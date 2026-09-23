@@ -1,1 +1,2 @@
-export { HomeScreen as default } from '@/features/home';
+// Routing-only file: the intro stays self-contained in its feature folder.
+export { IntroScreen as default } from '@/features/intro';

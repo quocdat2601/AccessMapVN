@@ -1,0 +1,32 @@
+# models/ – pre-trained model weights
+#
+# This directory is intentionally kept empty in source control.
+# Download or mount model weights before starting the service.
+#
+# Expected structure:
+#   models/
+#     yolo/
+#       ramp.pt         # YOLOv8 ramp detector weights
+#       step.pt         # YOLOv8 step/staircase detector weights
+#       elevator.pt     # YOLOv8 elevator detector weights
+#       door.pt         # YOLOv8 door detector weights
+#       signage.pt      # YOLOv8 accessibility-signage detector weights
+#       tactile.pt      # YOLOv8 tactile-paving detector weights
+#     phobert/
+#       config.json
+#       pytorch_model.bin  (or model.safetensors)
+#       tokenizer_config.json
+#       vocab.txt
+#       special_tokens_map.json
+#
+# In Docker/Kubernetes mount this directory as a volume:
+#   docker run -v /host/models:/service/models accessmap-ai
+#
+# ── What to ignore ────────────────────────────────────────────────────────────
+*.pt
+*.bin
+*.safetensors
+*.onnx
+*.pth
+*.h5
+*.pb

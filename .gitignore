@@ -41,6 +41,7 @@ build/
 coverage/
 
 # Logs
+*.log
 npm-debug.*
 yarn-debug.*
 yarn-error.*

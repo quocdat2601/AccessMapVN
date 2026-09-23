@@ -1,0 +1,23 @@
+$kind: http-example
+request:
+  url: /api/v1/submissions/pre-scan
+  method: POST
+response:
+  statusCode: 200
+  statusText: OK
+  body:
+    type: text
+    content: "{\r
+
+      \  \"suggested_tags\": [\"ramp\", \"wide_entrance\"],\r
+
+      \  \"pre_scan_confidence\": 0.92,\r
+
+      \  \"laplacian_variance\": 185.4,\r
+
+      \  \"is_blur\": false,\r
+
+      \  \"processing_time_ms\": 780\r
+
+      }"
+order: 1000

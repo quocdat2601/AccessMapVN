@@ -1,0 +1,10 @@
+workspace:
+  id: 5457e445-2f61-4b4b-873b-f0f49abc59fd
+
+# Each entry here maps a local resource to one or more corresponding objects in Postman Cloud
+
+cloudResources:
+  collections:
+    ../postman/collections/AccessMap-WF01-Mock: 52747476-77f5856d-f066-46d8-bff3-d21164ddd4b7
+  environments:
+    ../postman/environments/AccessMap-WF01-Mock.environment.yaml: 52747476-9de95e48-ccde-4292-b4b3-f97a49738ef2

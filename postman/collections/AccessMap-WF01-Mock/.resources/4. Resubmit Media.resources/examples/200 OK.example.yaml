@@ -1,0 +1,26 @@
+$kind: http-example
+request:
+  url: "{{base_url}}/api/v1/submissions/AMV-2026-08942/resubmit"
+  method: POST
+  body:
+    type: text
+    content: ""
+response:
+  statusCode: 200
+  statusText: OK
+  headers:
+    Content-Type: application/json
+  body:
+    type: json
+    content: "{\r
+
+      \  \"submission_id\": \"AMV-2026-08942\",\r
+
+      \  \"status\": \"AI Processing\",\r
+
+      \  \"resubmission_count\": 2,\r
+
+      \  \"message\": \"Đã nhận ảnh bổ sung thành công. Đang thẩm định lại.\"\r
+
+      }"
+order: 1000

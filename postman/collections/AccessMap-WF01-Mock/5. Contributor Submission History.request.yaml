@@ -1,0 +1,7 @@
+$kind: http-request
+description: "Generated from cURL: curl -X GET {{base_url}}/api/v1/me/submissions"
+url: "{{base_url}}/api/v1/me/submissions"
+method: GET
+settings: {}
+examples: ./.resources/5. Contributor Submission History.resources/examples
+order: 5000

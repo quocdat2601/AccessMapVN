@@ -1,0 +1,28 @@
+$kind: http-example
+request:
+  url: "{{base_url}}/api/v1/admin/submissions/AMV-2026-08942"
+  method: PATCH
+  body:
+    type: text
+    content: ""
+response:
+  statusCode: 200
+  statusText: OK
+  headers:
+    Content-Type: application/json
+  body:
+    type: json
+    content: "{\r
+
+      \  \"submission_id\": \"AMV-2026-08942\",\r
+
+      \  \"decision\": \"approved\",\r
+
+      \  \"status\": \"Published\",\r
+
+      \  \"points_awarded\": 50,\r
+
+      \  \"moderated_by\": \"admin_01\"\r
+
+      }"
+order: 1000

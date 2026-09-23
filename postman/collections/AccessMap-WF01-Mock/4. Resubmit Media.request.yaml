@@ -1,0 +1,7 @@
+$kind: http-request
+description: "Generated from cURL: curl -X POST {{base_url}}/api/v1/submissions/AMV-2026-08942/resubmit"
+url: "{{base_url}}/api/v1/submissions/AMV-2026-08942/resubmit"
+method: POST
+settings: {}
+examples: ./.resources/4. Resubmit Media.resources/examples
+order: 4000

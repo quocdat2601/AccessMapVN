@@ -1,0 +1,5 @@
+$kind: collection
+variables:
+  url: https://3a35c4a2-6c43-465f-8232-f9c2e176aafb.mock.pstmn.io
+  base_url: ""
+  current_submission_id: ""

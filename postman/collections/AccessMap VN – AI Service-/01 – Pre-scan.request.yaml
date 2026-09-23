@@ -1,0 +1,18 @@
+$kind: http-request
+url: http://localhost:8000/api/v1/ai/pre-scan
+method: POST
+order: 1789804359508
+body:
+  type: formdata
+  content:
+    - type: file
+      key: images
+      src:
+        - postman-cloud:///1f1b406b-398e-4020-b4c7-cd51528bbf0f
+      description: ""
+      disabled: false
+    - type: text
+      key: text_description
+      value: Test description
+      description: ""
+      disabled: false

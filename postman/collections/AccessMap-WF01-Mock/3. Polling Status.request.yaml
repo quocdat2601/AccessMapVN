@@ -1,0 +1,6 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/submissions/AMV-2026-08942/status"
+method: GET
+settings: {}
+examples: ./.resources/3. Polling Status.resources/examples
+order: 3000

@@ -1,0 +1,44 @@
+$kind: http-example
+request:
+  url: "{{base_url}}/api/v1/admin/submissions?status=pending"
+  method: GET
+  queryParams:
+    status: pending
+  body:
+    type: text
+    content: ""
+response:
+  statusCode: 200
+  statusText: OK
+  headers:
+    Content-Type: application/json
+  body:
+    type: json
+    content: "{\r
+
+      \  \"pending_count\": 1,\r
+
+      \  \"items\": [\r
+
+      \    {\r
+
+      \      \"submission_id\": \"AMV-2026-08942\",\r
+
+      \      \"contributor_id\": \"user_123\",\r
+
+      \      \"confidence_score\": 68.5,\r
+
+      \      \"suggested_tags\": [\r
+
+      \        \"ramp\"\r
+
+      \      ],\r
+
+      \      \"status\": \"Pending Moderation\"\r
+
+      \    }\r
+
+      \  ]\r
+
+      }"
+order: 1000

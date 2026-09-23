@@ -1,0 +1,6 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/submissions/pre-scan"
+method: POST
+settings: {}
+examples: ./.resources/1. Synchronous Pre-scan.resources/examples
+order: 1000

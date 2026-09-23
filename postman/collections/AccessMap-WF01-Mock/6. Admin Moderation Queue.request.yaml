@@ -1,0 +1,9 @@
+$kind: http-request
+description: 'Generated from cURL: curl -X GET "{{base_url}}/api/v1/admin/submissions?status=pending"'
+url: "{{base_url}}/api/v1/admin/submissions?status=pending"
+method: GET
+queryParams:
+  status: pending
+settings: {}
+examples: ./.resources/6. Admin Moderation Queue.resources/examples
+order: 6000

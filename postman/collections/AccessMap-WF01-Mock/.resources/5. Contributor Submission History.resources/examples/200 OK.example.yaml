@@ -1,0 +1,36 @@
+$kind: http-example
+request:
+  url: "{{base_url}}/api/v1/me/submissions"
+  method: GET
+  body:
+    type: text
+    content: ""
+response:
+  statusCode: 200
+  statusText: OK
+  body:
+    type: json
+    content: "{\r
+
+      \  \"total\": 1,\r
+
+      \  \"data\": [\r
+
+      \    {\r
+
+      \      \"submission_id\": \"AMV-2026-08942\",\r
+
+      \      \"location_name\": \"Saigon Centre\",\r
+
+      \      \"status\": \"Auto-Verified\",\r
+
+      \      \"points_awarded\": 50,\r
+
+      \      \"created_at\": \"2026-09-19T02:30:00Z\"\r
+
+      \    }\r
+
+      \  ]\r
+
+      }"
+order: 1000

@@ -1,0 +1,6 @@
+$kind: http-request
+url: "{{base_url}}/api/v1/submissions"
+method: POST
+settings: {}
+examples: ./.resources/2. Submit Contribution.resources/examples
+order: 2000

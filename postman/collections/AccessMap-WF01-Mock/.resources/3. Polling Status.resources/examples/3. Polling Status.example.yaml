@@ -1,0 +1,25 @@
+$kind: http-example
+request:
+  url: /api/v1/submissions/AMV-2026-08942/status
+  method: GET
+response:
+  statusCode: 200
+  statusText: OK
+  body:
+    type: text
+    content: "{\r
+
+      \  \"submission_id\": \"AMV-2026-08942\",\r
+
+      \  \"status\": \"Auto-Verified\",\r
+
+      \  \"confidence_score\": 88.5,\r
+
+      \  \"points_awarded\": 50,\r
+
+      \  \"location_published\": true,\r
+
+      \  \"message\": \"Dữ liệu đạt chuẩn QCVN 10:2014 và đã xuất bản lên bản đồ.\"\r
+
+      }"
+order: 1000

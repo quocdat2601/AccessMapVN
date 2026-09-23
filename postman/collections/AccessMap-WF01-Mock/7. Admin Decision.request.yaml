@@ -1,0 +1,7 @@
+$kind: http-request
+description: "Generated from cURL: curl -X PATCH {{base_url}}/api/v1/admin/submissions/AMV-2026-08942"
+url: "{{base_url}}/api/v1/admin/submissions/AMV-2026-08942"
+method: PATCH
+settings: {}
+examples: ./.resources/7. Admin Decision.resources/examples
+order: 7000

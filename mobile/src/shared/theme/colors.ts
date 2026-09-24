@@ -36,4 +36,9 @@ export const Colors = {
   shadow: 'rgba(0, 104, 116, 0.12)',
   shadowDark: 'rgba(0, 78, 88, 0.38)',
   overlayBlur: 'rgba(248, 250, 249, 0.95)',
+
+  // Accessibility Score Colors
+  accessGreen: '#2ecc71',
+  accessYellow: '#f39c12',
+  accessRed: '#e74c3c',
 };

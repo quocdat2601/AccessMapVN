@@ -1,5 +1,34 @@
 export type PoiCategory = 'mall' | 'hotel' | 'hospital' | 'transit' | 'market' | 'other';
 
+export interface PlaceDto {
+  id: string;
+  name: string;
+  category: PoiCategory;
+  lng: number;
+  lat: number;
+  has_ramp: boolean;
+  has_elevator: boolean;
+  has_tactile_paving: boolean;
+  has_accessible_restroom: boolean;
+  door_width_ok: boolean;
+  accessibility_score: number;
+  accessibility_note: string | null;
+}
+
+export interface BoundingBox {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
+}
+
+export interface MapRegion {
+  latitude: number;
+  longitude: number;
+  zoom: number;
+}
+
+// ponytail: legacy type kept for backward compat during transition; remove after Phase 3
 export interface AccessibilityFeature {
   hasRamp?: boolean;
   rampConfidence?: number;
@@ -10,12 +39,13 @@ export interface AccessibilityFeature {
   note?: string;
 }
 
+// ponytail: legacy type; remove after MapCanvas.tsx is fully replaced
 export interface LocationPoi {
   id: string;
   name: string;
   category: PoiCategory;
-  xPercent: number; // percentage in map canvas [0, 100]
-  yPercent: number; // percentage in map canvas [0, 100]
+  xPercent: number;
+  yPercent: number;
   accessibility: AccessibilityFeature;
   isSelected?: boolean;
   accentColor?: string;

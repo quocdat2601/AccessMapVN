@@ -1,2 +1,2 @@
-// Routing-only file: the discovery location picker stays self-contained in its feature folder.
-export { LocationPickerScreen as default } from '@/features/discovery';
+// Routing-only file: the discovery map screen stays self-contained in its feature folder.
+export { DiscoveryScreen as default } from '@/features/discovery';

@@ -194,13 +194,20 @@ export default function IntroScreen() {
           style={[styles.mapContext, { opacity: backgroundOpacity }]}
         >
           <View style={styles.backgroundWash} />
-          <View style={[styles.street, styles.streetUpper]} />
-          <View style={[styles.street, styles.streetMiddle]} />
-          <View style={[styles.street, styles.streetLower]} />
-          <View style={[styles.street, styles.streetVerticalLeft]} />
-          <View style={[styles.street, styles.streetVerticalRight]} />
-          <View style={[styles.mapBlock, styles.mapBlockTop]} />
-          <View style={[styles.mapBlock, styles.mapBlockBottom]} />
+          <View style={[styles.mapBlock, styles.mapBlockTopLeft]} />
+          <View style={[styles.mapBlock, styles.mapBlockTopRight]} />
+          <View style={[styles.mapBlock, styles.mapBlockBottomLeft]} />
+          <View style={[styles.mapBlock, styles.mapBlockBottomRight]} />
+          <View style={[styles.road, styles.roadHorizontalTop]} />
+          <View style={[styles.road, styles.roadHorizontalUpper]} />
+          <View style={[styles.road, styles.roadHorizontalMiddle]} />
+          <View style={[styles.road, styles.roadHorizontalLower]} />
+          <View style={[styles.road, styles.roadHorizontalBottom]} />
+          <View style={[styles.road, styles.roadVerticalFarLeft]} />
+          <View style={[styles.road, styles.roadVerticalLeft]} />
+          <View style={[styles.road, styles.roadVerticalMiddle]} />
+          <View style={[styles.road, styles.roadVerticalRight]} />
+          <View style={[styles.road, styles.roadVerticalFarRight]} />
         </Animated.View>
 
         <Animated.View
@@ -212,13 +219,34 @@ export default function IntroScreen() {
             { opacity: routeOpacity, transform: [{ translateX: routeTranslateX }] },
           ]}
         >
-          <View style={[styles.routeSegment, styles.routeSegmentLeft]} />
+          <View style={[styles.routeSegment, styles.routeSegmentStart]} />
+          <View style={[styles.routeSegment, styles.routeSegmentFirstTurn]} />
           <View style={[styles.routeSegment, styles.routeSegmentMiddle]} />
-          <View style={[styles.routeSegment, styles.routeSegmentRight]} />
+          <View style={[styles.routeSegment, styles.routeSegmentSecondTurn]} />
+          <View style={[styles.routeSegment, styles.routeSegmentArrival]} />
           <View style={[styles.waypoint, styles.waypointStart]} />
-          <View style={[styles.waypoint, styles.waypointMiddle]} />
-          <View style={[styles.communityNode, styles.communityNodeTop]} />
-          <View style={[styles.communityNode, styles.communityNodeBottom]} />
+          <View style={[styles.waypoint, styles.waypointFirstTurn]} />
+          <View style={[styles.waypoint, styles.waypointSecondTurn]} />
+
+          {/* Small popup-style pins make the background read as places on a map. */}
+          <View style={[styles.locationBubble, styles.locationBubbleTop]}>
+            <View style={styles.locationPin}>
+              <View style={styles.locationPinDot} />
+            </View>
+            <View style={styles.locationBubbleTail} />
+          </View>
+          <View style={[styles.locationBubble, styles.locationBubbleRight]}>
+            <View style={styles.locationPin}>
+              <View style={styles.locationPinDot} />
+            </View>
+            <View style={styles.locationBubbleTail} />
+          </View>
+          <View style={[styles.locationBubble, styles.locationBubbleBottom]}>
+            <View style={styles.locationPin}>
+              <View style={styles.locationPinDot} />
+            </View>
+            <View style={styles.locationBubbleTail} />
+          </View>
         </Animated.View>
 
         <View style={styles.content}>
@@ -278,65 +306,105 @@ const styles = StyleSheet.create({
     backgroundColor: branding.colors.primarySoft,
     opacity: 0.18,
   },
-  street: {
-    backgroundColor: branding.colors.grid,
-    borderRadius: 99,
-    height: 2,
-    opacity: 0.3,
-    position: 'absolute',
-  },
-  streetUpper: {
-    left: -30,
-    right: 35,
-    top: '24%',
-    transform: [{ rotate: '-7deg' }],
-  },
-  streetMiddle: {
-    left: 20,
-    right: -50,
-    top: '48%',
-    transform: [{ rotate: '9deg' }],
-  },
-  streetLower: {
-    left: -40,
-    right: -10,
-    top: '74%',
-    transform: [{ rotate: '-10deg' }],
-  },
-  streetVerticalLeft: {
-    bottom: -50,
-    left: '18%',
-    top: -60,
-    transform: [{ rotate: '8deg' }],
-    width: 2,
-  },
-  streetVerticalRight: {
-    bottom: -60,
-    right: '16%',
-    top: -40,
-    transform: [{ rotate: '-12deg' }],
-    width: 2,
-  },
   mapBlock: {
     backgroundColor: branding.colors.primarySoft,
     borderColor: branding.colors.grid,
-    borderRadius: 24,
+    borderRadius: 22,
     borderWidth: 1,
-    opacity: 0.34,
+    opacity: 0.42,
     position: 'absolute',
-    transform: [{ rotate: '-7deg' }],
   },
-  mapBlockTop: {
-    height: 84,
-    left: -22,
-    top: '29%',
-    width: 112,
+  mapBlockTopLeft: {
+    height: '16%',
+    left: '4%',
+    top: '4%',
+    width: '39%',
   },
-  mapBlockBottom: {
-    bottom: '17%',
-    height: 96,
+  mapBlockTopRight: {
+    height: '17%',
+    right: '4%',
+    top: '25%',
+    width: '37%',
+  },
+  mapBlockBottomLeft: {
+    bottom: '8%',
+    height: '18%',
+    left: '5%',
+    width: '37%',
+  },
+  mapBlockBottomRight: {
+    bottom: '7%',
+    height: '19%',
+    right: '4%',
+    width: '38%',
+  },
+  road: {
+    backgroundColor: '#FFFFFF',
+    borderColor: branding.colors.grid,
+    borderRadius: 99,
+    borderWidth: 1,
+    opacity: 0.58,
+    position: 'absolute',
+  },
+  roadHorizontalTop: {
+    height: 17,
+    left: -24,
     right: -24,
-    width: 132,
+    top: '21%',
+  },
+  roadHorizontalUpper: {
+    height: 13,
+    left: '10%',
+    right: -24,
+    top: '33%',
+  },
+  roadHorizontalMiddle: {
+    height: 19,
+    left: -24,
+    right: '9%',
+    top: '45%',
+  },
+  roadHorizontalLower: {
+    height: 13,
+    left: -24,
+    right: '17%',
+    top: '58%',
+  },
+  roadHorizontalBottom: {
+    bottom: '28%',
+    height: 16,
+    left: '8%',
+    right: -24,
+  },
+  roadVerticalFarLeft: {
+    bottom: '16%',
+    left: '4%',
+    top: '10%',
+    width: 12,
+  },
+  roadVerticalLeft: {
+    bottom: -24,
+    left: '15%',
+    top: -24,
+    width: 16,
+  },
+  roadVerticalMiddle: {
+    bottom: '4%',
+    left: '46%',
+    top: '12%',
+    width: 19,
+  },
+  roadVerticalRight: {
+    bottom: -24,
+    right: '12%',
+    top: -24,
+    width: 15,
+  },
+  roadVerticalFarRight: {
+    bottom: '10%',
+    right: '29%',
+    top: '6%',
+    width: 12,
   },
   routeContext: {
     ...StyleSheet.absoluteFill,
@@ -345,27 +413,38 @@ const styles = StyleSheet.create({
   routeSegment: {
     backgroundColor: branding.colors.primary,
     borderRadius: 99,
-    height: 3,
     opacity: 0.38,
     position: 'absolute',
   },
-  routeSegmentLeft: {
-    left: '7%',
-    top: '63%',
-    transform: [{ rotate: '-18deg' }],
-    width: '29%',
+  routeSegmentStart: {
+    height: 3,
+    left: '8%',
+    top: '68%',
+    width: '17%',
+  },
+  routeSegmentFirstTurn: {
+    height: '11%',
+    left: '24%',
+    top: '57%',
+    width: 3,
   },
   routeSegmentMiddle: {
-    left: '32%',
+    height: 3,
+    left: '24%',
     top: '57%',
-    transform: [{ rotate: '-6deg' }],
-    width: '25%',
+    width: '17%',
   },
-  routeSegmentRight: {
-    left: '53%',
-    top: '52%',
-    transform: [{ rotate: '-18deg' }],
-    width: '20%',
+  routeSegmentSecondTurn: {
+    height: '11%',
+    left: '40%',
+    top: '46%',
+    width: 3,
+  },
+  routeSegmentArrival: {
+    height: 3,
+    left: '40%',
+    top: '46%',
+    width: '10%',
   },
   waypoint: {
     backgroundColor: branding.colors.background,
@@ -377,28 +456,75 @@ const styles = StyleSheet.create({
     width: 14,
   },
   waypointStart: {
-    left: '8%',
-    top: '62%',
+    left: '7%',
+    top: '67.2%',
   },
-  waypointMiddle: {
-    left: '33%',
-    top: '56%',
+  waypointFirstTurn: {
+    left: '22.7%',
+    top: '56.2%',
   },
-  communityNode: {
-    backgroundColor: branding.colors.primary,
-    borderRadius: 5,
-    height: 10,
-    opacity: 0.22,
+  waypointSecondTurn: {
+    left: '38.7%',
+    top: '45.2%',
+  },
+  locationBubble: {
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderColor: branding.colors.primarySoft,
+    borderRadius: 12,
+    borderWidth: 1,
+    height: 34,
+    justifyContent: 'center',
     position: 'absolute',
+    shadowColor: branding.colors.primaryDark,
+    shadowOffset: { height: 3, width: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 7,
+    width: 38,
+    elevation: 2,
+  },
+  locationBubbleTop: {
+    left: '10.5%',
+    top: '16.5%',
+  },
+  locationBubbleRight: {
+    right: '7.5%',
+    top: '40.5%',
+  },
+  locationBubbleBottom: {
+    bottom: '24.5%',
+    left: '41.5%',
+  },
+  locationBubbleTail: {
+    backgroundColor: '#FFFFFF',
+    borderBottomColor: branding.colors.primarySoft,
+    borderBottomWidth: 1,
+    borderRightColor: branding.colors.primarySoft,
+    borderRightWidth: 1,
+    bottom: -5,
+    height: 10,
+    position: 'absolute',
+    transform: [{ rotate: '45deg' }],
     width: 10,
   },
-  communityNodeTop: {
-    right: '17%',
-    top: '30%',
+  locationPin: {
+    alignItems: 'center',
+    backgroundColor: branding.colors.primary,
+    borderBottomLeftRadius: 3,
+    borderBottomRightRadius: 9,
+    borderTopLeftRadius: 9,
+    borderTopRightRadius: 9,
+    height: 17,
+    justifyContent: 'center',
+    transform: [{ rotate: '-45deg' }],
+    width: 17,
   },
-  communityNodeBottom: {
-    bottom: '25%',
-    left: '18%',
+  locationPinDot: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 3,
+    height: 6,
+    transform: [{ rotate: '45deg' }],
+    width: 6,
   },
   content: {
     alignItems: 'center',

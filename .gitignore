@@ -64,3 +64,4 @@ yarn-error.*
 # Editor and OS files
 *.orig.*
 .DS_Store
+.idea/

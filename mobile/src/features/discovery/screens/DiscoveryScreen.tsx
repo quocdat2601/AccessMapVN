@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, View, ActivityIndicator, Text } from 'react-native';
 import { MapView } from '../components/MapView';
 import { HeaderBar } from '../components/HeaderBar';
@@ -11,6 +11,7 @@ import { useNearbyPlaces } from '../hooks/useNearbyPlaces';
 import { Colors } from '@/shared/theme';
 
 export function DiscoveryScreen() {
+  const [searchQuery, setSearchQuery] = useState('');
   const { location, loading: locationLoading } = useUserLocation();
   const { region, bbox, onRegionDidChange, initialRegion } = useMapRegion();
   const {
@@ -45,7 +46,7 @@ export function DiscoveryScreen() {
       {/* UI Overlays */}
       <View style={styles.overlayTop}>
         <HeaderBar />
-        <SearchBar />
+        <SearchBar value={searchQuery} onChangeText={setSearchQuery} />
       </View>
 
       <MapControls />

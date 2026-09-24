@@ -1,12 +1,11 @@
-import React from 'react';
-import MapLibreGL from '@maplibre/maplibre-react-native';
-
 interface UserLocationMarkerProps {
+  MapLibreGL: any;
   latitude: number;
   longitude: number;
 }
 
-export function UserLocationMarker({ latitude, longitude }: UserLocationMarkerProps) {
+export function UserLocationMarker({ MapLibreGL, latitude, longitude }: UserLocationMarkerProps) {
+  if (!MapLibreGL) return null;
   return (
     <MapLibreGL.ShapeSource
       id="user-location"

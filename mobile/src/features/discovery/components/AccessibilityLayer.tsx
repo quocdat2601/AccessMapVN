@@ -1,9 +1,9 @@
 import React, { useMemo } from 'react';
-import MapLibreGL from '@maplibre/maplibre-react-native';
 import type { PlaceDto } from '../types';
 import { Colors } from '@/shared/theme';
 
 interface AccessibilityLayerProps {
+  MapLibreGL: any;
   places: PlaceDto[];
   onSelectPlace?: (placeId: string) => void;
   selectedPlaceId?: string | null;
@@ -28,11 +28,14 @@ function categoryToEmoji(category: string): string {
 }
 
 export function AccessibilityLayer({
+  MapLibreGL,
   places,
   onSelectPlace,
   selectedPlaceId,
 }: AccessibilityLayerProps) {
-  const geojson = useMemo<GeoJSON.FeatureCollection>(() => ({
+  if (!MapLibreGL) return null;
+
+  const geojson: any = useMemo(() => ({
     type: 'FeatureCollection',
     features: places.map((p) => ({
       type: 'Feature' as const,
@@ -57,7 +60,7 @@ export function AccessibilityLayer({
     <MapLibreGL.ShapeSource
       id="accessibility-places"
       shape={geojson}
-      onPress={(e) => {
+      onPress={(e: any) => {
         const feature = e.features?.[0];
         if (feature?.properties?.id) {
           onSelectPlace?.(feature.properties.id as string);

@@ -15,7 +15,7 @@ export function useMapRegion() {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const onRegionDidChange = useCallback(
-    (feature: GeoJSON.Feature<GeoJSON.Point>) => {
+    (feature: any) => {
       const coords = feature.geometry.coordinates;
       const props = feature.properties as Record<string, unknown> | undefined;
       const zoom = (props?.zoomLevel as number) ?? region.zoom;

@@ -1,2 +1,3 @@
-// Routing-only file: the discovery map screen stays self-contained in its feature folder.
-export { DiscoveryScreen as default } from '@/features/discovery';
+import { DiscoveryScreen } from '@/features/discovery';
+
+export default DiscoveryScreen;

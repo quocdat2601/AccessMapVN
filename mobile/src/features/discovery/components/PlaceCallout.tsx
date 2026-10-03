@@ -8,14 +8,15 @@ interface PlaceCalloutProps {
   onClose: () => void;
 }
 
-function ScoreBadge({ score }: { score: number }) {
-  const percentage = Math.round(score * 100);
+function ScoreBadge({ score }: { score: number | string }) {
+  const numScore = Number(score);
+  const percentage = Math.round(numScore * 100);
   let bg = Colors.accessRed ?? '#e74c3c';
   let label = 'Khó tiếp cận';
-  if (score >= 0.8) {
+  if (numScore >= 0.8) {
     bg = Colors.accessGreen ?? '#2ecc71';
     label = 'Dễ tiếp cận';
-  } else if (score >= 0.5) {
+  } else if (numScore >= 0.5) {
     bg = Colors.accessYellow ?? '#f39c12';
     label = 'Trung bình';
   }
@@ -27,7 +28,7 @@ function ScoreBadge({ score }: { score: number }) {
   );
 }
 
-function FeatureTag({ label, available }: { label: string; available: boolean }) {
+function FeatureTag({ label, available }: { label: string; available?: boolean }) {
   return (
     <View style={[styles.tag, available ? styles.tagAvailable : styles.tagUnavailable]}>
       <Text style={[styles.tagText, available ? styles.tagTextAvailable : styles.tagTextUnavailable]}>
@@ -53,11 +54,11 @@ export function PlaceCallout({ place, onClose }: PlaceCalloutProps) {
       <ScoreBadge score={place.accessibility_score} />
 
       <View style={styles.tagRow}>
-        <FeatureTag label="Lối dốc" available={place.has_ramp} />
-        <FeatureTag label="Thang máy" available={place.has_elevator} />
-        <FeatureTag label="Gạch dẫn hướng" available={place.has_tactile_paving} />
-        <FeatureTag label="WC tiếp cận" available={place.has_accessible_restroom} />
-        <FeatureTag label="Cửa rộng" available={place.door_width_ok} />
+        <FeatureTag label="Lối dốc" available={Boolean(place.has_ramp)} />
+        <FeatureTag label="Thang máy" available={Boolean(place.has_elevator || place.has_accessible_elevator)} />
+        <FeatureTag label="Gạch dẫn hướng" available={Boolean(place.has_tactile_paving)} />
+        <FeatureTag label="WC tiếp cận" available={Boolean(place.has_accessible_restroom)} />
+        <FeatureTag label="Cửa rộng" available={Boolean(place.door_width_ok)} />
       </View>
 
       {place.accessibility_note && (

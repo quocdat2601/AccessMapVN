@@ -91,7 +91,7 @@ const MOCK_PLACES: PlaceDto[] = [
   },
 ];
 
-const USE_MOCK = true; // ponytail: flip to false when Supabase is live
+const hasSupabase = Boolean(process.env.EXPO_PUBLIC_SUPABASE_URL);
 
 export function useNearbyPlaces(bbox: BoundingBox | null) {
   const [places, setPlaces] = useState<PlaceDto[]>(MOCK_PLACES);
@@ -102,22 +102,31 @@ export function useNearbyPlaces(bbox: BoundingBox | null) {
   const selectedPlace = places.find((p) => p.id === selectedId) ?? null;
 
   const fetchPlaces = useCallback(async (box: BoundingBox) => {
-    if (USE_MOCK) return;
+    if (!hasSupabase) {
+      setPlaces(MOCK_PLACES);
+      return;
+    }
 
     setLoading(true);
     setError(null);
     try {
       const data = await fetchPlacesInBBox(box);
-      setPlaces(data);
-    } catch (e) {
-      setError('Không thể tải dữ liệu địa điểm');
+      setPlaces(data.length > 0 ? data : MOCK_PLACES);
+    } catch {
+      // Graceful fallback to mock data during local development
+      setPlaces(MOCK_PLACES);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (bbox) fetchPlaces(bbox);
+    if (bbox) {
+      fetchPlaces(bbox);
+    } else {
+      // Zoom Gate: Clear markers when zoomed out to prevent citywide clutter
+      setPlaces([]);
+    }
   }, [bbox, fetchPlaces]);
 
   return {

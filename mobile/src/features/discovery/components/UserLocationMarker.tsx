@@ -7,9 +7,9 @@ interface UserLocationMarkerProps {
 export function UserLocationMarker({ MapLibreGL, latitude, longitude }: UserLocationMarkerProps) {
   if (!MapLibreGL) return null;
   return (
-    <MapLibreGL.ShapeSource
+    <MapLibreGL.GeoJSONSource
       id="user-location"
-      shape={{
+      data={{
         type: 'Feature',
         geometry: {
           type: 'Point',
@@ -19,7 +19,8 @@ export function UserLocationMarker({ MapLibreGL, latitude, longitude }: UserLoca
       }}
     >
       {/* Pulsing outer ring */}
-      <MapLibreGL.CircleLayer
+      <MapLibreGL.Layer
+        type="circle"
         id="user-location-pulse"
         style={{
           circleRadius: 20,
@@ -30,7 +31,8 @@ export function UserLocationMarker({ MapLibreGL, latitude, longitude }: UserLoca
       />
 
       {/* Inner blue dot */}
-      <MapLibreGL.CircleLayer
+      <MapLibreGL.Layer
+        type="circle"
         id="user-location-dot"
         style={{
           circleRadius: 8,
@@ -41,13 +43,14 @@ export function UserLocationMarker({ MapLibreGL, latitude, longitude }: UserLoca
       />
 
       {/* Center white dot */}
-      <MapLibreGL.CircleLayer
+      <MapLibreGL.Layer
+        type="circle"
         id="user-location-center"
         style={{
           circleRadius: 3,
           circleColor: '#ffffff',
         }}
       />
-    </MapLibreGL.ShapeSource>
+    </MapLibreGL.GeoJSONSource>
   );
 }

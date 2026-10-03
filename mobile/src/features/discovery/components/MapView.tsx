@@ -21,8 +21,10 @@ if (!isExpoGo && !isWeb) {
   }
 }
 
-// Fallback to a basic OSM style if no API key is set
-const FALLBACK_STYLE_URL = 'https://demotiles.maplibre.org/style.json';
+// Vector tile style: supports custom MapTiler/Protomaps via env, falls back to OpenFreeMap Liberty
+const DEFAULT_STYLE_URL =
+  process.env.EXPO_PUBLIC_MAP_STYLE_URL ||
+  'https://tiles.openfreemap.org/styles/liberty';
 
 interface MapViewProps {
   places: PlaceDto[];
@@ -97,19 +99,19 @@ export function MapView({
 
   return (
     <View style={styles.container}>
-      <MapLibreGL.MapView
+      <MapLibreGL.Map
         style={styles.map}
-        styleURL={FALLBACK_STYLE_URL}
-        logoEnabled={false}
-        attributionEnabled={false}
-        compassEnabled
+        mapStyle={DEFAULT_STYLE_URL}
+        logo={false}
+        attribution={false}
+        compass
         onRegionDidChange={onRegionDidChange}
       >
         <MapLibreGL.Camera
           ref={cameraRef}
-          defaultSettings={{
-            centerCoordinate: [initialRegion.longitude, initialRegion.latitude],
-            zoomLevel: initialRegion.zoom,
+          initialViewState={{
+            center: [initialRegion.longitude, initialRegion.latitude],
+            zoom: initialRegion.zoom,
           }}
         />
 
@@ -129,7 +131,7 @@ export function MapView({
             selectedPlaceId={selectedPlaceId}
           />
         )}
-      </MapLibreGL.MapView>
+      </MapLibreGL.Map>
     </View>
   );
 }

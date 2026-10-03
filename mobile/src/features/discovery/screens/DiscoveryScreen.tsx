@@ -13,7 +13,7 @@ import { Colors } from '@/shared/theme';
 export function DiscoveryScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const { location, loading: locationLoading } = useUserLocation();
-  const { region, bbox, onRegionDidChange, initialRegion } = useMapRegion();
+  const { region, bbox, isZoomedOut, onRegionDidChange, initialRegion } = useMapRegion();
   const {
     places,
     selectedPlace,
@@ -50,6 +50,12 @@ export function DiscoveryScreen() {
       </View>
 
       <MapControls />
+
+      {isZoomedOut && (
+        <View style={styles.zoomHintBanner}>
+          <Text style={styles.zoomHintText}>🔍 Phóng to khu vực để xem chi tiết tiếp cận</Text>
+        </View>
+      )}
 
       {selectedPlace && (
         <PlaceCallout
@@ -106,5 +112,25 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 13,
     fontWeight: '500',
+  },
+  zoomHintBanner: {
+    position: 'absolute',
+    bottom: 96,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(26, 26, 46, 0.85)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    zIndex: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  zoomHintText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

@@ -15,32 +15,65 @@ export function useMapRegion() {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const onRegionDidChange = useCallback(
-    (feature: any) => {
-      const coords = feature.geometry.coordinates;
-      const props = feature.properties as Record<string, unknown> | undefined;
-      const zoom = (props?.zoomLevel as number) ?? region.zoom;
-      const bounds = props?.visibleBounds as [number[], number[]] | undefined;
+    (event: any) => {
+      const data = event?.nativeEvent ?? event;
+      if (!data) return;
 
-      setRegion({
-        latitude: coords[1],
-        longitude: coords[0],
-        zoom,
-      });
+      let lat: number | undefined;
+      let lng: number | undefined;
+      let zoom: number | undefined;
+      let north: number | undefined;
+      let south: number | undefined;
+      let east: number | undefined;
+      let west: number | undefined;
 
-      if (bounds) {
-        if (timerRef.current) clearTimeout(timerRef.current);
-        timerRef.current = setTimeout(() => {
-          setBbox({
-            north: bounds[0][1],
-            east: bounds[0][0],
-            south: bounds[1][1],
-            west: bounds[1][0],
-          });
-        }, DEBOUNCE_MS);
+      if (Array.isArray(data.center)) {
+        // MapLibre RN v11 format: center is [lng, lat], bounds is [west, south, east, north]
+        lng = data.center[0];
+        lat = data.center[1];
+        zoom = data.zoom;
+        if (Array.isArray(data.bounds) && data.bounds.length === 4) {
+          [west, south, east, north] = data.bounds;
+        }
+      } else if (data.geometry?.coordinates) {
+        // Legacy GeoJSON format
+        lng = data.geometry.coordinates[0];
+        lat = data.geometry.coordinates[1];
+        const props = data.properties as Record<string, unknown> | undefined;
+        zoom = (props?.zoomLevel as number) ?? region.zoom;
+        const b = props?.visibleBounds as [number[], number[]] | undefined;
+        if (b && Array.isArray(b) && b.length >= 2) {
+          north = b[0][1];
+          east = b[0][0];
+          south = b[1][1];
+          west = b[1][0];
+        }
+      }
+
+      if (lat != null && lng != null) {
+        const currentZoom = zoom ?? region.zoom;
+        setRegion({
+          latitude: lat,
+          longitude: lng,
+          zoom: currentZoom,
+        });
+
+        if (north != null && south != null && east != null && west != null) {
+          if (timerRef.current) clearTimeout(timerRef.current);
+          timerRef.current = setTimeout(() => {
+            if (currentZoom >= 12) {
+              setBbox({ north, east, south, west });
+            } else {
+              setBbox(null);
+            }
+          }, DEBOUNCE_MS);
+        }
       }
     },
     [region.zoom]
   );
 
-  return { region, bbox, onRegionDidChange, initialRegion: HCMC_INITIAL };
+  const isZoomedOut = region.zoom < 12;
+
+  return { region, bbox, isZoomedOut, onRegionDidChange, initialRegion: HCMC_INITIAL };
 }

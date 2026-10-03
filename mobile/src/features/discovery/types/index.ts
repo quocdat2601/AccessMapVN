@@ -21,3 +21,12 @@ export interface LocationPoi {
   accentColor?: string;
   badgeLabel?: string;
 }
+
+export interface SearchLocation {
+  id: string;
+  poiId?: string;
+  name: string;
+  address: string;
+  xPercent: number;
+  yPercent: number;
+}

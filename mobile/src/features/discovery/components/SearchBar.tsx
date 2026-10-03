@@ -6,6 +6,7 @@ import { Colors } from '@/shared/theme';
 interface SearchBarProps {
   value: string;
   onChangeText: (text: string) => void;
+  onFocus?: () => void;
   onVoicePress?: () => void;
   onFilterPress?: () => void;
 }
@@ -13,6 +14,7 @@ interface SearchBarProps {
 export function SearchBar({
   value,
   onChangeText,
+  onFocus,
   onVoicePress,
   onFilterPress,
 }: SearchBarProps) {
@@ -29,6 +31,7 @@ export function SearchBar({
           placeholderTextColor={Colors.textPlaceholder}
           value={value}
           onChangeText={onChangeText}
+          onFocus={onFocus}
           returnKeyType="search"
           accessibilityLabel="Tìm địa điểm tiếp cận"
         />

@@ -1,11 +1,14 @@
 import React from 'react';
-import { StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/shared/theme';
 
 interface SearchBarProps {
   value: string;
   onChangeText: (text: string) => void;
+  onClear?: () => void;
+  onSubmit?: () => void;
+  isSearching?: boolean;
   onVoicePress?: () => void;
   onFilterPress?: () => void;
 }
@@ -13,14 +16,21 @@ interface SearchBarProps {
 export function SearchBar({
   value,
   onChangeText,
+  onClear,
+  onSubmit,
+  isSearching = false,
   onVoicePress,
   onFilterPress,
 }: SearchBarProps) {
   return (
     <View style={styles.outerContainer}>
       <View style={styles.searchBox}>
-        {/* Search Icon */}
-        <Ionicons name="search" size={20} color={Colors.primaryContainer} style={styles.searchIcon} />
+        {/* Search Icon / Loader */}
+        {isSearching ? (
+          <ActivityIndicator size="small" color={Colors.primary} style={styles.searchIcon} />
+        ) : (
+          <Ionicons name="search" size={20} color={Colors.primaryContainer} style={styles.searchIcon} />
+        )}
 
         {/* Input */}
         <TextInput
@@ -29,9 +39,23 @@ export function SearchBar({
           placeholderTextColor={Colors.textPlaceholder}
           value={value}
           onChangeText={onChangeText}
+          onSubmitEditing={onSubmit}
           returnKeyType="search"
           accessibilityLabel="Tìm địa điểm tiếp cận"
         />
+
+        {/* Clear Button */}
+        {value.length > 0 && onClear && (
+          <TouchableOpacity
+            style={styles.clearButton}
+            onPress={onClear}
+            accessibilityRole="button"
+            accessibilityLabel="Xóa tìm kiếm"
+            hitSlop={8}
+          >
+            <Ionicons name="close-circle" size={18} color={Colors.textSecondary} />
+          </TouchableOpacity>
+        )}
 
         {/* Voice Search Button */}
         <TouchableOpacity
@@ -90,6 +114,10 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontWeight: '500',
     paddingVertical: 0,
+  },
+  clearButton: {
+    padding: 4,
+    marginRight: 2,
   },
   voiceButton: {
     width: 34,

@@ -4,6 +4,12 @@ export interface PlaceDto {
   id: string;
   name: string;
   category: PoiCategory;
+  address?: string | null;
+  phone?: string | null;
+  website?: string | null;
+  opening_hours?: string | null;
+  brand?: string | null;
+  operator?: string | null;
   lng: number;
   lat: number;
   has_ramp: boolean;
@@ -54,4 +60,13 @@ export interface LocationPoi {
   isSelected?: boolean;
   accentColor?: string;
   badgeLabel?: string;
+}
+
+export interface GeocodeResult {
+  id: string;
+  name: string;
+  displayName: string;
+  lat: number;
+  lng: number;
+  type?: string;
 }

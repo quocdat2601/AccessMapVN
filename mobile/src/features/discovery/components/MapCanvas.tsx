@@ -1,29 +1,105 @@
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Stop, Path, Rect, Circle, G } from 'react-native-svg';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { LocationPoi } from '../types';
 import { LocationMarker } from './LocationMarker';
+import { FocusedLocationMarker } from './FocusedLocationMarker';
 import { Colors } from '@/shared/theme';
+
+export interface MapFocusTarget {
+  key: number;
+  poiId?: string;
+  name: string;
+  xPercent: number;
+  yPercent: number;
+}
 
 interface MapCanvasProps {
   locations: LocationPoi[];
   onSelectLocation: (id: string) => void;
   zoomLevel?: number;
+  focusTarget?: MapFocusTarget | null;
+  onMapPress?: () => void;
 }
 
 export function MapCanvas({
   locations,
   onSelectLocation,
   zoomLevel = 1,
+  focusTarget,
+  onMapPress,
 }: MapCanvasProps) {
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+  const animatedScale = useSharedValue(zoomLevel);
+  const animatedTranslateX = useSharedValue(0);
+  const animatedTranslateY = useSharedValue(0);
+
+  useEffect(() => {
+    if (focusTarget && canvasSize.width > 0 && canvasSize.height > 0) {
+      const targetX = canvasSize.width * 0.5;
+      const targetY = canvasSize.height * 0.25;
+      const locationX = canvasSize.width * (focusTarget.xPercent / 100);
+      const locationY = canvasSize.height * (focusTarget.yPercent / 100);
+
+      animatedScale.value = withTiming(1.38, {
+        duration: 560,
+        easing: Easing.out(Easing.cubic),
+      });
+      animatedTranslateX.value = withTiming((targetX - locationX) * 0.74, {
+        duration: 560,
+        easing: Easing.out(Easing.cubic),
+      });
+      animatedTranslateY.value = withTiming((targetY - locationY) * 0.74, {
+        duration: 560,
+        easing: Easing.out(Easing.cubic),
+      });
+      return;
+    }
+
+    animatedScale.value = withTiming(zoomLevel, { duration: 240 });
+    animatedTranslateX.value = withTiming(0, { duration: 240 });
+    animatedTranslateY.value = withTiming(0, { duration: 240 });
+  }, [
+    animatedScale,
+    animatedTranslateX,
+    animatedTranslateY,
+    canvasSize.height,
+    canvasSize.width,
+    focusTarget,
+    zoomLevel,
+  ]);
+
+  const animatedMapStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: animatedTranslateX.value },
+      { translateY: animatedTranslateY.value },
+      { scale: animatedScale.value },
+    ],
+  }));
+
   return (
-    <View style={styles.canvasContainer}>
+    <View
+      style={styles.canvasContainer}
+      onLayout={({ nativeEvent }) => {
+        const { width, height } = nativeEvent.layout;
+        setCanvasSize((current) =>
+          current.width === width && current.height === height ? current : { width, height }
+        );
+      }}
+    >
+      <Animated.View style={[styles.mapLayer, animatedMapStyle]}>
       {/* ── Realistic Stylized Saigon Urban Grid (SVG) ──────────────── */}
       <Svg
         width="100%"
         height="100%"
         viewBox="0 0 400 700"
-        style={[StyleSheet.absoluteFill, { transform: [{ scale: zoomLevel }] }]}
+        style={StyleSheet.absoluteFill}
       >
         <Defs>
           <LinearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
@@ -183,10 +259,30 @@ export function MapCanvas({
         </Text>
       </View>
 
+      {onMapPress ? (
+        <Pressable
+          style={styles.mapTapTarget}
+          onPress={onMapPress}
+          accessibilityRole="button"
+          accessibilityLabel="Đóng chi tiết và quay lại bản đồ"
+        />
+      ) : null}
+
       {/* ── Interactive POI Markers ───────────────────────────────── */}
-      {locations.map((poi) => (
-        <LocationMarker key={poi.id} poi={poi} onPress={onSelectLocation} />
-      ))}
+      {locations
+        .filter((poi) => poi.id !== focusTarget?.poiId)
+        .map((poi) => (
+          <LocationMarker key={poi.id} poi={poi} onPress={onSelectLocation} />
+        ))}
+      {focusTarget ? (
+        <FocusedLocationMarker
+          key={focusTarget.key}
+          name={focusTarget.name}
+          xPercent={focusTarget.xPercent}
+          yPercent={focusTarget.yPercent}
+        />
+      ) : null}
+      </Animated.View>
     </View>
   );
 }
@@ -196,6 +292,21 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.mapCanvasBg || '#e5eeed',
     overflow: 'hidden',
+  },
+  mapLayer: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
+  mapTapTarget: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 5,
   },
   streetLabel: {
     position: 'absolute',

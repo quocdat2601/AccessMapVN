@@ -1,6 +1,7 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Ionicons, FontAwesome5 } from '@expo/vector-icons';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { branding } from '@/shared/config/branding';
 import { Colors } from '@/shared/theme';
 
 interface HeaderBarProps {
@@ -12,14 +13,18 @@ export function HeaderBar({ onNotificationPress, onProfilePress }: HeaderBarProp
   return (
     <View style={styles.container}>
       <View style={styles.leftSection}>
-        {/* App Logo Icon */}
+        {/* Reuse the same replaceable brand asset shown on Intro and Login. */}
         <View style={styles.logoBadge}>
-          <FontAwesome5 name="wheelchair" size={17} color="#ffffff" />
+          <Image
+            accessibilityIgnoresInvertColors
+            source={branding.logo}
+            style={styles.logoImage}
+          />
         </View>
 
         {/* Brand Titles */}
         <View style={styles.titleContainer}>
-          <Text style={styles.brandSubtitle}>ACCESSMAP VN</Text>
+          <Text style={styles.brandSubtitle}>{branding.appName}</Text>
           <Text style={styles.brandTitle}>Location Gallery</Text>
         </View>
       </View>
@@ -74,14 +79,20 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.primaryUltraLight,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: Colors.primary,
+    overflow: 'hidden',
+    shadowColor: Colors.shadowDark,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.16,
     shadowRadius: 4,
     elevation: 3,
+  },
+  logoImage: {
+    height: 48,
+    resizeMode: 'contain',
+    width: 48,
   },
   titleContainer: {
     justifyContent: 'center',

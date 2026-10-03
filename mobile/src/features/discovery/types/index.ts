@@ -70,3 +70,12 @@ export interface GeocodeResult {
   lng: number;
   type?: string;
 }
+
+export interface SearchLocation {
+  id: string;
+  poiId?: string;
+  name: string;
+  address: string;
+  xPercent: number;
+  yPercent: number;
+}

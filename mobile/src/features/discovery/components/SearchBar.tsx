@@ -9,6 +9,7 @@ interface SearchBarProps {
   onClear?: () => void;
   onSubmit?: () => void;
   isSearching?: boolean;
+  onFocus?: () => void;
   onVoicePress?: () => void;
   onFilterPress?: () => void;
 }
@@ -19,6 +20,7 @@ export function SearchBar({
   onClear,
   onSubmit,
   isSearching = false,
+  onFocus,
   onVoicePress,
   onFilterPress,
 }: SearchBarProps) {
@@ -39,6 +41,7 @@ export function SearchBar({
           placeholderTextColor={Colors.textPlaceholder}
           value={value}
           onChangeText={onChangeText}
+          onFocus={onFocus}
           onSubmitEditing={onSubmit}
           returnKeyType="search"
           accessibilityLabel="Tìm địa điểm tiếp cận"

@@ -1,11 +1,22 @@
-import React, { useRef, useMemo } from 'react';
-import { StyleSheet, View, Text, Platform } from 'react-native';
 import Constants from 'expo-constants';
-import type { PlaceDto, MapRegion, LocationPoi } from '../types';
+import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { Platform, StyleSheet, Text, View } from 'react-native';
+import { reverseGeocode } from '../services/placesApi';
+import type { LocationPoi, MapRegion, PlaceDto } from '../types';
 import { AccessibilityLayer } from './AccessibilityLayer';
-import { UserLocationMarker } from './UserLocationMarker';
 import { MapCanvas } from './MapCanvas';
-import { Colors } from '@/shared/theme';
+import { UserLocationMarker } from './UserLocationMarker';
+
+function cleanPlaceName(rawName: string): string {
+  if (!rawName) return '';
+  return rawName
+    .replace(/^(office|building|commercial|residential|retail|public|amenity)_+/i, '')
+    .replace(/stories\s*\d+/gi, '')
+    .replace(/levels\s*\d+/gi, '')
+    .replace(/height\s*\d+/gi, '')
+    .replace(/^[_\s-]+|[_\s-]+$/g, '')
+    .trim();  
+}
 
 const isExpoGo =
   Constants.appOwnership === 'expo' ||
@@ -32,22 +43,244 @@ interface MapViewProps {
   userLongitude: number | null;
   initialRegion: MapRegion;
   onRegionDidChange?: (feature: any) => void;
-  onSelectPlace?: (placeId: string) => void;
+  onSelectPlace?: (placeId: string | null) => void;
+  onSelectOsmPlace?: (place: PlaceDto | null) => void;
   selectedPlaceId?: string | null;
+  selectedPlace?: PlaceDto | null;
   showAccessibilityLayer?: boolean;
 }
 
-export function MapView({
+export interface MapViewHandle {
+  recenter: () => void;
+  flyTo: (lng: number, lat: number, zoom?: number) => void;
+}
+
+function extractImmediateAddress(features: any[]): string | null {
+  for (const f of features) {
+    const p = f?.properties;
+    if (p?.['addr:street']) {
+      const num = p['addr:housenumber'] ? `${p['addr:housenumber']} ` : '';
+      const ward = p['addr:suburb'] || p['addr:district'] ? `, ${p['addr:suburb'] || p['addr:district']}` : '';
+      return `${num}${p['addr:street']}${ward}`;
+    }
+    if (p?.['addr:full']) return p['addr:full'];
+  }
+
+  const roadFeature = features.find((f: any) => {
+    const p = f?.properties;
+    const name = p?.name || p?.['name:vi'] || p?.name_vi;
+    if (!name) return false;
+    const layer = (f?.layer?.id || '').toLowerCase();
+    const cls = (p?.class || '').toLowerCase();
+    return (
+      layer.includes('road') ||
+      layer.includes('transportation') ||
+      layer.includes('street') ||
+      ['street', 'primary', 'secondary', 'tertiary', 'residential', 'service', 'motorway', 'trunk'].includes(cls)
+    );
+  });
+
+  const areaFeature = features.find((f: any) => {
+    const p = f?.properties;
+    const name = p?.name || p?.['name:vi'] || p?.name_vi;
+    if (!name) return false;
+    const layer = (f?.layer?.id || '').toLowerCase();
+    const cls = (p?.class || '').toLowerCase();
+    return (
+      (layer.includes('place') || layer.includes('boundary') || ['suburb', 'neighbourhood', 'quarter', 'district', 'city'].includes(cls)) &&
+      name !== (roadFeature?.properties?.name || roadFeature?.properties?.['name:vi'])
+    );
+  });
+
+  const roadName = roadFeature?.properties?.name || roadFeature?.properties?.['name:vi'] || roadFeature?.properties?.name_vi;
+  const areaName = areaFeature?.properties?.name || areaFeature?.properties?.['name:vi'] || areaFeature?.properties?.name_vi;
+
+  if (roadName && areaName) return `${roadName}, ${areaName}`;
+  if (roadName) return roadName;
+  if (areaName) return areaName;
+  return null;
+}
+
+export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView({
   places,
   userLatitude,
   userLongitude,
   initialRegion,
   onRegionDidChange,
   onSelectPlace,
+  onSelectOsmPlace,
   selectedPlaceId,
+  selectedPlace,
   showAccessibilityLayer = true,
-}: MapViewProps) {
+}, ref) {
   const cameraRef = useRef<any>(null);
+  const mapRef = useRef<any>(null);
+  const [activeTapPoint, setActiveTapPoint] = useState<{ lng: number; lat: number; name?: string } | null>(null);
+
+  useImperativeHandle(ref, () => ({
+    recenter: () => {
+      if (userLatitude == null || userLongitude == null) return;
+      cameraRef.current?.flyTo({ center: [userLongitude, userLatitude], zoom: 16, duration: 800 });
+    },
+    flyTo: (lng: number, lat: number, zoom: number = 16) => {
+      cameraRef.current?.flyTo({ center: [lng, lat], zoom, duration: 900 });
+    },
+  }), [userLatitude, userLongitude]);
+
+  const handleMapPress = async (event: any) => {
+    const nativeEvent = event?.nativeEvent;
+    if (!nativeEvent?.point || !mapRef.current) return;
+
+    try {
+      const point = nativeEvent.point;
+      const px = Array.isArray(point) ? point[0] : (point as any)?.x;
+      const py = Array.isArray(point) ? point[1] : (point as any)?.y;
+
+      let features: any[] = [];
+      if (typeof px === 'number' && typeof py === 'number' && !isNaN(px) && !isNaN(py)) {
+        try {
+          features = await mapRef.current.queryRenderedFeatures([
+            [px - 24, py - 24],
+            [px + 24, py + 24],
+          ]);
+        } catch {
+          features = [];
+        }
+      }
+
+      if (!features || features.length === 0) {
+        try {
+          features = (await mapRef.current.queryRenderedFeatures(point)) ?? [];
+        } catch {
+          features = [];
+        }
+      }
+
+      if (!features || features.length === 0) {
+        // If nativeEvent already has bubbled features, use them
+        features = nativeEvent?.features ?? [];
+      }
+
+      if (!features || features.length === 0) {
+        setActiveTapPoint(null);
+        onSelectPlace?.(null);
+        onSelectOsmPlace?.(null);
+        return;
+      }
+
+      const immediateAddress = extractImmediateAddress(features);
+
+      // Priority 1: Check if user tapped directly on an AccessMapVN place marker
+      const appFeature = features.find(
+        (f: any) => f?.properties?.id && places.some((p) => p.id === f.properties.id)
+      );
+      if (appFeature) {
+        const matched = places.find((p) => p.id === appFeature.properties.id);
+        if (matched) {
+          setActiveTapPoint({ lng: matched.lng, lat: matched.lat, name: matched.name });
+          if (!matched.address) {
+            const addr = immediateAddress || (await reverseGeocode(matched.lat, matched.lng));
+            if (addr) matched.address = addr;
+          }
+          setActiveTapPoint(null);
+          onSelectOsmPlace?.(null);
+          onSelectPlace?.(appFeature.properties.id);
+          return;
+        }
+      }
+
+      // Priority 2: Check if tapped base map feature matches an existing loaded place
+      const namedFeature = features.find(
+        (f: any) =>
+          f?.properties?.name ||
+          f?.properties?.name_en ||
+          f?.properties?.name_vi ||
+          f?.properties?.['name:vi']
+      );
+
+      if (namedFeature) {
+        const props = namedFeature.properties;
+        const rawName = props.name || props['name:vi'] || props.name_vi || props.name_en;
+        const name = cleanPlaceName(rawName);
+
+        if (!name) {
+          setActiveTapPoint(null);
+          onSelectPlace?.(null);
+          onSelectOsmPlace?.(null);
+          return;
+        }
+
+        const matchedExisting = places.find(
+          (p) => p.name.trim().toLowerCase() === name.trim().toLowerCase()
+        );
+        if (matchedExisting) {
+          setActiveTapPoint({ lng: matchedExisting.lng, lat: matchedExisting.lat, name: matchedExisting.name });
+          if (!matchedExisting.address) {
+            const addr = immediateAddress || (await reverseGeocode(matchedExisting.lat, matchedExisting.lng));
+            if (addr) matchedExisting.address = addr;
+          }
+          setActiveTapPoint(null);
+          onSelectOsmPlace?.(null);
+          onSelectPlace?.(matchedExisting.id);
+          return;
+        }
+
+        // Priority 3: Truly unrated base map feature
+        const coords = nativeEvent.lngLat ?? [initialRegion.longitude, initialRegion.latitude];
+        const placeId = `osm-${namedFeature.id ?? Math.round(coords[0] * 10000)}`;
+        const baseCategory = (props.category || props.class || props.subclass || props.amenity || 'other') as any;
+
+        // Show immediate selection pin on map while address resolves
+        setActiveTapPoint({ lng: coords[0], lat: coords[1], name });
+
+        const phone = props.phone || props['contact:phone'] || null;
+        const website = props.website || props['contact:website'] || null;
+        const openingHours = props.opening_hours || props.openingHours || null;
+        const brand = props.brand || null;
+        const operator = props.operator || null;
+        const quickAddr = props['addr:street']
+          ? `${props['addr:housenumber'] ? props['addr:housenumber'] + ' ' : ''}${props['addr:street']}`
+          : null;
+
+        // Ensure all location details (address) are 100% loaded BEFORE showing the card
+        let resolvedAddress = quickAddr || immediateAddress || null;
+        if (!resolvedAddress && coords[1] && coords[0]) {
+          resolvedAddress = await reverseGeocode(coords[1], coords[0]);
+        }
+
+        setActiveTapPoint(null);
+        onSelectPlace?.(null);
+        onSelectOsmPlace?.({
+          id: placeId,
+          name,
+          category: baseCategory,
+          address: resolvedAddress,
+          phone,
+          website,
+          opening_hours: openingHours,
+          brand,
+          operator,
+          lng: coords[0],
+          lat: coords[1],
+          has_ramp: false,
+          has_elevator: false,
+          has_tactile_paving: false,
+          has_accessible_restroom: false,
+          door_width_ok: false,
+          accessibility_score: -1,
+          accessibility_note: null,
+        });
+      } else {
+        setActiveTapPoint(null);
+        onSelectPlace?.(null);
+        onSelectOsmPlace?.(null);
+      }
+    } catch {
+      setActiveTapPoint(null);
+      onSelectPlace?.(null);
+      onSelectOsmPlace?.(null);
+    }
+  };
 
   // Convert real lat/lng places into SVG LocationPoi coordinates for Expo Go / Web fallback
   const fallbackLocations = useMemo<LocationPoi[]>(() => {
@@ -100,12 +333,14 @@ export function MapView({
   return (
     <View style={styles.container}>
       <MapLibreGL.Map
+        ref={mapRef}
         style={styles.map}
         mapStyle={DEFAULT_STYLE_URL}
         logo={false}
         attribution={false}
         compass
         onRegionDidChange={onRegionDidChange}
+        onPress={handleMapPress}
       >
         <MapLibreGL.Camera
           ref={cameraRef}
@@ -131,10 +366,66 @@ export function MapView({
             selectedPlaceId={selectedPlaceId}
           />
         )}
+
+        {Boolean(selectedPlace || activeTapPoint) && (
+          <MapLibreGL.GeoJSONSource
+            id="selected-place-pin"
+            data={{
+              type: 'Feature',
+              geometry: {
+                type: 'Point',
+                coordinates: selectedPlace
+                  ? [selectedPlace.lng, selectedPlace.lat]
+                  : [activeTapPoint!.lng, activeTapPoint!.lat],
+              },
+              properties: {
+                name: selectedPlace?.name || activeTapPoint?.name || '',
+              },
+            }}
+          >
+            <MapLibreGL.Layer
+              type="circle"
+              id="selected-place-pulse"
+              paint={{
+                circleRadius: 22,
+                circleColor: '#ef4444',
+                circleOpacity: 0.25,
+                circleStrokeWidth: 0,
+              }}
+            />
+            <MapLibreGL.Layer
+              type="circle"
+              id="selected-place-dot"
+              paint={{
+                circleRadius: 9,
+                circleColor: '#ef4444',
+                circleStrokeWidth: 3,
+                circleStrokeColor: '#ffffff',
+              }}
+            />
+            <MapLibreGL.Layer
+              type="symbol"
+              id="selected-place-label"
+              layout={{
+                textField: ['get', 'name'],
+                textSize: 12,
+                textFont: ['Noto Sans Bold'],
+                textOffset: [0, 1.8],
+                textAnchor: 'top',
+                textMaxWidth: 10,
+              }}
+              paint={{
+                textColor: '#0f172a',
+                textHaloColor: '#ffffff',
+                textHaloWidth: 2,
+              }}
+            />
+          </MapLibreGL.GeoJSONSource>
+        )}
       </MapLibreGL.Map>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {

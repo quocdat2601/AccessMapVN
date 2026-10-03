@@ -43,7 +43,7 @@ interface MapViewProps {
   userLongitude: number | null;
   initialRegion: MapRegion;
   onRegionDidChange?: (feature: any) => void;
-  onSelectPlace?: (placeId: string | null) => void;
+  onSelectPlace?: (placeId: string | null, place?: PlaceDto | null) => void;
   onSelectOsmPlace?: (place: PlaceDto | null) => void;
   selectedPlaceId?: string | null;
   selectedPlace?: PlaceDto | null;
@@ -53,6 +53,11 @@ interface MapViewProps {
 export interface MapViewHandle {
   recenter: () => void;
   flyTo: (lng: number, lat: number, zoom?: number) => void;
+}
+
+function isFullAddress(addr?: string | null): boolean {
+  if (!addr) return false;
+  return addr.includes(',');
 }
 
 function extractImmediateAddress(features: any[]): string | null {
@@ -127,6 +132,46 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     },
   }), [userLatitude, userLongitude]);
 
+  const currentResolvingId = useRef<string | null>(null);
+
+  const handleSelectAppPlace = async (placeId: string, immediateAddr?: string | null) => {
+    if (currentResolvingId.current === placeId) return;
+    const matched = places.find((p) => p.id === placeId);
+    if (!matched) return;
+
+    currentResolvingId.current = placeId;
+    setActiveTapPoint({ lng: matched.lng, lat: matched.lat, name: matched.name });
+
+    try {
+      let resolvedAddress = matched.address;
+      if (!isFullAddress(resolvedAddress)) {
+        const addr = await reverseGeocode(matched.lat, matched.lng);
+        if (currentResolvingId.current !== placeId) return;
+        if (addr) {
+          resolvedAddress = addr;
+          matched.address = addr;
+        } else if (!resolvedAddress && immediateAddr) {
+          resolvedAddress = immediateAddr;
+          matched.address = immediateAddr;
+        }
+      }
+      if (currentResolvingId.current !== placeId) return;
+      setActiveTapPoint(null);
+      onSelectOsmPlace?.(null);
+      onSelectPlace?.(placeId, { ...matched, address: resolvedAddress });
+    } catch {
+      if (currentResolvingId.current === placeId) {
+        setActiveTapPoint(null);
+        onSelectOsmPlace?.(null);
+        onSelectPlace?.(placeId, matched);
+      }
+    } finally {
+      if (currentResolvingId.current === placeId) {
+        currentResolvingId.current = null;
+      }
+    }
+  };
+
   const handleMapPress = async (event: any) => {
     const nativeEvent = event?.nativeEvent;
     if (!nativeEvent?.point || !mapRef.current) return;
@@ -175,18 +220,8 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         (f: any) => f?.properties?.id && places.some((p) => p.id === f.properties.id)
       );
       if (appFeature) {
-        const matched = places.find((p) => p.id === appFeature.properties.id);
-        if (matched) {
-          setActiveTapPoint({ lng: matched.lng, lat: matched.lat, name: matched.name });
-          if (!matched.address) {
-            const addr = immediateAddress || (await reverseGeocode(matched.lat, matched.lng));
-            if (addr) matched.address = addr;
-          }
-          setActiveTapPoint(null);
-          onSelectOsmPlace?.(null);
-          onSelectPlace?.(appFeature.properties.id);
-          return;
-        }
+        await handleSelectAppPlace(appFeature.properties.id, immediateAddress);
+        return;
       }
 
       // Priority 2: Check if tapped base map feature matches an existing loaded place
@@ -214,14 +249,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
           (p) => p.name.trim().toLowerCase() === name.trim().toLowerCase()
         );
         if (matchedExisting) {
-          setActiveTapPoint({ lng: matchedExisting.lng, lat: matchedExisting.lat, name: matchedExisting.name });
-          if (!matchedExisting.address) {
-            const addr = immediateAddress || (await reverseGeocode(matchedExisting.lat, matchedExisting.lng));
-            if (addr) matchedExisting.address = addr;
-          }
-          setActiveTapPoint(null);
-          onSelectOsmPlace?.(null);
-          onSelectPlace?.(matchedExisting.id);
+          await handleSelectAppPlace(matchedExisting.id, immediateAddress);
           return;
         }
 
@@ -243,9 +271,17 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
           : null;
 
         // Ensure all location details (address) are 100% loaded BEFORE showing the card
-        let resolvedAddress = quickAddr || immediateAddress || null;
+        let resolvedAddress = isFullAddress(quickAddr)
+          ? quickAddr
+          : isFullAddress(immediateAddress)
+          ? immediateAddress
+          : null;
+
         if (!resolvedAddress && coords[1] && coords[0]) {
           resolvedAddress = await reverseGeocode(coords[1], coords[0]);
+        }
+        if (!resolvedAddress) {
+          resolvedAddress = quickAddr || immediateAddress || null;
         }
 
         setActiveTapPoint(null);
@@ -362,7 +398,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
           <AccessibilityLayer
             MapLibreGL={MapLibreGL}
             places={places}
-            onSelectPlace={onSelectPlace}
+            onSelectPlace={handleSelectAppPlace}
             selectedPlaceId={selectedPlaceId}
           />
         )}

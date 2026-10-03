@@ -1,18 +1,18 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { StyleSheet, View, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
+import { Colors } from '@/shared/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { MapView, type MapViewHandle } from '../components/MapView';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { HeaderBar } from '../components/HeaderBar';
-import { SearchBar } from '../components/SearchBar';
 import { MapControls } from '../components/MapControls';
+import { MapView, type MapViewHandle } from '../components/MapView';
 import { PlaceCallout } from '../components/PlaceCallout';
-import { useUserLocation } from '../hooks/useUserLocation';
+import { SearchBar } from '../components/SearchBar';
 import { useMapRegion } from '../hooks/useMapRegion';
 import { useNearbyPlaces } from '../hooks/useNearbyPlaces';
+import { useUserLocation } from '../hooks/useUserLocation';
 import { forwardGeocode } from '../services/placesApi';
-import { Colors } from '@/shared/theme';
 
-import type { PlaceDto, GeocodeResult } from '../types';
+import type { GeocodeResult, PlaceDto } from '../types';
 
 export function DiscoveryScreen() {
   const mapViewRef = useRef<MapViewHandle>(null);
@@ -23,16 +23,15 @@ export function DiscoveryScreen() {
   const [showAccessibilityLayer, setShowAccessibilityLayer] = useState(true);
   const [osmPlace, setOsmPlace] = useState<PlaceDto | null>(null);
   const { location, loading: locationLoading } = useUserLocation();
-  const { region, bbox, isZoomedOut, onRegionDidChange, initialRegion } = useMapRegion();
+  const { bbox, isZoomedOut, onRegionDidChange, initialRegion } = useMapRegion();
   const {
     places,
     selectedPlace,
     selectedId,
     selectPlace,
-    loading: placesLoading,
   } = useNearbyPlaces(bbox);
 
-  const activePlace = selectedPlace ?? osmPlace;
+  const activePlace = osmPlace ?? selectedPlace;
 
   useEffect(() => {
     const q = searchQuery.trim();
@@ -103,8 +102,8 @@ export function DiscoveryScreen() {
         userLongitude={location?.longitude ?? null}
         initialRegion={initialRegion}
         onRegionDidChange={onRegionDidChange}
-        onSelectPlace={(id) => {
-          setOsmPlace(null);
+        onSelectPlace={(id, place) => {
+          setOsmPlace(place ?? null);
           selectPlace(id);
         }}
         onSelectOsmPlace={(p) => {

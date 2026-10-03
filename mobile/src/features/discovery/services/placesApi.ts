@@ -24,12 +24,70 @@ export async function fetchPlacesInBBox(
 
 const geocodeCache = new Map<string, string>();
 
+function cleanDisplayName(raw: string): string {
+  if (!raw) return '';
+  return raw
+    .replace(/,\s*\d{5,6}/g, '')
+    .replace(/,\s*Việt Nam$/i, '')
+    .trim();
+}
+
+function formatNominatim(data: any): string {
+  const addr = data?.address;
+  const displayName = data?.display_name as string;
+  if (!addr) return cleanDisplayName(displayName) || displayName;
+
+  const num = addr.house_number ? `${addr.house_number} ` : '';
+  const road = addr.road || addr.pedestrian || addr.footway || '';
+  const streetPart = `${num}${road}`.trim();
+
+  const locality = addr.residential || '';
+  const ward = addr.suburb || addr.quarter || addr.neighbourhood || addr.ward || addr.hamlet || '';
+  const district = addr.city_district || addr.district || addr.county || '';
+  const city = addr.city || addr.town || addr.province || addr.state || '';
+
+  const parts = [streetPart, locality, ward, district, city].filter(Boolean);
+  if (parts.length >= 2) {
+    return parts.join(', ');
+  }
+  return cleanDisplayName(displayName) || parts.join(', ');
+}
+
 export async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
   const cacheKey = `${lat.toFixed(4)},${lng.toFixed(4)}`;
   if (geocodeCache.has(cacheKey)) {
     return geocodeCache.get(cacheKey)!;
   }
 
+  // 1. Try Photon first (fast, ~150ms, no strict 1 req/s rate-limit)
+  try {
+    const photonRes = await fetch(`https://photon.komoot.io/reverse?lat=${lat}&lon=${lng}`, {
+      headers: { 'User-Agent': 'AccessMapVN/1.0' },
+      signal: AbortSignal.timeout(2500),
+    });
+    if (photonRes.ok) {
+      const data = await photonRes.json();
+      const p = data?.features?.[0]?.properties;
+      if (p) {
+        const num = p.housenumber ? `${p.housenumber} ` : '';
+        const street = p.street || p.name || '';
+        const streetPart = `${num}${street}`.trim();
+        const locality = p.locality || '';
+        const district = p.district && p.district !== locality ? p.district : '';
+        const city = p.city || p.state || '';
+        const parts = [streetPart, locality, district, city].filter(Boolean);
+        if (parts.length >= 2) {
+          const formatted = parts.join(', ');
+          geocodeCache.set(cacheKey, formatted);
+          return formatted;
+        }
+      }
+    }
+  } catch {
+    // Fallback to Nominatim
+  }
+
+  // 2. Fallback to Nominatim with full address parser
   try {
     const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`;
     const res = await fetch(url, {
@@ -37,28 +95,20 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string |
         'User-Agent': 'AccessMapVN/1.0 (https://accessmap.vn)',
         'Accept-Language': 'vi,en;q=0.9',
       },
+      signal: AbortSignal.timeout(3500),
     });
     if (!res.ok) return null;
     const data = await res.json();
-    const addr = data?.address;
-    if (!addr) return (data?.display_name as string) ?? null;
-
-    const parts = [
-      addr.house_number,
-      addr.road,
-      addr.suburb || addr.quarter || addr.neighbourhood,
-      addr.city_district || addr.district,
-    ].filter(Boolean);
-
-    const formatted = parts.length > 0 ? parts.join(', ') : (data.display_name as string);
+    const formatted = formatNominatim(data);
     if (formatted) {
       if (geocodeCache.size > 200) {
         const firstKey = geocodeCache.keys().next().value;
         if (firstKey) geocodeCache.delete(firstKey);
       }
       geocodeCache.set(cacheKey, formatted);
+      return formatted;
     }
-    return formatted ?? null;
+    return null;
   } catch {
     return null;
   }

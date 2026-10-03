@@ -32,6 +32,21 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Cho phép AccessMapVN sử dụng camera để ghi nhận bằng chứng tiếp cận.",
+          "microphonePermission": "Cho phép AccessMapVN sử dụng micrô khi quay video bằng chứng.",
+          "recordAudioAndroid": true,
+          "barcodeScannerEnabled": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Cho phép AccessMapVN sử dụng vị trí để gắn GPS cho bằng chứng tiếp cận."
+        }
       ]
     ],
     "experiments": {

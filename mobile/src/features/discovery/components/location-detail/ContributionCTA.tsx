@@ -1,15 +1,24 @@
-import React from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { startContributionFlow } from '@/features/contribution/navigation/startContributionFlow';
 import { Colors } from '@/shared/theme';
 
-export function ContributionCTA() {
+interface ContributionCTAProps {
+  locationId: string;
+  locationName: string;
+}
+
+export function ContributionCTA({ locationId, locationName }: ContributionCTAProps) {
+  const router = useRouter();
   return (
     <View style={styles.container}>
       <TouchableOpacity
         style={styles.button}
-        onPress={() => Alert.alert('Đóng góp dữ liệu tiếp cận', 'Luồng đóng góp sẽ được kết nối ở bước tiếp theo.')}
+        onPress={() => startContributionFlow(router, { id: locationId, name: locationName })}
         accessibilityRole="button"
+        accessibilityLabel="Đóng góp dữ liệu tiếp cận"
         activeOpacity={0.82}
       >
         <MaterialCommunityIcons name="plus-box-outline" size={22} color={Colors.surface} />
@@ -27,9 +36,7 @@ export function ContributionCTA() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingBottom: 34,
-  },
+  container: { paddingBottom: 34 },
   button: {
     height: 58,
     borderRadius: 17,
@@ -44,11 +51,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
-  buttonText: {
-    color: Colors.surface,
-    fontSize: 16,
-    fontWeight: '800',
-  },
+  buttonText: { color: Colors.surface, fontSize: 16, fontWeight: '800' },
   noteRow: {
     marginTop: 14,
     paddingHorizontal: 10,
@@ -56,14 +59,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 9,
   },
-  note: {
-    flex: 1,
-    color: Colors.textSecondary,
-    fontSize: 12.5,
-    lineHeight: 18,
-  },
-  reward: {
-    color: Colors.primary,
-    fontWeight: '800',
-  },
+  note: { flex: 1, color: Colors.textSecondary, fontSize: 12.5, lineHeight: 18 },
+  reward: { color: Colors.primary, fontWeight: '800' },
 });

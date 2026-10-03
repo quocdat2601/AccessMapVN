@@ -22,6 +22,7 @@ import { LocationDetailData } from './types';
 interface LocationDetailSheetProps {
   data: LocationDetailData;
   containerHeight: number;
+  collapseRequest: number;
   onClose: () => void;
   onExpandedChange?: (isExpanded: boolean) => void;
 }
@@ -37,6 +38,7 @@ const SPRING_CONFIG = {
 export function LocationDetailSheet({
   data,
   containerHeight,
+  collapseRequest,
   onClose,
   onExpandedChange,
 }: LocationDetailSheetProps) {
@@ -51,6 +53,13 @@ export function LocationDetailSheet({
     translateY.value = sheetHeight;
     translateY.value = withTiming(collapsedOffset, { duration: 420 });
   }, [collapsedOffset, sheetHeight, translateY]);
+
+  useEffect(() => {
+    if (collapseRequest === 0) return;
+    translateY.value = withSpring(collapsedOffset, SPRING_CONFIG);
+    setSnap('collapsed');
+    onExpandedChange?.(false);
+  }, [collapseRequest, collapsedOffset, onExpandedChange, translateY]);
 
   const setSnapFromAnimation = useCallback((nextSnap: SheetSnap) => {
     setSnap(nextSnap);
@@ -151,7 +160,10 @@ export function LocationDetailSheet({
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          snap === 'collapsed' && { paddingBottom: collapsedOffset + 28 },
+        ]}
         scrollEnabled={snap !== 'peek'}
         nestedScrollEnabled
         keyboardShouldPersistTaps="handled"
@@ -173,7 +185,7 @@ export function LocationDetailSheet({
           <CommunityReviewsSection reviews={data.reviews} />
           <EvidenceGallerySection evidence={data.evidence} />
           <AccuracyConfirmationSection />
-          <ContributionCTA />
+          <ContributionCTA locationId={data.id} locationName={data.name} />
         </View>
       </ScrollView>
     </Animated.View>

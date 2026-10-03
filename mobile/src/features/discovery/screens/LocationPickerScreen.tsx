@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Keyboard, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNearbyLocations } from '../hooks/useNearbyLocations';
 import { SEARCH_LOCATIONS } from '../data/mockSearchLocations';
@@ -38,6 +39,7 @@ export function LocationPickerScreen() {
   const [focusTarget, setFocusTarget] = useState<MapFocusTarget | null>(null);
   const [isDetailVisible, setIsDetailVisible] = useState(false);
   const [isDetailExpanded, setIsDetailExpanded] = useState(false);
+  const [detailCollapseRequest, setDetailCollapseRequest] = useState(0);
   const [mapHeight, setMapHeight] = useState(0);
   const focusSequenceRef = useRef(0);
   const detailTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -47,6 +49,13 @@ export function LocationPickerScreen() {
       if (detailTimerRef.current) clearTimeout(detailTimerRef.current);
     },
     []
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      setIsDetailExpanded(false);
+      setDetailCollapseRequest((current) => current + 1);
+    }, [])
   );
 
   const detailData = useMemo(() => {
@@ -216,6 +225,7 @@ export function LocationPickerScreen() {
           <LocationDetailSheet
             data={detailData}
             containerHeight={mapHeight}
+            collapseRequest={detailCollapseRequest}
             onClose={closeLocationDetail}
             onExpandedChange={setIsDetailExpanded}
           />

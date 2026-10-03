@@ -13,6 +13,10 @@ export interface PlaceDto {
   door_width_ok: boolean;
   accessibility_score: number;
   accessibility_note: string | null;
+  floor_level?: number;
+  building_id?: string | null;
+  has_accessible_elevator?: boolean;
+  last_verified_at?: string;
 }
 
 export interface BoundingBox {

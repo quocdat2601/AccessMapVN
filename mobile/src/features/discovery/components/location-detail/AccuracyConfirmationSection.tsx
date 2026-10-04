@@ -1,113 +1,110 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '@/shared/theme';
 
-type AccuracyResponse = 'accurate' | 'changed' | null;
+interface AccuracyConfirmationSectionProps {
+  onConfirmAccurate?: () => void;
+  onReportIssue?: () => void;
+}
 
-export function AccuracyConfirmationSection() {
-  const [response, setResponse] = useState<AccuracyResponse>(null);
+export function AccuracyConfirmationSection({
+  onConfirmAccurate,
+  onReportIssue,
+}: AccuracyConfirmationSectionProps) {
+  const [isConfirmed, setIsConfirmed] = useState(false);
+
+  const handleConfirm = () => {
+    setIsConfirmed(true);
+    onConfirmAccurate?.();
+    Alert.alert('Cảm ơn bạn!', 'Đã ghi nhận xác nhận tiếp cận. Bạn nhận được +15 EXP cộng đồng!');
+  };
+
+  const handleReport = () => {
+    onReportIssue?.();
+    Alert.alert('Báo lỗi tiếp cận', 'Cảm ơn bạn đã phản hồi. Nhóm kiểm duyệt sẽ xác minh lại thông tin địa điểm này.');
+  };
 
   return (
     <View style={styles.container}>
-      <View style={styles.titleRow}>
-        <MaterialCommunityIcons name="help-circle-outline" size={22} color={Colors.primaryContainer} />
-        <Text style={styles.title}>Thông tin này còn chính xác không?</Text>
-      </View>
-      <Text style={styles.description}>
-        Xác nhận của bạn giúp dữ liệu luôn mới và đáng tin cậy.
-      </Text>
-      <View style={styles.actions}>
-        <TouchableOpacity
-          style={[styles.button, styles.accurateButton, response === 'accurate' && styles.selectedButton]}
-          onPress={() => setResponse('accurate')}
-          accessibilityRole="button"
-          activeOpacity={0.8}
-        >
-          <MaterialCommunityIcons name="check-circle-outline" size={19} color={Colors.primary} />
-          <Text style={styles.accurateText}>
-            {response === 'accurate' ? 'Đã xác nhận' : 'Vẫn chính xác'}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.button, styles.reportButton, response === 'changed' && styles.reportSelected]}
-          onPress={() => setResponse('changed')}
-          accessibilityRole="button"
-          activeOpacity={0.8}
-        >
-          <MaterialCommunityIcons name="alert-outline" size={19} color={Colors.poiHospital} />
-          <Text style={styles.reportText}>
-            {response === 'changed' ? 'Đã ghi nhận' : 'Báo thay đổi'}
-          </Text>
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity
+        style={[styles.confirmBtn, isConfirmed && styles.confirmedBtn]}
+        onPress={handleConfirm}
+        disabled={isConfirmed}
+        accessibilityRole="button"
+        accessibilityLabel="Vẫn dùng tốt nhận 15 EXP"
+        activeOpacity={0.85}
+      >
+        <MaterialCommunityIcons
+          name={isConfirmed ? 'check-circle' : 'check-circle-outline'}
+          size={20}
+          color="#ffffff"
+        />
+        <Text style={styles.confirmBtnText}>
+          {isConfirmed ? 'Đã xác nhận (+15 EXP)' : 'Vẫn dùng tốt (+15 EXP)'}
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.reportBtn}
+        onPress={handleReport}
+        accessibilityRole="button"
+        accessibilityLabel="Báo lỗi thông tin"
+        activeOpacity={0.8}
+      >
+        <MaterialCommunityIcons name="alert-circle-outline" size={19} color="#dc2626" />
+        <Text style={styles.reportBtnText}>Báo lỗi</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 20,
-    padding: 15,
-    borderRadius: 18,
-    backgroundColor: Colors.surfaceVariant,
+    marginTop: 8,
+    marginBottom: 24,
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
   },
-  titleRow: {
+  confirmBtn: {
+    flex: 2,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#006874',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#006874',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  title: {
-    flex: 1,
-    color: Colors.textPrimary,
-    fontSize: 17,
+  confirmedBtn: {
+    backgroundColor: '#059669',
+  },
+  confirmBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
     fontWeight: '800',
-    letterSpacing: -0.3,
   },
-  description: {
-    marginTop: 8,
-    color: Colors.textSecondary,
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  actions: {
-    marginTop: 13,
-    flexDirection: 'row',
-    gap: 9,
-  },
-  button: {
+  reportBtn: {
     flex: 1,
-    height: 46,
-    borderRadius: 23,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#fee2e2',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-  },
-  accurateButton: {
-    backgroundColor: Colors.primaryLight,
-  },
-  selectedButton: {
-    borderWidth: 1.5,
-    borderColor: Colors.primaryContainer,
-  },
-  accurateText: {
-    color: Colors.primary,
-    fontSize: 12.5,
-    fontWeight: '800',
-  },
-  reportButton: {
-    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: '#cfd5d4',
+    borderColor: '#fecaca',
   },
-  reportSelected: {
-    borderColor: Colors.poiHospital,
-    backgroundColor: '#fff5f4',
-  },
-  reportText: {
-    color: Colors.textSecondary,
-    fontSize: 12.5,
+  reportBtnText: {
+    color: '#dc2626',
+    fontSize: 13.5,
     fontWeight: '700',
   },
 });

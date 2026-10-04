@@ -1,11 +1,11 @@
 import { Colors } from '@/shared/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Keyboard, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { HeaderBar } from '../components/HeaderBar';
 import { MapControls } from '../components/MapControls';
 import { MapView, type MapViewHandle } from '../components/MapView';
-import { PlaceCallout } from '../components/PlaceCallout';
+import { LocationDetailSheet } from '../components/location-detail';
 import { SearchBar } from '../components/SearchBar';
 import { useMapRegion } from '../hooks/useMapRegion';
 import { useNearbyPlaces } from '../hooks/useNearbyPlaces';
@@ -14,12 +14,25 @@ import { forwardGeocode } from '../services/placesApi';
 
 import type { GeocodeResult, PlaceDto } from '../types';
 
-export function DiscoveryScreen() {
+interface DiscoveryScreenProps {
+  onNavigateToContribute?: (place: { id: string; name: string }) => void;
+}
+
+const QUICK_SEARCH_SUGGESTIONS = [
+  { id: 'hosp', icon: 'medical', label: 'Bệnh viện & Cơ sở y tế', query: 'Bệnh viện' },
+  { id: 'cafe', icon: 'cafe', label: 'Quán Cà phê tiếp cận', query: 'Cà phê' },
+  { id: 'mall', icon: 'cart', label: 'TTTM & Siêu thị', query: 'Siêu thị' },
+  { id: 'pharm', icon: 'fitness', label: 'Nhà thuốc đạt chuẩn', query: 'Nhà thuốc' },
+  { id: 'transit', icon: 'bus', label: 'Bến xe & Giao thông', query: 'Bến xe' },
+];
+
+export function DiscoveryScreen({ onNavigateToContribute }: DiscoveryScreenProps = {}) {
   const mapViewRef = useRef<MapViewHandle>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<GeocodeResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [showAccessibilityLayer, setShowAccessibilityLayer] = useState(true);
   const [osmPlace, setOsmPlace] = useState<PlaceDto | null>(null);
   const { location, loading: locationLoading } = useUserLocation();
@@ -64,6 +77,8 @@ export function DiscoveryScreen() {
 
   const handleSelectSearchResult = (result: GeocodeResult) => {
     setShowResults(false);
+    setIsSearchFocused(false);
+    Keyboard.dismiss();
     setSearchQuery(result.name);
     mapViewRef.current?.flyTo(result.lng, result.lat, 16);
     selectPlace(null);
@@ -125,17 +140,72 @@ export function DiscoveryScreen() {
         <HeaderBar />
         <SearchBar
           value={searchQuery}
-          onChangeText={setSearchQuery}
+          onChangeText={(text) => {
+            setSearchQuery(text);
+            if (text.length >= 2) {
+              setShowResults(true);
+            }
+          }}
+          onFocus={() => {
+            setIsSearchFocused(true);
+            if (activePlace) {
+              selectPlace(null);
+              setOsmPlace(null);
+            }
+          }}
           onClear={() => {
             setSearchQuery('');
             setSearchResults([]);
             setShowResults(false);
+            setIsSearchFocused(false);
+            Keyboard.dismiss();
           }}
           isSearching={isSearching}
         />
 
-        {showResults && searchResults.length > 0 && (
+        {/* Quick suggestions when search is focused and query is empty */}
+        {isSearchFocused && searchQuery.trim().length === 0 && (
           <View style={styles.resultsDropdown}>
+            <View style={styles.suggestionsHeader}>
+              <Text style={styles.suggestionsHeaderText}>GỢI Ý TÌM KIẾM NHANH</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setIsSearchFocused(false);
+                  Keyboard.dismiss();
+                }}
+                hitSlop={10}
+              >
+                <Text style={styles.suggestionsCloseText}>Đóng</Text>
+              </TouchableOpacity>
+            </View>
+            {QUICK_SEARCH_SUGGESTIONS.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.resultItem}
+                onPress={() => {
+                  setSearchQuery(item.query);
+                  setIsSearchFocused(false);
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name={item.icon as any} size={18} color={Colors.primary} style={styles.resultIcon} />
+                <View style={styles.resultTextContainer}>
+                  <Text style={styles.resultName}>{item.label}</Text>
+                  <Text style={styles.resultAddress}>Khảo sát tiêu chuẩn tiếp cận</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {showResults && searchResults.length > 0 && (
+          <ScrollView
+            style={styles.resultsDropdown}
+            contentContainerStyle={styles.resultsDropdownContent}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+            showsVerticalScrollIndicator={true}
+          >
             {searchResults.map((item) => (
               <TouchableOpacity
                 key={item.id}
@@ -150,7 +220,7 @@ export function DiscoveryScreen() {
                 </View>
               </TouchableOpacity>
             ))}
-          </View>
+          </ScrollView>
         )}
       </View>
 
@@ -167,13 +237,16 @@ export function DiscoveryScreen() {
       )}
 
       {activePlace && (
-        <PlaceCallout
+        <LocationDetailSheet
           place={activePlace}
           userLatitude={location?.latitude}
           userLongitude={location?.longitude}
           onClose={() => {
             selectPlace(null);
             setOsmPlace(null);
+          }}
+          onContribute={(p) => {
+            onNavigateToContribute?.({ id: p.id, name: p.name });
           }}
         />
       )}
@@ -228,7 +301,6 @@ const styles = StyleSheet.create({
     marginTop: 6,
     backgroundColor: '#ffffff',
     borderRadius: 16,
-    paddingVertical: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
@@ -236,7 +308,11 @@ const styles = StyleSheet.create({
     elevation: 8,
     borderWidth: 1,
     borderColor: '#f1f5f9',
-    maxHeight: 280,
+    maxHeight: 320,
+    overflow: 'hidden',
+  },
+  resultsDropdownContent: {
+    paddingVertical: 4,
   },
   resultItem: {
     flexDirection: 'row',
@@ -261,5 +337,26 @@ const styles = StyleSheet.create({
   resultAddress: {
     fontSize: 11,
     color: '#64748b',
+  },
+  suggestionsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingTop: 8,
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  suggestionsHeaderText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+    letterSpacing: 0.4,
+  },
+  suggestionsCloseText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primary,
   },
 });

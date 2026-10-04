@@ -1,5 +1,12 @@
-import React from 'react';
-import { StyleSheet, TextInput, TouchableOpacity, View, ActivityIndicator } from 'react-native';
+import React, { useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/shared/theme';
 
@@ -10,6 +17,7 @@ interface SearchBarProps {
   onSubmit?: () => void;
   isSearching?: boolean;
   onFocus?: () => void;
+  onBlur?: () => void;
   onVoicePress?: () => void;
   onFilterPress?: () => void;
 }
@@ -21,27 +29,47 @@ export function SearchBar({
   onSubmit,
   isSearching = false,
   onFocus,
+  onBlur,
   onVoicePress,
   onFilterPress,
 }: SearchBarProps) {
+  const inputRef = useRef<TextInput>(null);
+  const [isFocused, setIsFocused] = useState(false);
+
   return (
     <View style={styles.outerContainer}>
-      <View style={styles.searchBox}>
+      <Pressable
+        style={[styles.searchBox, isFocused && styles.searchBoxFocused]}
+        onPress={() => inputRef.current?.focus()}
+      >
         {/* Search Icon / Loader */}
         {isSearching ? (
           <ActivityIndicator size="small" color={Colors.primary} style={styles.searchIcon} />
         ) : (
-          <Ionicons name="search" size={20} color={Colors.primaryContainer} style={styles.searchIcon} />
+          <Ionicons
+            name="search"
+            size={20}
+            color={isFocused ? Colors.primary : Colors.primaryContainer}
+            style={styles.searchIcon}
+          />
         )}
 
         {/* Input */}
         <TextInput
+          ref={inputRef}
           style={styles.input}
           placeholder="Tìm địa điểm, địa chỉ hoặc tọa độ"
           placeholderTextColor={Colors.textPlaceholder}
           value={value}
           onChangeText={onChangeText}
-          onFocus={onFocus}
+          onFocus={() => {
+            setIsFocused(true);
+            onFocus?.();
+          }}
+          onBlur={() => {
+            setIsFocused(false);
+            onBlur?.();
+          }}
           onSubmitEditing={onSubmit}
           returnKeyType="search"
           accessibilityLabel="Tìm địa điểm tiếp cận"
@@ -81,7 +109,7 @@ export function SearchBar({
         >
           <Ionicons name="options-outline" size={17} color={Colors.textPrimary} />
         </TouchableOpacity>
-      </View>
+      </Pressable>
     </View>
   );
 }
@@ -107,6 +135,12 @@ const styles = StyleSheet.create({
     elevation: 4,
     borderWidth: 1,
     borderColor: '#f1f5f9',
+  },
+  searchBoxFocused: {
+    borderColor: Colors.primary,
+    borderWidth: 1.5,
+    backgroundColor: '#ffffff',
+    shadowOpacity: 0.2,
   },
   searchIcon: {
     marginRight: 10,

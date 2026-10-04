@@ -2,7 +2,11 @@ export type AccessibilityIconName =
   | 'wheelchair-accessibility'
   | 'elevator-passenger'
   | 'slope-uphill'
-  | 'toilet';
+  | 'toilet'
+  | 'door'
+  | 'dots-grid'
+  | 'shield-check'
+  | 'check-decagram';
 
 export interface AccessibilityDetailFeature {
   id: string;
@@ -26,18 +30,5 @@ export interface EvidenceItem {
   subtitle: string;
   badge: string;
   isFaceBlurred?: boolean;
-}
-
-export interface LocationDetailData {
-  id: string;
-  name: string;
-  address: string;
-  standardLabel: string;
-  trustPercent: number;
-  confirmationCount: number;
-  lastVerified: string;
-  verificationState: string;
-  features: AccessibilityDetailFeature[];
-  reviews: CommunityReview[];
-  evidence: EvidenceItem[];
+  imageUrl?: string;
 }

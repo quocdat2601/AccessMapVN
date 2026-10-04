@@ -1,22 +1,20 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { startContributionFlow } from '@/features/contribution/navigation/startContributionFlow';
 import { Colors } from '@/shared/theme';
 
 interface ContributionCTAProps {
-  locationId: string;
-  locationName: string;
+  locationId?: string;
+  locationName?: string;
+  onPress?: () => void;
 }
 
-export function ContributionCTA({ locationId, locationName }: ContributionCTAProps) {
-  const router = useRouter();
+export function ContributionCTA({ locationId, locationName, onPress }: ContributionCTAProps) {
   return (
     <View style={styles.container}>
       <TouchableOpacity
         style={styles.button}
-        onPress={() => startContributionFlow(router, { id: locationId, name: locationName })}
+        onPress={onPress}
         accessibilityRole="button"
         accessibilityLabel="Đóng góp dữ liệu tiếp cận"
         activeOpacity={0.82}

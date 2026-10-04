@@ -6,5 +6,4 @@ export * from './ContributionCTA';
 export * from './EvidenceGallerySection';
 export * from './LocationDetailSheet';
 export * from './LocationHeader';
-export * from './mockLocationDetail';
 export * from './types';

@@ -1,13 +1,13 @@
 import React from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '@/shared/theme';
 import { EvidenceItem } from './types';
-import { SectionHeading } from './SectionHeading';
 
 interface EvidenceGallerySectionProps {
   evidence: EvidenceItem[];
+  onAddEvidence?: () => void;
 }
 
 function EvidenceIllustration() {
@@ -29,42 +29,50 @@ function EvidenceIllustration() {
   );
 }
 
-export function EvidenceGallerySection({ evidence }: EvidenceGallerySectionProps) {
+export function EvidenceGallerySection({ evidence, onAddEvidence }: EvidenceGallerySectionProps) {
+  const photoCount = evidence.length;
+
   return (
     <View style={styles.section}>
-      <SectionHeading
-        icon="camera-outline"
-        title="Ảnh & bằng chứng cộng đồng"
-        meta={`(${evidence.length + 26} ảnh)`}
-        actionLabel="Xem tất cả"
-        onActionPress={() => Alert.alert('Bằng chứng cộng đồng', 'Thư viện đầy đủ sẽ được bổ sung sau.')}
-      />
+      <View style={styles.headingRow}>
+        <View style={styles.headingLeft}>
+          <MaterialCommunityIcons name="camera-outline" size={18} color={Colors.primary} />
+          <Text style={styles.headingTitle}>Hình ảnh tiếp cận</Text>
+        </View>
+        <Text style={styles.headingCount}>
+          {photoCount > 0 ? `${photoCount} ảnh` : 'Chưa có ảnh'}
+        </Text>
+      </View>
+
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.cards}
       >
         {evidence.map((item) => (
-          <View key={item.id} style={styles.card}>
-            <View style={styles.imageWrap}>
+          <View key={item.id} style={styles.thumbCard}>
+            <View style={styles.thumbIllustration}>
               <EvidenceIllustration />
-              {item.isFaceBlurred ? (
-                <View style={styles.blurBadge}>
-                  <MaterialCommunityIcons name="blur" size={14} color={Colors.surface} />
-                  <Text style={styles.blurText}>Mặt đã làm mờ</Text>
-                </View>
-              ) : null}
-              <View style={styles.evidenceBadge}>
-                <MaterialCommunityIcons name="ruler" size={14} color={Colors.surface} />
-                <Text style={styles.evidenceBadgeText}>{item.badge}</Text>
+              <View style={styles.thumbLabelOverlay}>
+                <Text style={styles.thumbLabelText} numberOfLines={1}>{item.title}</Text>
               </View>
-            </View>
-            <View style={styles.cardCopy}>
-              <Text style={styles.title}>{item.title}</Text>
-              <Text style={styles.subtitle}>{item.subtitle}</Text>
             </View>
           </View>
         ))}
+
+        {/* Dashed Camera +50 EXP Tile */}
+        <TouchableOpacity
+          style={styles.addCard}
+          onPress={onAddEvidence}
+          accessibilityRole="button"
+          accessibilityLabel="Chụp ảnh đóng góp nhận 50 EXP"
+          activeOpacity={0.78}
+        >
+          <View style={styles.addCardContent}>
+            <MaterialCommunityIcons name="camera-plus-outline" size={26} color={Colors.primary} />
+            <Text style={styles.addCardExp}>+50 EXP</Text>
+          </View>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -72,23 +80,80 @@ export function EvidenceGallerySection({ evidence }: EvidenceGallerySectionProps
 
 const styles = StyleSheet.create({
   section: {
-    marginBottom: 22,
+    marginBottom: 18,
+  },
+  headingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  headingLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  headingTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  headingCount: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.textMuted,
   },
   cards: {
-    paddingTop: 10,
-    paddingRight: 18,
-    gap: 12,
+    gap: 10,
+    paddingRight: 10,
   },
-  card: {
-    width: 318,
+  thumbCard: {
+    width: 108,
+    height: 84,
+    borderRadius: 14,
     overflow: 'hidden',
-    borderRadius: 18,
+    backgroundColor: '#dce9e7',
     borderWidth: 1,
-    borderColor: Colors.divider,
-    backgroundColor: Colors.surface,
+    borderColor: '#e2e8f0',
   },
-  imageWrap: {
-    height: 150,
+  thumbIllustration: {
+    flex: 1,
+    position: 'relative',
+  },
+  thumbLabelOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingVertical: 3,
+    paddingHorizontal: 6,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    alignItems: 'center',
+  },
+  thumbLabelText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  addCard: {
+    width: 96,
+    height: 84,
+    borderRadius: 14,
+    borderWidth: 1.8,
+    borderStyle: 'dashed',
+    borderColor: Colors.primary,
+    backgroundColor: '#f0fdfa',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addCardContent: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  addCardExp: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.primary,
   },
   illustration: {
     position: 'absolute',
@@ -104,53 +169,5 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     backgroundColor: 'rgba(0, 55, 63, 0.08)',
-  },
-  blurBadge: {
-    position: 'absolute',
-    left: 10,
-    top: 10,
-    height: 27,
-    borderRadius: 14,
-    paddingHorizontal: 9,
-    backgroundColor: 'rgba(25, 28, 28, 0.68)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  blurText: {
-    color: Colors.surface,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  evidenceBadge: {
-    position: 'absolute',
-    left: 10,
-    bottom: 9,
-    height: 29,
-    borderRadius: 15,
-    paddingHorizontal: 10,
-    backgroundColor: Colors.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  evidenceBadgeText: {
-    color: Colors.surface,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  cardCopy: {
-    paddingHorizontal: 13,
-    paddingVertical: 11,
-  },
-  title: {
-    color: Colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  subtitle: {
-    marginTop: 2,
-    color: Colors.textMuted,
-    fontSize: 11.5,
   },
 });

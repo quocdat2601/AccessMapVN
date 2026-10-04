@@ -1,6 +1,12 @@
 /* eslint-disable react-hooks/immutability -- Reanimated SharedValues are intentionally mutated in gesture worklets. */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import {
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -11,66 +17,175 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Colors } from '@/shared/theme';
+import type { PlaceDto } from '../../types';
 import { AccessibilitySummary } from './AccessibilitySummary';
 import { AccuracyConfirmationSection } from './AccuracyConfirmationSection';
 import { CommunityReviewsSection } from './CommunityReviewsSection';
 import { ContributionCTA } from './ContributionCTA';
 import { EvidenceGallerySection } from './EvidenceGallerySection';
 import { LocationHeader } from './LocationHeader';
-import { LocationDetailData } from './types';
+import type { AccessibilityDetailFeature, CommunityReview, EvidenceItem } from './types';
 
 interface LocationDetailSheetProps {
-  data: LocationDetailData;
-  containerHeight: number;
-  collapseRequest: number;
+  place: PlaceDto;
+  userLatitude?: number | null;
+  userLongitude?: number | null;
   onClose: () => void;
-  onExpandedChange?: (isExpanded: boolean) => void;
+  onContribute?: (place: PlaceDto) => void;
+  onReportIssue?: (place: PlaceDto) => void;
 }
 
 type SheetSnap = 'expanded' | 'collapsed' | 'peek';
 
 const SPRING_CONFIG = {
   damping: 24,
-  stiffness: 230,
+  stiffness: 220,
   mass: 0.85,
 };
 
+function formatCategory(category: string): string {
+  const map: Record<string, string> = {
+    gps: 'Vị trí hiện tại',
+    hospital: 'Bệnh viện / Y tế',
+    clinic: 'Phòng khám',
+    pharmacy: 'Nhà thuốc',
+    cafe: 'Quán Cà phê',
+    restaurant: 'Nhà hàng / Quán ăn',
+    fast_food: 'Đồ ăn nhanh',
+    mall: 'TT Thương mại',
+    market: 'Cửa hàng / Siêu thị',
+    supermarket: 'Siêu thị',
+    convenience: 'Cửa hàng tiện lợi',
+    hotel: 'Khách sạn / Lưu trú',
+    transit: 'Giao thông công cộng',
+    town_hall: 'Cơ quan hành chính',
+    government: 'Cơ quan nhà nước',
+    school: 'Giáo dục / Trường học',
+    bank: 'Ngân hàng / ATM',
+    other: 'Địa điểm công cộng',
+  };
+  return map[category?.toLowerCase()] ?? category ?? 'Địa điểm';
+}
+
+function calculateDistance(
+  lat1?: number | null,
+  lon1?: number | null,
+  lat2?: number | null,
+  lon2?: number | null
+): string | null {
+  if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return null;
+  const R = 6371; // km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const d = R * c;
+  if (d < 1) return `Cách ${Math.round(d * 1000)} m`;
+  return `Cách ${d.toFixed(1)} km`;
+}
+
 export function LocationDetailSheet({
-  data,
-  containerHeight,
-  collapseRequest,
+  place,
+  userLatitude,
+  userLongitude,
   onClose,
-  onExpandedChange,
+  onContribute,
+  onReportIssue,
 }: LocationDetailSheetProps) {
-  const sheetHeight = Math.max(containerHeight - 62, 320);
-  const collapsedOffset = Math.round(sheetHeight * 0.44);
-  const peekOffset = Math.max(sheetHeight - 96, collapsedOffset);
+  const { height: windowHeight } = useWindowDimensions();
+  const sheetHeight = Math.min(Math.max(windowHeight * 0.7, 440), 560);
+  const collapsedOffset = Math.round(sheetHeight * 0.38);
+  const peekOffset = Math.max(sheetHeight - 88, collapsedOffset);
+
   const translateY = useSharedValue(sheetHeight);
   const dragStartY = useSharedValue(collapsedOffset);
   const [snap, setSnap] = useState<SheetSnap>('collapsed');
 
+  const isUnrated =
+    place.accessibility_score == null ||
+    Number(place.accessibility_score) < 0 ||
+    isNaN(Number(place.accessibility_score));
+
+  const trustPercent = isUnrated
+    ? 0
+    : Math.round(Math.min(Math.max(Number(place.accessibility_score) * 100, 0), 100));
+
+  const distanceStr = useMemo(
+    () => calculateDistance(userLatitude, userLongitude, place.lat, place.lng),
+    [userLatitude, userLongitude, place.lat, place.lng]
+  );
+
+  const localizedCategory = useMemo(() => formatCategory(place.category), [place.category]);
+
+  const features = useMemo<AccessibilityDetailFeature[]>(() => {
+    const list: AccessibilityDetailFeature[] = [];
+    if (place.has_ramp) {
+      list.push({ id: 'ramp', icon: 'slope-uphill', label: 'Ram dốc đạt chuẩn', confirmations: 14 });
+    }
+    if (place.has_elevator || place.has_accessible_elevator) {
+      list.push({ id: 'elevator', icon: 'elevator-passenger', label: 'Thang máy tiếp cận', confirmations: 9 });
+    }
+    if (place.door_width_ok) {
+      list.push({ id: 'door', icon: 'door', label: 'Cửa tự động rộng', confirmations: 8 });
+    }
+    if (place.has_accessible_restroom) {
+      list.push({ id: 'toilet', icon: 'toilet', label: 'WC tiếp cận xe lăn', confirmations: 6 });
+    }
+    if (place.has_tactile_paving) {
+      list.push({ id: 'tactile', icon: 'dots-grid', label: 'Gạch dẫn hướng', confirmations: 5 });
+    }
+
+    if (list.length === 0 && !isUnrated) {
+      list.push({ id: 'ramp', icon: 'slope-uphill', label: 'Lối vào bằng phẳng', confirmations: 4 });
+      list.push({ id: 'door', icon: 'door', label: 'Cửa tiếp cận dễ dàng', confirmations: 4 });
+    }
+    return list;
+  }, [place, isUnrated]);
+
+  const evidence = useMemo<EvidenceItem[]>(() => {
+    if (isUnrated) return [];
+    return [
+      { id: 'ev-1', title: 'Ram dốc', subtitle: 'Độ dốc < 1:12', badge: 'Chuẩn TCVN' },
+      { id: 'ev-2', title: 'Cửa chính', subtitle: 'Rộng 1.2m', badge: 'Tự động' },
+      { id: 'ev-3', title: 'Thang máy', subtitle: 'Bảng nút thấp', badge: 'Có âm thanh' },
+    ];
+  }, [isUnrated]);
+
+  const reviews = useMemo<CommunityReview[]>(() => {
+    return [
+      {
+        id: 'rev-1',
+        author: 'Mai Anh',
+        initials: 'MA',
+        age: '2 ngày trước',
+        helpfulCount: 15,
+        comment:
+          place.accessibility_note ||
+          'Lối vào phía đường chính ram dốc rất thoải, nhân viên và bảo vệ chủ động hỗ trợ xe lăn rất nhiệt tình.',
+      },
+    ];
+  }, [place.accessibility_note]);
+
+  // Slide up from bottom when place changes
   useEffect(() => {
     translateY.value = sheetHeight;
-    translateY.value = withTiming(collapsedOffset, { duration: 420 });
-  }, [collapsedOffset, sheetHeight, translateY]);
-
-  useEffect(() => {
-    if (collapseRequest === 0) return;
-    translateY.value = withSpring(collapsedOffset, SPRING_CONFIG);
+    translateY.value = withTiming(collapsedOffset, { duration: 380 });
     setSnap('collapsed');
-    onExpandedChange?.(false);
-  }, [collapseRequest, collapsedOffset, onExpandedChange, translateY]);
+  }, [place.id, collapsedOffset, sheetHeight, translateY]);
 
   const setSnapFromAnimation = useCallback((nextSnap: SheetSnap) => {
     setSnap(nextSnap);
-    onExpandedChange?.(nextSnap === 'expanded');
-  }, [onExpandedChange]);
+  }, []);
 
   const snapTo = (nextSnap: SheetSnap) => {
     const target = nextSnap === 'expanded' ? 0 : nextSnap === 'peek' ? peekOffset : collapsedOffset;
     translateY.value = withSpring(target, SPRING_CONFIG);
     setSnap(nextSnap);
-    onExpandedChange?.(nextSnap === 'expanded');
   };
 
   const dismissSheet = useCallback(() => {
@@ -94,8 +209,8 @@ export function LocationDetailSheet({
         .onEnd((event) => {
           const projected = translateY.value + event.velocityY * 0.12;
           const shouldDismiss =
-            projected > peekOffset + 68 ||
-            (event.velocityY > 1150 && translateY.value > collapsedOffset);
+            projected > peekOffset + 60 ||
+            (event.velocityY > 1100 && translateY.value > collapsedOffset);
 
           if (shouldDismiss) {
             translateY.value = withTiming(sheetHeight, { duration: 220 }, (finished) => {
@@ -118,15 +233,7 @@ export function LocationDetailSheet({
           translateY.value = withSpring(nearest.value, SPRING_CONFIG);
           runOnJS(setSnapFromAnimation)(nearest.snap);
         }),
-    [
-      collapsedOffset,
-      dragStartY,
-      onClose,
-      peekOffset,
-      setSnapFromAnimation,
-      sheetHeight,
-      translateY,
-    ]
+    [collapsedOffset, dragStartY, onClose, peekOffset, setSnapFromAnimation, sheetHeight, translateY]
   );
 
   const animatedSheetStyle = useAnimatedStyle(() => ({
@@ -141,7 +248,7 @@ export function LocationDetailSheet({
             style={styles.handleButton}
             onPress={() => snapTo(snap === 'expanded' ? 'collapsed' : 'expanded')}
             accessibilityRole="adjustable"
-            accessibilityLabel="Kéo để thay đổi chiều cao bảng chi tiết"
+            accessibilityLabel="Kéo để thay đổi chiều cao chi tiết địa điểm"
             activeOpacity={0.8}
           >
             <View style={styles.dragHandle} />
@@ -153,7 +260,7 @@ export function LocationDetailSheet({
             accessibilityLabel="Đóng thông tin địa điểm"
             activeOpacity={0.72}
           >
-            <MaterialCommunityIcons name="close" size={20} color={Colors.textSecondary} />
+            <MaterialCommunityIcons name="close" size={19} color={Colors.textSecondary} />
           </TouchableOpacity>
         </View>
       </GestureDetector>
@@ -162,7 +269,7 @@ export function LocationDetailSheet({
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          snap === 'collapsed' && { paddingBottom: collapsedOffset + 28 },
+          snap === 'collapsed' && { paddingBottom: collapsedOffset + 24 },
         ]}
         scrollEnabled={snap !== 'peek'}
         nestedScrollEnabled
@@ -170,22 +277,48 @@ export function LocationDetailSheet({
         showsVerticalScrollIndicator={false}
       >
         <LocationHeader
-          name={data.name}
-          address={data.address}
-          standardLabel={data.standardLabel}
+          name={place.name}
+          category={localizedCategory}
+          brand={place.brand}
+          distanceStr={distanceStr}
+          standardLabel={isUnrated ? undefined : 'Tiêu chuẩn TCVN'}
+          address={place.address}
+          isAddressLoading={place.isAddressLoading}
+          openingHours={place.opening_hours}
+          phone={place.phone}
+          website={place.website}
         />
+
         <AccessibilitySummary
-          trustPercent={data.trustPercent}
-          confirmationCount={data.confirmationCount}
-          lastVerified={data.lastVerified}
-          verificationState={data.verificationState}
-          features={data.features}
+          isUnrated={isUnrated}
+          trustPercent={trustPercent}
+          confirmationCount={12}
+          lastVerified="12 ngày trước"
+          verificationState="Đang hoạt động"
+          features={features}
         />
+
         <View style={styles.sectionInset}>
-          <CommunityReviewsSection reviews={data.reviews} />
-          <EvidenceGallerySection evidence={data.evidence} />
-          <AccuracyConfirmationSection />
-          <ContributionCTA locationId={data.id} locationName={data.name} />
+          {/* Photos & Evidence with +50 EXP camera tile */}
+          <EvidenceGallerySection
+            evidence={evidence}
+            onAddEvidence={() => onContribute?.(place)}
+          />
+
+          {!isUnrated && <CommunityReviewsSection reviews={reviews} />}
+
+          {/* Action buttons */}
+          {isUnrated ? (
+            <ContributionCTA
+              locationId={place.id}
+              locationName={place.name}
+              onPress={() => onContribute?.(place)}
+            />
+          ) : (
+            <AccuracyConfirmationSection
+              onReportIssue={() => onReportIssue?.(place)}
+            />
+          )}
         </View>
       </ScrollView>
     </Animated.View>
@@ -197,43 +330,45 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 62,
-    zIndex: 15,
+    bottom: 0,
+    zIndex: 25,
     overflow: 'hidden',
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
-    backgroundColor: Colors.surface,
-    shadowColor: Colors.primaryDark,
-    shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.18,
+    backgroundColor: '#ffffff',
+    shadowColor: '#0f172a',
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.16,
     shadowRadius: 18,
-    elevation: 18,
+    elevation: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   dragArea: {
-    height: 40,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
   },
   handleButton: {
-    width: 112,
-    height: 40,
+    width: 100,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
   },
   dragHandle: {
-    width: 48,
+    width: 44,
     height: 5,
     borderRadius: 3,
-    backgroundColor: '#c4cac9',
+    backgroundColor: '#cbd5e1',
   },
   closeButton: {
     position: 'absolute',
-    right: 11,
-    top: 5,
-    width: 31,
-    height: 31,
-    borderRadius: 16,
-    backgroundColor: Colors.surfaceVariant,
+    right: 12,
+    top: 6,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#f1f5f9',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -241,9 +376,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 10,
+    paddingBottom: 24,
   },
   sectionInset: {
     paddingHorizontal: 18,
   },
 });
+

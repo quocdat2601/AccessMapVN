@@ -1,1 +1,3 @@
-export { CameraContributionScreen as default } from '@/features/contribution/camera/screens/CameraContributionScreen';
+import CameraContributionScreen from '@/features/contribution/camera/screens/CameraContributionScreen';
+
+export default CameraContributionScreen;

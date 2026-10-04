@@ -1,5 +1,4 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { CameraType, CameraView, useCameraPermissions, useMicrophonePermissions } from 'expo-camera';
 import * as Location from 'expo-location';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -22,6 +21,15 @@ import { PermissionState } from '../components/PermissionState';
 import { setPendingContributionMedia } from '../pendingContributionStore';
 import { CapturedContributionMedia, CaptureMode, GpsSnapshot } from '../types';
 
+type CameraType = 'back' | 'front';
+
+let ExpoCamera: any = null;
+try {
+  ExpoCamera = require('expo-camera');
+} catch {
+  ExpoCamera = null;
+}
+
 function firstParam(value: string | string[] | undefined, fallback: string) {
   return Array.isArray(value) ? value[0] ?? fallback : value ?? fallback;
 }
@@ -30,19 +38,19 @@ function createMediaId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-export function CameraContributionScreen() {
+function ActiveCameraContributionScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ locationId?: string | string[]; locationName?: string | string[] }>();
   const locationId = firstParam(params.locationId, 'saigon-centre');
   const locationName = firstParam(params.locationName, 'Saigon Centre (Takashimaya)');
-  const cameraRef = useRef<CameraView | null>(null);
+  const cameraRef = useRef<any>(null);
   const requestedInitialPermissions = useRef(false);
   const recordingStartedAt = useRef<number | null>(null);
   const mounted = useRef(true);
 
-  const [cameraPermission, requestCameraPermission, getCameraPermission] = useCameraPermissions();
-  const [microphonePermission, requestMicrophonePermission, getMicrophonePermission] = useMicrophonePermissions();
+  const [cameraPermission, requestCameraPermission, getCameraPermission] = ExpoCamera.useCameraPermissions();
+  const [microphonePermission, requestMicrophonePermission, getMicrophonePermission] = ExpoCamera.useMicrophonePermissions();
   const [locationPermission, requestLocationPermission, getLocationPermission] = Location.useForegroundPermissions();
 
   const [mode, setMode] = useState<CaptureMode>('photo');
@@ -289,7 +297,7 @@ export function CameraContributionScreen() {
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
-      <CameraView
+      <ExpoCamera.CameraView
         key={`${facing}-${mode}`}
         ref={cameraRef}
         style={StyleSheet.absoluteFill}
@@ -340,6 +348,36 @@ export function CameraContributionScreen() {
   );
 }
 
+function CameraFallbackScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[styles.container, styles.fallbackContainer, { paddingTop: insets.top + 24, paddingBottom: insets.bottom + 24 }]}>
+      <StatusBar style="light" />
+      <MaterialCommunityIcons name="camera-off" size={64} color="#64748b" />
+      <Text style={styles.fallbackTitle}>Cần cập nhật Development Build</Text>
+      <Text style={styles.fallbackDesc}>
+        Tính năng camera yêu cầu module native 'expo-camera'. Bản build trên thiết bị của bạn hiện tại chưa có module này. Hãy kết nối USB/ADB và chạy lệnh:
+      </Text>
+      <View style={styles.codeBox}>
+        <Text style={styles.codeText}>npx expo run:android</Text>
+      </View>
+      <Pressable style={styles.backBtn} onPress={() => router.back()}>
+        <Text style={styles.backBtnText}>Quay lại Bản đồ</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+export function CameraContributionScreen() {
+  if (!ExpoCamera) {
+    return <CameraFallbackScreen />;
+  }
+  return <ActiveCameraContributionScreen />;
+}
+
+export default CameraContributionScreen;
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#060909' },
   loading: { flex: 1, backgroundColor: '#0c1314', alignItems: 'center', justifyContent: 'center', gap: 13 },
@@ -365,4 +403,50 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(20,22,22,0.88)',
   },
   messageText: { flex: 1, color: '#fff', fontSize: 12.5, lineHeight: 18 },
+  fallbackContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+    gap: 16,
+    backgroundColor: '#0f172a',
+  },
+  fallbackTitle: {
+    color: '#f8fafc',
+    fontSize: 18,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  fallbackDesc: {
+    color: '#94a3b8',
+    fontSize: 14,
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  codeBox: {
+    backgroundColor: '#1e293b',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+    marginVertical: 8,
+  },
+  codeText: {
+    color: '#38bdf8',
+    fontFamily: 'monospace',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  backBtn: {
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 10,
+    marginTop: 8,
+  },
+  backBtnText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
 });

@@ -8,20 +8,10 @@ import { AccessibilityFeatureList } from './AccessibilityFeatureList';
 interface AccessibilitySummaryProps {
   isUnrated?: boolean;
   trustPercent: number;
-  confirmationCount: number;
-  lastVerified: string;
-  verificationState: string;
   features: AccessibilityDetailFeature[];
 }
 
-export function AccessibilitySummary({
-  isUnrated,
-  trustPercent,
-  confirmationCount,
-  lastVerified,
-  verificationState,
-  features,
-}: AccessibilitySummaryProps) {
+export function AccessibilitySummary({ isUnrated, trustPercent, features }: AccessibilitySummaryProps) {
   if (isUnrated) {
     return (
       <View style={styles.unratedContainer}>
@@ -53,7 +43,6 @@ export function AccessibilitySummary({
             {trustLabel} ({trustPercent}%)
           </Text>
         </View>
-        <Text style={styles.trustMeta}>• {lastVerified}</Text>
       </View>
       <AccessibilityFeatureList features={features} />
     </View>
@@ -91,10 +80,6 @@ const styles = StyleSheet.create({
   trustPillText: {
     fontSize: 12,
     fontWeight: '700',
-  },
-  trustMeta: {
-    color: Colors.textMuted,
-    fontSize: 12,
   },
   unratedContainer: {
     marginHorizontal: 18,

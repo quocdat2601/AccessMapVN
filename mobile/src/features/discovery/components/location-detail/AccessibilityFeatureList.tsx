@@ -17,10 +17,12 @@ export function AccessibilityFeatureList({ features }: AccessibilityFeatureListP
           <Text style={styles.featureLabel} numberOfLines={1}>
             {feature.label}
           </Text>
-          <View style={styles.countBadge}>
-            <Text style={styles.countText}>{feature.confirmations}</Text>
-            <MaterialCommunityIcons name="check" size={12} color={Colors.primary} />
-          </View>
+          {feature.confirmations != null && (
+            <View style={styles.countBadge}>
+              <Text style={styles.countText}>{feature.confirmations}</Text>
+              <MaterialCommunityIcons name="check" size={12} color={Colors.primary} />
+            </View>
+          )}
         </View>
       ))}
     </View>

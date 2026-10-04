@@ -20,11 +20,10 @@ import { Colors } from '@/shared/theme';
 import type { PlaceDto } from '../../types';
 import { AccessibilitySummary } from './AccessibilitySummary';
 import { AccuracyConfirmationSection } from './AccuracyConfirmationSection';
-import { CommunityReviewsSection } from './CommunityReviewsSection';
 import { ContributionCTA } from './ContributionCTA';
 import { EvidenceGallerySection } from './EvidenceGallerySection';
 import { LocationHeader } from './LocationHeader';
-import type { AccessibilityDetailFeature, CommunityReview, EvidenceItem } from './types';
+import type { AccessibilityDetailFeature } from './types';
 
 interface LocationDetailSheetProps {
   place: PlaceDto;
@@ -122,54 +121,16 @@ export function LocationDetailSheet({
 
   const localizedCategory = useMemo(() => formatCategory(place.category), [place.category]);
 
+  // ponytail: has_accessible_elevator is ignored because the DB column defaults to true for every row; re-enable once the default is fixed.
   const features = useMemo<AccessibilityDetailFeature[]>(() => {
     const list: AccessibilityDetailFeature[] = [];
-    if (place.has_ramp) {
-      list.push({ id: 'ramp', icon: 'slope-uphill', label: 'Ram dốc đạt chuẩn', confirmations: 14 });
-    }
-    if (place.has_elevator || place.has_accessible_elevator) {
-      list.push({ id: 'elevator', icon: 'elevator-passenger', label: 'Thang máy tiếp cận', confirmations: 9 });
-    }
-    if (place.door_width_ok) {
-      list.push({ id: 'door', icon: 'door', label: 'Cửa tự động rộng', confirmations: 8 });
-    }
-    if (place.has_accessible_restroom) {
-      list.push({ id: 'toilet', icon: 'toilet', label: 'WC tiếp cận xe lăn', confirmations: 6 });
-    }
-    if (place.has_tactile_paving) {
-      list.push({ id: 'tactile', icon: 'dots-grid', label: 'Gạch dẫn hướng', confirmations: 5 });
-    }
-
-    if (list.length === 0 && !isUnrated) {
-      list.push({ id: 'ramp', icon: 'slope-uphill', label: 'Lối vào bằng phẳng', confirmations: 4 });
-      list.push({ id: 'door', icon: 'door', label: 'Cửa tiếp cận dễ dàng', confirmations: 4 });
-    }
+    if (place.has_ramp) list.push({ id: 'ramp', icon: 'slope-uphill', label: 'Ram dốc' });
+    if (place.has_elevator) list.push({ id: 'elevator', icon: 'elevator-passenger', label: 'Thang máy tiếp cận' });
+    if (place.door_width_ok) list.push({ id: 'door', icon: 'door', label: 'Cửa đủ rộng' });
+    if (place.has_accessible_restroom) list.push({ id: 'toilet', icon: 'toilet', label: 'WC tiếp cận xe lăn' });
+    if (place.has_tactile_paving) list.push({ id: 'tactile', icon: 'dots-grid', label: 'Gạch dẫn hướng' });
     return list;
-  }, [place, isUnrated]);
-
-  const evidence = useMemo<EvidenceItem[]>(() => {
-    if (isUnrated) return [];
-    return [
-      { id: 'ev-1', title: 'Ram dốc', subtitle: 'Độ dốc < 1:12', badge: 'Chuẩn TCVN' },
-      { id: 'ev-2', title: 'Cửa chính', subtitle: 'Rộng 1.2m', badge: 'Tự động' },
-      { id: 'ev-3', title: 'Thang máy', subtitle: 'Bảng nút thấp', badge: 'Có âm thanh' },
-    ];
-  }, [isUnrated]);
-
-  const reviews = useMemo<CommunityReview[]>(() => {
-    return [
-      {
-        id: 'rev-1',
-        author: 'Mai Anh',
-        initials: 'MA',
-        age: '2 ngày trước',
-        helpfulCount: 15,
-        comment:
-          place.accessibility_note ||
-          'Lối vào phía đường chính ram dốc rất thoải, nhân viên và bảo vệ chủ động hỗ trợ xe lăn rất nhiệt tình.',
-      },
-    ];
-  }, [place.accessibility_note]);
+  }, [place]);
 
   // Slide up from bottom when place changes
   useEffect(() => {
@@ -281,7 +242,6 @@ export function LocationDetailSheet({
           category={localizedCategory}
           brand={place.brand}
           distanceStr={distanceStr}
-          standardLabel={isUnrated ? undefined : 'Tiêu chuẩn TCVN'}
           address={place.address}
           isAddressLoading={place.isAddressLoading}
           openingHours={place.opening_hours}
@@ -289,23 +249,11 @@ export function LocationDetailSheet({
           website={place.website}
         />
 
-        <AccessibilitySummary
-          isUnrated={isUnrated}
-          trustPercent={trustPercent}
-          confirmationCount={12}
-          lastVerified="12 ngày trước"
-          verificationState="Đang hoạt động"
-          features={features}
-        />
+        <AccessibilitySummary isUnrated={isUnrated} trustPercent={trustPercent} features={features} />
 
         <View style={styles.sectionInset}>
           {/* Photos & Evidence with +50 EXP camera tile */}
-          <EvidenceGallerySection
-            evidence={evidence}
-            onAddEvidence={() => onContribute?.(place)}
-          />
-
-          {!isUnrated && <CommunityReviewsSection reviews={reviews} />}
+          <EvidenceGallerySection evidence={[]} onAddEvidence={() => onContribute?.(place)} />
 
           {/* Action buttons */}
           {isUnrated ? (

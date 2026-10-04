@@ -61,7 +61,7 @@ export function useMapRegion() {
         if (north != null && south != null && east != null && west != null) {
           if (timerRef.current) clearTimeout(timerRef.current);
           timerRef.current = setTimeout(() => {
-            if (currentZoom >= 12) {
+            if (currentZoom >= 13) {
               setBbox({ north, east, south, west });
             } else {
               setBbox(null);
@@ -73,7 +73,7 @@ export function useMapRegion() {
     [region.zoom]
   );
 
-  const isZoomedOut = region.zoom < 12;
+  const isZoomedOut = region.zoom < 13;
 
   return { region, bbox, isZoomedOut, onRegionDidChange, initialRegion: HCMC_INITIAL };
 }

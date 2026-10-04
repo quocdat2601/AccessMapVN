@@ -12,16 +12,7 @@ export interface AccessibilityDetailFeature {
   id: string;
   icon: AccessibilityIconName;
   label: string;
-  confirmations: number;
-}
-
-export interface CommunityReview {
-  id: string;
-  author: string;
-  initials: string;
-  age: string;
-  helpfulCount: number;
-  comment: string;
+  confirmations?: number;
 }
 
 export interface EvidenceItem {
@@ -31,4 +22,13 @@ export interface EvidenceItem {
   badge: string;
   isFaceBlurred?: boolean;
   imageUrl?: string;
+}
+
+export interface CommunityReview {
+  id: string;
+  author: string;
+  initials: string;
+  age: string;
+  helpfulCount: number;
+  comment: string;
 }

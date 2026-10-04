@@ -356,7 +356,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         }
 
         // Priority 3: Truly unrated base map feature
-        const coords = nativeEvent.lngLat ?? [initialRegion.longitude, initialRegion.latitude];
+        const coords = tapCoords ?? nativeEvent.lngLat ?? [initialRegion.longitude, initialRegion.latitude];
         const placeId = `osm-${namedFeature.id ?? Math.round(coords[0] * 10000)}`;
         const baseCategory = (props.category || props.class || props.subclass || props.amenity || 'other') as any;
 

@@ -17,7 +17,10 @@ export function UserLocationMarker({ MapLibreGL, latitude, longitude }: UserLoca
           type: 'Point',
           coordinates: [longitude, latitude],
         },
-        properties: {},
+        properties: {
+          isUserLocation: true,
+          name: 'Vị trí hiện tại của bạn',
+        },
       }}
     >
       <MapLibreGL.Layer

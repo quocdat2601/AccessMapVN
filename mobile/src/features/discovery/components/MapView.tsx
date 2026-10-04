@@ -60,6 +60,18 @@ function isFullAddress(addr?: string | null): boolean {
   return addr.includes(',');
 }
 
+function getDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  return 6371000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 function extractImmediateAddress(features: any[]): string | null {
   for (const f of features) {
     const p = f?.properties;
@@ -122,13 +134,19 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   const mapRef = useRef<any>(null);
   const [activeTapPoint, setActiveTapPoint] = useState<{ lng: number; lat: number; name?: string } | null>(null);
 
+  const flyToPlace = (lng: number, lat: number, zoom = 16) => {
+    // Offset south so marker is centered in the upper viewport above the bottom sheet
+    const targetLat = lat - 0.0028;
+    cameraRef.current?.flyTo({ center: [lng, targetLat], zoom, duration: 750 });
+  };
+
   useImperativeHandle(ref, () => ({
     recenter: () => {
       if (userLatitude == null || userLongitude == null) return;
       cameraRef.current?.flyTo({ center: [userLongitude, userLatitude], zoom: 16, duration: 800 });
     },
     flyTo: (lng: number, lat: number, zoom: number = 16) => {
-      cameraRef.current?.flyTo({ center: [lng, lat], zoom, duration: 900 });
+      flyToPlace(lng, lat, zoom);
     },
   }), [userLatitude, userLongitude]);
 
@@ -139,31 +157,43 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     const matched = places.find((p) => p.id === placeId);
     if (!matched) return;
 
+    flyToPlace(matched.lng, matched.lat);
     currentResolvingId.current = placeId;
-    setActiveTapPoint({ lng: matched.lng, lat: matched.lat, name: matched.name });
+    setActiveTapPoint(null);
+    onSelectOsmPlace?.(null);
+
+    const initialAddress = matched.address || immediateAddr || null;
+    const needsGeocode = !isFullAddress(initialAddress);
+
+    // Optimistic UI: Open place callout immediately (0ms)
+    onSelectPlace?.(placeId, {
+      ...matched,
+      address: initialAddress,
+      isAddressLoading: needsGeocode,
+    });
+
+    if (!needsGeocode) {
+      currentResolvingId.current = null;
+      return;
+    }
 
     try {
-      let resolvedAddress = matched.address;
-      if (!isFullAddress(resolvedAddress)) {
-        const addr = await reverseGeocode(matched.lat, matched.lng);
-        if (currentResolvingId.current !== placeId) return;
-        if (addr) {
-          resolvedAddress = addr;
-          matched.address = addr;
-        } else if (!resolvedAddress && immediateAddr) {
-          resolvedAddress = immediateAddr;
-          matched.address = immediateAddr;
-        }
-      }
+      const addr = await reverseGeocode(matched.lat, matched.lng);
       if (currentResolvingId.current !== placeId) return;
-      setActiveTapPoint(null);
-      onSelectOsmPlace?.(null);
-      onSelectPlace?.(placeId, { ...matched, address: resolvedAddress });
+      const finalAddress = addr || initialAddress;
+      matched.address = finalAddress;
+      onSelectPlace?.(placeId, {
+        ...matched,
+        address: finalAddress,
+        isAddressLoading: false,
+      });
     } catch {
       if (currentResolvingId.current === placeId) {
-        setActiveTapPoint(null);
-        onSelectOsmPlace?.(null);
-        onSelectPlace?.(placeId, matched);
+        onSelectPlace?.(placeId, {
+          ...matched,
+          address: initialAddress,
+          isAddressLoading: false,
+        });
       }
     } finally {
       if (currentResolvingId.current === placeId) {
@@ -204,6 +234,78 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       if (!features || features.length === 0) {
         // If nativeEvent already has bubbled features, use them
         features = nativeEvent?.features ?? [];
+      }
+
+      // Priority 0: Check if user tapped directly on or near their current location marker
+      const tapCoords: [number, number] | null =
+        event?.geometry?.coordinates ||
+        nativeEvent?.lngLat ||
+        (nativeEvent?.coordinate ? [nativeEvent.coordinate.longitude, nativeEvent.coordinate.latitude] : null);
+
+      const isUserLocationTap =
+        userLatitude != null &&
+        userLongitude != null &&
+        (features.some((f: any) => f?.properties?.isUserLocation || (f?.layer?.id && f.layer.id.includes('user-location'))) ||
+          (tapCoords && getDistanceMeters(userLatitude, userLongitude, tapCoords[1], tapCoords[0]) <= 35));
+
+      if (isUserLocationTap && userLatitude != null && userLongitude != null) {
+        flyToPlace(userLongitude, userLatitude);
+        const myPlaceId = 'my-current-location';
+        currentResolvingId.current = myPlaceId;
+        setActiveTapPoint(null);
+        onSelectPlace?.(null);
+
+        const immediateAddress = extractImmediateAddress(features);
+        const userPlace: PlaceDto = {
+          id: myPlaceId,
+          name: 'Vị trí hiện tại của bạn',
+          category: 'gps' as any,
+          address: immediateAddress || 'Đang tải địa chỉ...',
+          phone: null,
+          website: null,
+          opening_hours: null,
+          brand: null,
+          operator: null,
+          lng: userLongitude,
+          lat: userLatitude,
+          has_ramp: false,
+          has_elevator: false,
+          has_tactile_paving: false,
+          has_accessible_restroom: false,
+          door_width_ok: false,
+          accessibility_score: -1,
+          accessibility_note: null,
+          isAddressLoading: !isFullAddress(immediateAddress),
+        };
+
+        onSelectOsmPlace?.(userPlace);
+
+        if (!isFullAddress(immediateAddress)) {
+          try {
+            const addr = await reverseGeocode(userLatitude, userLongitude);
+            if (currentResolvingId.current !== myPlaceId) return;
+            onSelectOsmPlace?.({
+              ...userPlace,
+              address: addr || 'Vị trí hiện tại',
+              isAddressLoading: false,
+            });
+          } catch {
+            if (currentResolvingId.current === myPlaceId) {
+              onSelectOsmPlace?.({
+                ...userPlace,
+                address: 'Vị trí hiện tại',
+                isAddressLoading: false,
+              });
+            }
+          } finally {
+            if (currentResolvingId.current === myPlaceId) {
+              currentResolvingId.current = null;
+            }
+          }
+        } else {
+          currentResolvingId.current = null;
+        }
+        return;
       }
 
       if (!features || features.length === 0) {
@@ -259,6 +361,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         const baseCategory = (props.category || props.class || props.subclass || props.amenity || 'other') as any;
 
         // Show immediate selection pin on map while address resolves
+        flyToPlace(coords[0], coords[1]);
         setActiveTapPoint({ lng: coords[0], lat: coords[1], name });
 
         const phone = props.phone || props['contact:phone'] || null;
@@ -270,27 +373,19 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
           ? `${props['addr:housenumber'] ? props['addr:housenumber'] + ' ' : ''}${props['addr:street']}`
           : null;
 
-        // Ensure all location details (address) are 100% loaded BEFORE showing the card
-        let resolvedAddress = isFullAddress(quickAddr)
+        const initialAddress = isFullAddress(quickAddr)
           ? quickAddr
           : isFullAddress(immediateAddress)
           ? immediateAddress
-          : null;
+          : quickAddr || immediateAddress || null;
 
-        if (!resolvedAddress && coords[1] && coords[0]) {
-          resolvedAddress = await reverseGeocode(coords[1], coords[0]);
-        }
-        if (!resolvedAddress) {
-          resolvedAddress = quickAddr || immediateAddress || null;
-        }
+        const needsGeocode = !isFullAddress(initialAddress) && Boolean(coords[1] && coords[0]);
 
-        setActiveTapPoint(null);
-        onSelectPlace?.(null);
-        onSelectOsmPlace?.({
+        const baseOsmPlace: PlaceDto = {
           id: placeId,
           name,
           category: baseCategory,
-          address: resolvedAddress,
+          address: initialAddress,
           phone,
           website,
           opening_hours: openingHours,
@@ -305,13 +400,49 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
           door_width_ok: false,
           accessibility_score: -1,
           accessibility_note: null,
-        });
+          isAddressLoading: needsGeocode,
+        };
+
+        currentResolvingId.current = placeId;
+        setActiveTapPoint(null);
+        onSelectPlace?.(null);
+        onSelectOsmPlace?.(baseOsmPlace);
+
+        if (!needsGeocode) {
+          currentResolvingId.current = null;
+          return;
+        }
+
+        try {
+          const addr = await reverseGeocode(coords[1], coords[0]);
+          if (currentResolvingId.current !== placeId) return;
+          const finalAddress = addr || initialAddress;
+          onSelectOsmPlace?.({
+            ...baseOsmPlace,
+            address: finalAddress,
+            isAddressLoading: false,
+          });
+        } catch {
+          if (currentResolvingId.current === placeId) {
+            onSelectOsmPlace?.({
+              ...baseOsmPlace,
+              address: initialAddress,
+              isAddressLoading: false,
+            });
+          }
+        } finally {
+          if (currentResolvingId.current === placeId) {
+            currentResolvingId.current = null;
+          }
+        }
       } else {
+        currentResolvingId.current = null;
         setActiveTapPoint(null);
         onSelectPlace?.(null);
         onSelectOsmPlace?.(null);
       }
     } catch {
+      currentResolvingId.current = null;
       setActiveTapPoint(null);
       onSelectPlace?.(null);
       onSelectOsmPlace?.(null);

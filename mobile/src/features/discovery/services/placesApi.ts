@@ -9,7 +9,7 @@ export async function fetchPlacesInBBox(
     return [];
   }
 
-  const { data, error } = await supabase.rpc('get_places_in_bbox', {
+  const { data, error } = await supabase.rpc('get_places_in_bounds', {
     min_lng: bbox.west,
     min_lat: bbox.south,
     max_lng: bbox.east,
@@ -63,7 +63,7 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string |
   try {
     const photonRes = await fetch(`https://photon.komoot.io/reverse?lat=${lat}&lon=${lng}`, {
       headers: { 'User-Agent': 'AccessMapVN/1.0' },
-      signal: AbortSignal.timeout(2500),
+      signal: AbortSignal.timeout(900),
     });
     if (photonRes.ok) {
       const data = await photonRes.json();

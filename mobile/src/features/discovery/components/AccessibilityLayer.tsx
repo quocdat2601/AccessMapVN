@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
 import type { PlaceDto } from '../types';
-import { Colors } from '@/shared/theme';
 
 interface AccessibilityLayerProps {
   MapLibreGL: any;
@@ -10,11 +9,13 @@ interface AccessibilityLayerProps {
 }
 
 function categoryToSpriteIcon(category: string): string {
-  switch (category) {
+  switch (category?.toLowerCase()) {
     case 'cafe':
+    case 'coffee':
       return 'cafe_11';
     case 'restaurant':
     case 'food_court':
+    case 'food':
       return 'restaurant_11';
     case 'fast_food':
       return 'fast_food';
@@ -29,6 +30,7 @@ function categoryToSpriteIcon(category: string): string {
     case 'supermarket':
     case 'convenience':
     case 'shop':
+    case 'store':
       return 'shop_11';
     case 'clothes':
     case 'clothing_store':
@@ -53,6 +55,7 @@ function categoryToSpriteIcon(category: string): string {
 
     case 'transit':
     case 'bus_station':
+    case 'bus':
       return 'bus';
 
     case 'hotel':
@@ -88,7 +91,6 @@ function categoryToSpriteIcon(category: string): string {
     case 'place_of_worship':
       return 'place_of_worship';
 
-    // Google Maps-like bullseye place dot for buildings, apartments & generic places
     case 'apartment':
     case 'residential':
     case 'building':
@@ -97,11 +99,10 @@ function categoryToSpriteIcon(category: string): string {
   }
 }
 
-function getAccessibilityColor(score: number): string | null {
-  if (score < 0 || isNaN(score)) return null;
-  if (score >= 0.8) return '#10b981'; // Green: Accessible
-  if (score >= 0.5) return '#f59e0b'; // Yellow: Limited
-  return '#ef4444'; // Red: Inaccessible
+function getAccessibilityColor(score: number): string {
+  if (score >= 0.8) return '#10b981'; // Xanh lá: Tiếp cận tốt
+  if (score >= 0.5) return '#f59e0b'; // Vàng cam: Tiếp cận một phần
+  return '#ef4444'; // Đỏ: Khó tiếp cận
 }
 
 export function AccessibilityLayer({
@@ -117,7 +118,7 @@ export function AccessibilityLayer({
     features: places.map((p) => {
       const score = Number(p.accessibility_score);
       const isRated = !isNaN(score) && score >= 0;
-      const accessColor = isRated ? getAccessibilityColor(score) : null;
+      const accessColor = isRated ? getAccessibilityColor(score) : '#94a3b8';
       const icon = categoryToSpriteIcon(p.category);
 
       return {
@@ -131,7 +132,7 @@ export function AccessibilityLayer({
           id: p.id,
           name: p.name,
           category: p.category,
-          score: p.accessibility_score,
+          score,
           isRated,
           accessColor,
           icon,
@@ -154,20 +155,40 @@ export function AccessibilityLayer({
         }
       }}
     >
-      {/* Google Maps style POI icon + label symbol layer */}
+      {/* Viền tròn màu tiếp cận - chỉ hiển thị cho các địa điểm ĐÃ CÓ ĐÁNH GIÁ (isRated = true) */}
+      <MapLibreGL.Layer
+        type="circle"
+        id="places-rated-badge"
+        minZoomLevel={13}
+        filter={['==', ['get', 'isRated'], true]}
+        style={{
+          circleRadius: [
+            'case',
+            ['get', 'isSelected'], 15,
+            12,
+          ],
+          circleColor: '#ffffff',
+          circleOpacity: 0.95,
+          circleStrokeWidth: 2.5,
+          circleStrokeColor: ['get', 'accessColor'],
+        }}
+      />
+
+      {/* Icon thể loại POI + Tên địa điểm */}
       <MapLibreGL.Layer
         type="symbol"
         id="places-symbols"
-        minZoomLevel={13.5}
+        minZoomLevel={13}
         layout={{
           iconImage: ['get', 'icon'],
           iconSize: 1.0,
-          iconAllowOverlap: false,
-          iconIgnorePlacement: false,
+          iconAllowOverlap: true,
+          iconIgnorePlacement: true,
+          textAllowOverlap: false,
           textField: ['get', 'name'],
           textSize: 11,
           textFont: ['Noto Sans Regular'],
-          textOffset: [0, 0.7],
+          textOffset: [0, 0.8],
           textAnchor: 'top',
           textMaxWidth: 9,
           textOptional: true,

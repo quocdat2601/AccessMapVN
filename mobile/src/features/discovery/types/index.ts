@@ -23,6 +23,7 @@ export interface PlaceDto {
   building_id?: string | null;
   has_accessible_elevator?: boolean;
   last_verified_at?: string;
+  isAddressLoading?: boolean;
 }
 
 export interface BoundingBox {

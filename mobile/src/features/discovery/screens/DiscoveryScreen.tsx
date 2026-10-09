@@ -236,6 +236,22 @@ export function DiscoveryScreen({ onNavigateToContribute }: DiscoveryScreenProps
         </View>
       )}
 
+      {!activePlace && (
+        <TouchableOpacity
+          style={styles.contributeFab}
+          onPress={() => onNavigateToContribute?.({ id: 'new-location', name: 'Địa điểm mới gần bạn' })}
+          accessibilityRole="button"
+          accessibilityLabel="Đóng góp tiện ích tiếp cận mới"
+          activeOpacity={0.88}
+        >
+          <Ionicons name="camera" size={20} color={Colors.surface} />
+          <Text style={styles.contributeFabText}>Đóng góp tiếp cận</Text>
+          <View style={styles.contributeExpBadge}>
+            <Text style={styles.contributeExpText}>+50 EXP</Text>
+          </View>
+        </TouchableOpacity>
+      )}
+
       {activePlace && (
         <LocationDetailSheet
           place={activePlace}
@@ -358,5 +374,39 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: Colors.primary,
+  },
+  contributeFab: {
+    position: 'absolute',
+    bottom: 34,
+    alignSelf: 'center',
+    backgroundColor: Colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 28,
+    shadowColor: Colors.shadowDark,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    elevation: 8,
+    gap: 8,
+    zIndex: 15,
+  },
+  contributeFabText: {
+    color: Colors.surface,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  contributeExpBadge: {
+    backgroundColor: '#004f58',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  contributeExpText: {
+    color: '#8ee9dc',
+    fontSize: 11,
+    fontWeight: '800',
   },
 });

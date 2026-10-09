@@ -18,8 +18,9 @@ import { CameraStatusOverlay } from '../components/CameraStatusOverlay';
 import { CaptureControls } from '../components/CaptureControls';
 import { MediaPreview } from '../components/MediaPreview';
 import { PermissionState } from '../components/PermissionState';
-import { setPendingContributionMedia } from '../pendingContributionStore';
+import { addContributionRecord, setPendingContributionMedia } from '../pendingContributionStore';
 import { CapturedContributionMedia, CaptureMode, GpsSnapshot } from '../types';
+import { styles } from './CameraContributionScreen.styles';
 
 type CameraType = 'back' | 'front';
 
@@ -259,8 +260,21 @@ function ActiveCameraContributionScreen() {
         savedLocally={savedLocally}
         onBack={handleBack}
         onRetake={handleRetake}
-        onUse={() => {
+        onUse={(confirmedTags) => {
           setPendingContributionMedia(capturedMedia);
+          addContributionRecord({
+            id: createMediaId(),
+            locationId,
+            locationName,
+            mediaUri: capturedMedia.uri,
+            mediaType: capturedMedia.type,
+            featureTags: confirmedTags,
+            gps: gps ? { latitude: gps.latitude, longitude: gps.longitude } : null,
+            status: 'Auto-Verified',
+            confidenceScore: 0.88,
+            pointsAwarded: 50,
+            createdAt: Date.now(),
+          });
           setSavedLocally(true);
         }}
       />
@@ -309,7 +323,7 @@ function ActiveCameraContributionScreen() {
         onMountError={(error: any) => setMessage(`Không thể mở camera: ${error?.message ?? error}`)}
       />
       <View style={styles.previewScrim} pointerEvents="none" />
-      <View style={[styles.hud, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
+      <View style={[styles.hud, { paddingTop: insets.top + 8, paddingBottom: insets.bottom }]} pointerEvents="box-none">
         <CameraHeader locationName={locationName} onBack={handleBack} disabled={isCapturing} />
         <CameraStatusOverlay
           gpsAccuracy={gps?.accuracy ?? null}
@@ -326,7 +340,7 @@ function ActiveCameraContributionScreen() {
             }}
             accessibilityRole="button"
           >
-            <MaterialCommunityIcons name="alert-circle-outline" size={19} color="#f5ce4a" />
+            <MaterialCommunityIcons name="alert-circle-outline" size={18} color="#f5ce4a" />
             <Text style={styles.messageText}>{message}</Text>
           </Pressable>
         ) : null}
@@ -342,7 +356,6 @@ function ActiveCameraContributionScreen() {
             setFacing((current: CameraType) => current === 'back' ? 'front' : 'back');
           }}
         />
-        <View style={{ height: Math.max(insets.bottom, 8) }} />
       </View>
     </View>
   );
@@ -377,76 +390,3 @@ export function CameraContributionScreen() {
 }
 
 export default CameraContributionScreen;
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#060909' },
-  loading: { flex: 1, backgroundColor: '#0c1314', alignItems: 'center', justifyContent: 'center', gap: 13 },
-  loadingText: { color: '#d9e2e2', fontSize: 15, fontWeight: '600' },
-  previewScrim: {
-    position: 'absolute',
-    inset: 0,
-    backgroundColor: 'rgba(0,0,0,0.08)',
-    borderBottomWidth: 180,
-    borderBottomColor: 'rgba(0,0,0,0.38)',
-  },
-  hud: { position: 'absolute', inset: 0 },
-  flexSpace: { flex: 1 },
-  message: {
-    marginHorizontal: 22,
-    marginBottom: 11,
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 13,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(20,22,22,0.88)',
-  },
-  messageText: { flex: 1, color: '#fff', fontSize: 12.5, lineHeight: 18 },
-  fallbackContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 28,
-    gap: 16,
-    backgroundColor: '#0f172a',
-  },
-  fallbackTitle: {
-    color: '#f8fafc',
-    fontSize: 18,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  fallbackDesc: {
-    color: '#94a3b8',
-    fontSize: 14,
-    lineHeight: 22,
-    textAlign: 'center',
-  },
-  codeBox: {
-    backgroundColor: '#1e293b',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#334155',
-    marginVertical: 8,
-  },
-  codeText: {
-    color: '#38bdf8',
-    fontFamily: 'monospace',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  backBtn: {
-    backgroundColor: '#2563eb',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 10,
-    marginTop: 8,
-  },
-  backBtnText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-});

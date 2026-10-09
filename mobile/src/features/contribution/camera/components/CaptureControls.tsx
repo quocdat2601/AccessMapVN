@@ -52,7 +52,9 @@ export function CaptureControls({
       {/* Subtle Hint */}
       <Text style={styles.hint} numberOfLines={1}>
         {isRecording
-          ? `Đang quay ${formatDuration(recordingSeconds)} • Chạm để dừng`
+          ? recordingSeconds < 5
+            ? `🔴 Đang quay 00:0${recordingSeconds} / 00:10 (Tối thiểu 5s)`
+            : `🟢 Đã đạt chuẩn: ${formatDuration(recordingSeconds)} / 00:10 (Chạm để lưu)`
           : isVideo
             ? 'Quay 5–10 giây, giữ máy ổn định'
             : 'Chụp rõ ram dốc và lối vào'}

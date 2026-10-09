@@ -2,7 +2,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/shared/theme';
 import { PreScanFeatureTag, runAiPreScan } from '../../services/aiPreScanService';
@@ -15,11 +15,13 @@ interface MediaPreviewProps {
   savedLocally: boolean;
   onBack: () => void;
   onRetake: () => void;
-  onUse: (confirmedTags: string[]) => void;
+  onUse: (confirmedTags: string[], customName?: string, notes?: string) => void;
 }
 
 export function MediaPreview({ media, savedLocally, onBack, onRetake, onUse }: MediaPreviewProps) {
   const insets = useSafeAreaInsets();
+  const [customName, setCustomName] = useState(media.locationName);
+  const [notes, setNotes] = useState('');
   const [isScanning, setIsScanning] = useState(media.type === 'photo');
   const [tags, setTags] = useState<PreScanFeatureTag[]>([]);
   const [selectedTagKeys, setSelectedTagKeys] = useState<Set<string>>(new Set());
@@ -125,6 +127,28 @@ export function MediaPreview({ media, savedLocally, onBack, onRetake, onUse }: M
           </View>
         ) : null}
 
+        {/* Location Name & Notes Input */}
+        <View style={styles.inputSection}>
+          {media.locationId === 'new-location' ? (
+            <TextInput
+              style={styles.inputField}
+              value={customName}
+              onChangeText={setCustomName}
+              placeholder="Nhập tên địa điểm / toà nhà mới..."
+              placeholderTextColor="#94a3b8"
+              accessibilityLabel="Tên địa điểm mới"
+            />
+          ) : null}
+          <TextInput
+            style={styles.inputField}
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="Ghi chú thêm (vd: ram dốc ở cửa hông, không có bậc)..."
+            placeholderTextColor="#94a3b8"
+            accessibilityLabel="Ghi chú mô tả tiện ích"
+          />
+        </View>
+
         {/* +50 EXP Badge */}
         <View style={styles.expBadge}>
           <MaterialCommunityIcons name="star-circle" size={14} color="#facc15" />
@@ -142,7 +166,7 @@ export function MediaPreview({ media, savedLocally, onBack, onRetake, onUse }: M
           </Pressable>
           <Pressable
             style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed, savedLocally && styles.savedButton]}
-            onPress={() => onUse(Array.from(selectedTagKeys))}
+            onPress={() => onUse(Array.from(selectedTagKeys), customName, notes)}
             disabled={savedLocally}
             accessibilityRole="button"
           >
@@ -151,6 +175,26 @@ export function MediaPreview({ media, savedLocally, onBack, onRetake, onUse }: M
           </Pressable>
         </View>
       </View>
+
+      {/* Success Celebration Overlay */}
+      {savedLocally ? (
+        <View style={styles.successModal}>
+          <View style={styles.successCard}>
+            <MaterialCommunityIcons name="check-decagram" size={54} color="#38bdf8" />
+            <Text style={styles.successTitle}>Đã ghi nhận đóng góp!</Text>
+            <View style={styles.successPointsBadge}>
+              <MaterialCommunityIcons name="star-circle" size={18} color="#facc15" />
+              <Text style={styles.successPointsText}>+50 EXP điểm uy tín</Text>
+            </View>
+            <Text style={styles.successDesc}>
+              Bằng chứng tiếp cận cho "{customName}" đã được lưu trữ an toàn và chuyển tiếp vào hàng đợi thẩm định AI.
+            </Text>
+            <Pressable style={styles.successDoneBtn} onPress={onBack} accessibilityRole="button">
+              <Text style={styles.successDoneText}>Quay lại Bản đồ</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }

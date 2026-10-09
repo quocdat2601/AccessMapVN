@@ -209,11 +209,31 @@ function ActiveCameraContributionScreen() {
     setIsRecording(true);
     setRecordingSeconds(0);
     recordingStartedAt.current = Date.now();
+
+    const timer = setInterval(() => {
+      if (!mounted.current) return;
+      setRecordingSeconds((prev) => {
+        if (prev >= 10) {
+          cameraRef.current?.stopRecording();
+          return 10;
+        }
+        return prev + 1;
+      });
+    }, 1000);
+
     try {
-      const result = await cameraRef.current.recordAsync({ maxDuration: 30 });
+      const result = await cameraRef.current.recordAsync({ maxDuration: 10 });
       const durationSeconds = recordingStartedAt.current == null
-        ? undefined
+        ? 0
         : Math.max(1, Math.round((Date.now() - recordingStartedAt.current) / 1000));
+
+      if (durationSeconds < 5) {
+        if (mounted.current) {
+          setMessage('Video quá ngắn (< 5s). Vui lòng quay từ 5–10 giây để ghi nhận đủ bằng chứng tiếp cận (BR-01).');
+        }
+        return;
+      }
+
       if (result?.uri && mounted.current) {
         setCapturedMedia({
           id: createMediaId(),
@@ -229,6 +249,7 @@ function ActiveCameraContributionScreen() {
     } catch {
       if (mounted.current) setMessage('Không thể hoàn tất video. Vui lòng thử quay lại.');
     } finally {
+      clearInterval(timer);
       recordingStartedAt.current = null;
       if (mounted.current) {
         setIsRecording(false);
@@ -260,15 +281,16 @@ function ActiveCameraContributionScreen() {
         savedLocally={savedLocally}
         onBack={handleBack}
         onRetake={handleRetake}
-        onUse={(confirmedTags) => {
+        onUse={(confirmedTags, customName, notes) => {
           setPendingContributionMedia(capturedMedia);
           addContributionRecord({
             id: createMediaId(),
             locationId,
-            locationName,
+            locationName: customName || locationName,
             mediaUri: capturedMedia.uri,
             mediaType: capturedMedia.type,
             featureTags: confirmedTags,
+            textDescription: notes,
             gps: gps ? { latitude: gps.latitude, longitude: gps.longitude } : null,
             status: 'Auto-Verified',
             confidenceScore: 0.88,

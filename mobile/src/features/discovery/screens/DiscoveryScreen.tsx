@@ -1,7 +1,8 @@
 import { Colors } from '@/shared/theme';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Keyboard, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ContributionHistorySheet } from '@/features/contribution/history/ContributionHistorySheet';
 import { HeaderBar } from '../components/HeaderBar';
 import { MapControls } from '../components/MapControls';
 import { MapView, type MapViewHandle } from '../components/MapView';
@@ -35,6 +36,7 @@ export function DiscoveryScreen({ onNavigateToContribute }: DiscoveryScreenProps
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [showAccessibilityLayer, setShowAccessibilityLayer] = useState(true);
   const [osmPlace, setOsmPlace] = useState<PlaceDto | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
   const { location, loading: locationLoading } = useUserLocation();
   const { bbox, isZoomedOut, onRegionDidChange, initialRegion } = useMapRegion();
   const {
@@ -237,19 +239,30 @@ export function DiscoveryScreen({ onNavigateToContribute }: DiscoveryScreenProps
       )}
 
       {!activePlace && (
-        <TouchableOpacity
-          style={styles.contributeFab}
-          onPress={() => onNavigateToContribute?.({ id: 'new-location', name: 'Địa điểm mới gần bạn' })}
-          accessibilityRole="button"
-          accessibilityLabel="Đóng góp tiện ích tiếp cận mới"
-          activeOpacity={0.88}
-        >
-          <Ionicons name="camera" size={20} color={Colors.surface} />
-          <Text style={styles.contributeFabText}>Đóng góp tiếp cận</Text>
-          <View style={styles.contributeExpBadge}>
-            <Text style={styles.contributeExpText}>+50 EXP</Text>
-          </View>
-        </TouchableOpacity>
+        <View style={styles.fabContainer}>
+          <TouchableOpacity
+            style={styles.historyBtn}
+            onPress={() => setShowHistory(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Xem lịch sử đóng góp tiếp cận"
+            activeOpacity={0.85}
+          >
+            <MaterialCommunityIcons name="history" size={22} color={Colors.primary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.contributeFab}
+            onPress={() => onNavigateToContribute?.({ id: 'new-location', name: 'Địa điểm mới gần bạn' })}
+            accessibilityRole="button"
+            accessibilityLabel="Đóng góp tiện ích tiếp cận mới"
+            activeOpacity={0.88}
+          >
+            <Ionicons name="camera" size={20} color={Colors.surface} />
+            <Text style={styles.contributeFabText}>Đóng góp tiếp cận</Text>
+            <View style={styles.contributeExpBadge}>
+              <Text style={styles.contributeExpText}>+50 EXP</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
       )}
 
       {activePlace && (
@@ -266,6 +279,11 @@ export function DiscoveryScreen({ onNavigateToContribute }: DiscoveryScreenProps
           }}
         />
       )}
+
+      <ContributionHistorySheet
+        visible={showHistory}
+        onClose={() => setShowHistory(false)}
+      />
     </View>
   );
 }
@@ -375,10 +393,31 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.primary,
   },
-  contributeFab: {
+  fabContainer: {
     position: 'absolute',
     bottom: 34,
     alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    zIndex: 15,
+  },
+  historyBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.shadowDark,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  contributeFab: {
     backgroundColor: Colors.primary,
     flexDirection: 'row',
     alignItems: 'center',
@@ -391,7 +430,6 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 8,
     gap: 8,
-    zIndex: 15,
   },
   contributeFabText: {
     color: Colors.surface,

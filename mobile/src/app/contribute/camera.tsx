@@ -1,3 +1,4 @@
-import CameraContributionScreen from '@/features/contribution/camera/screens/CameraContributionScreen';
+import { CameraContributionScreen } from '@/features/contribution';
 
 export default CameraContributionScreen;
+

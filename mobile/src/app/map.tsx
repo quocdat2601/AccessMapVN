@@ -1,5 +1,5 @@
 import { DiscoveryScreen } from '@/features/discovery';
-import { startContributionFlow } from '@/features/contribution/navigation/startContributionFlow';
+import { startContributionFlow } from '@/features/contribution';
 import { useRouter } from 'expo-router';
 
 export default function MapRoute() {

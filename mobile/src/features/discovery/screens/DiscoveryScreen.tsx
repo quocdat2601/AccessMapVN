@@ -2,7 +2,7 @@ import { Colors } from '@/shared/theme';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Keyboard, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { ContributionHistorySheet } from '@/features/contribution/history/ContributionHistorySheet';
+import { ContributionHistorySheet } from '@/entities/contribution';
 import { HeaderBar } from '../components/HeaderBar';
 import { MapControls } from '../components/MapControls';
 import { MapView, type MapViewHandle } from '../components/MapView';

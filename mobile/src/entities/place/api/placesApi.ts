@@ -1,25 +1,57 @@
-import { supabase } from '@/shared/lib/supabase';
-import type { BoundingBox, GeocodeResult, PlaceDto } from '../types';
+import { apiClient } from '@/shared/api/client';
+import type { BoundingBox, GeocodeResult, PlaceDto, PoiCategory } from '../model/types';
 
 export async function fetchPlacesInBBox(
   bbox: BoundingBox,
-  zoomLevel: number = 14
+  zoomLevel: number = 14,
+  categories?: string[]
 ): Promise<PlaceDto[]> {
-  if (!process.env.EXPO_PUBLIC_SUPABASE_URL) {
+  try {
+    const raw = await apiClient.get<any[]>('/api/v1/places', {
+      params: {
+        minLng: bbox.west,
+        minLat: bbox.south,
+        maxLng: bbox.east,
+        maxLat: bbox.north,
+        zoomLevel,
+        categories: categories?.join(','),
+      },
+    });
+
+    if (!Array.isArray(raw)) return [];
+
+    return raw.map((p) => ({
+      id: String(p.id ?? ''),
+      name: String(p.name ?? ''),
+      category: (p.category ?? 'other') as PoiCategory,
+      address: p.address ?? null,
+      phone: p.phone ?? null,
+      website: p.website ?? null,
+      opening_hours: p.openingHours ?? p.opening_hours ?? null,
+      brand: p.brand ?? null,
+      operator: p.operator ?? null,
+      lng: Number(p.lng ?? 0),
+      lat: Number(p.lat ?? 0),
+      has_ramp: Boolean(p.hasRamp ?? p.has_ramp),
+      has_elevator: Boolean(p.hasAccessibleElevator ?? p.has_accessible_elevator ?? p.has_elevator),
+      has_tactile_paving: Boolean(p.hasTactilePaving ?? p.has_tactile_paving),
+      has_accessible_restroom: Boolean(p.hasAccessibleRestroom ?? p.has_accessible_restroom),
+      door_width_ok: Boolean(p.doorWidthOk ?? p.door_width_ok),
+      accessibility_score: typeof p.accessibilityScore === 'number'
+        ? p.accessibilityScore
+        : typeof p.accessibility_score === 'number'
+        ? p.accessibility_score
+        : -1,
+      accessibility_note: p.accessibilityNote ?? p.accessibility_note ?? null,
+      floor_level: p.floorLevel ?? p.floor_level ?? null,
+      building_id: p.buildingId ?? p.building_id ?? null,
+      has_accessible_elevator: Boolean(p.hasAccessibleElevator ?? p.has_accessible_elevator),
+      last_verified_at: p.lastVerifiedAt ?? p.last_verified_at ?? null,
+    }));
+  } catch (error) {
+    // Graceful fallback to empty array on transient failure
     return [];
   }
-
-  const { data, error } = await supabase.rpc('get_places_in_bounds', {
-    min_lng: bbox.west,
-    min_lat: bbox.south,
-    max_lng: bbox.east,
-    max_lat: bbox.north,
-    zoom_level: zoomLevel,
-    category_filter: null,
-  });
-
-  if (error) throw error;
-  return (data as PlaceDto[]) ?? [];
 }
 
 const geocodeCache = new Map<string, string>();
@@ -59,7 +91,6 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string |
     return geocodeCache.get(cacheKey)!;
   }
 
-  // 1. Try Photon first (fast, ~150ms, no strict 1 req/s rate-limit)
   try {
     const photonRes = await fetch(`https://photon.komoot.io/reverse?lat=${lat}&lon=${lng}`, {
       headers: { 'User-Agent': 'AccessMapVN/1.0' },
@@ -87,7 +118,6 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string |
     // Fallback to Nominatim
   }
 
-  // 2. Fallback to Nominatim with full address parser
   try {
     const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`;
     const res = await fetch(url, {

@@ -1,8 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { fetchPlacesInBBox } from '../services/placesApi';
-import type { BoundingBox, PlaceDto } from '../types';
-
-const hasSupabase = Boolean(process.env.EXPO_PUBLIC_SUPABASE_URL);
+import { fetchPlacesInBBox, type BoundingBox, type PlaceDto } from '@/entities/place';
 
 export function useNearbyPlaces(bbox: BoundingBox | null) {
   const [places, setPlaces] = useState<PlaceDto[]>([]);
@@ -16,10 +13,6 @@ export function useNearbyPlaces(bbox: BoundingBox | null) {
   const selectedPlace = places.find((p) => p.id === selectedId) ?? null;
 
   const fetchPlaces = useCallback(async (box: BoundingBox) => {
-    if (!hasSupabase) {
-      setPlaces([]);
-      return;
-    }
 
     // Spatial containment check: if visible screen is already inside previously fetched buffered area, skip request
     if (

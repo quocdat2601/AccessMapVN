@@ -11,9 +11,7 @@ import { SearchBar } from '../components/SearchBar';
 import { useMapRegion } from '../hooks/useMapRegion';
 import { useNearbyPlaces } from '../hooks/useNearbyPlaces';
 import { useUserLocation } from '../hooks/useUserLocation';
-import { forwardGeocode } from '../services/placesApi';
-
-import type { GeocodeResult, PlaceDto } from '../types';
+import { forwardGeocode, type GeocodeResult, type PlaceDto } from '@/entities/place';
 
 interface DiscoveryScreenProps {
   onNavigateToContribute?: (place: { id: string; name: string }) => void;

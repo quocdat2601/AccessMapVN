@@ -1,8 +1,8 @@
 import Constants from 'expo-constants';
 import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
-import { reverseGeocode } from '../services/placesApi';
-import type { LocationPoi, MapRegion, PlaceDto } from '../types';
+import { reverseGeocode, type PlaceDto } from '@/entities/place';
+import type { LocationPoi, MapRegion } from '../types';
 import { AccessibilityLayer } from './AccessibilityLayer';
 import { MapCanvas } from './MapCanvas';
 import { UserLocationMarker } from './UserLocationMarker';

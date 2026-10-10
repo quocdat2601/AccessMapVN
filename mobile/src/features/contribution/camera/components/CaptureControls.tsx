@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Pressable, Text, View } from 'react-native';
-import { CaptureMode } from '../types';
+import type { CaptureMode } from '@/entities/contribution';
 import { styles } from './CaptureControls.styles';
 
 interface CaptureControlsProps {

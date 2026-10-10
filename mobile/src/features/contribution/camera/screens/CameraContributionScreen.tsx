@@ -18,8 +18,14 @@ import { CameraStatusOverlay } from '../components/CameraStatusOverlay';
 import { CaptureControls } from '../components/CaptureControls';
 import { MediaPreview } from '../components/MediaPreview';
 import { PermissionState } from '../components/PermissionState';
-import { addContributionRecord, setPendingContributionMedia } from '../pendingContributionStore';
-import { CapturedContributionMedia, CaptureMode, GpsSnapshot } from '../types';
+import {
+  addContributionRecord,
+  setPendingContributionMedia,
+  type CapturedContributionMedia,
+  type CaptureMode,
+  type GpsSnapshot,
+} from '@/entities/contribution';
+
 import { styles } from './CameraContributionScreen.styles';
 
 type CameraType = 'back' | 'front';

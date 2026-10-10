@@ -1,5 +1,5 @@
 import { Href } from 'expo-router';
-import { ContributionLocation } from '../camera/types';
+import type { ContributionLocation } from '@/entities/contribution';
 
 interface ContributionRouter {
   push: (href: Href) => void;

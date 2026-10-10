@@ -6,7 +6,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/shared/theme';
 import { PreScanFeatureTag, runAiPreScan } from '../../services/aiPreScanService';
-import { CapturedContributionMedia } from '../types';
+import type { CapturedContributionMedia } from '@/entities/contribution';
 import { CameraHeader } from './CameraHeader';
 import { styles } from './MediaPreview.styles';
 

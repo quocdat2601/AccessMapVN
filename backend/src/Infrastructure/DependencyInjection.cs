@@ -26,6 +26,8 @@ public static class DependencyInjection
 
         services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
         services.AddScoped<IPlaceSpatialQueryService, AccessMapVN.Infrastructure.Services.PlaceSpatialQueryService>();
+        services.AddScoped<IPlaceRepository, AccessMapVN.Infrastructure.Repositories.PlaceRepository>();
+        services.AddScoped<ISubmissionRepository, AccessMapVN.Infrastructure.Repositories.SubmissionRepository>();
 
         return services;
     }

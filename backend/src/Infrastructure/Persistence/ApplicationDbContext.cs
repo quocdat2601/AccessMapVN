@@ -12,6 +12,8 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     }
 
     public DbSet<Place> Places => Set<Place>();
+    public DbSet<Submission> Submissions => Set<Submission>();
+    public DbSet<PointTransaction> PointTransactions => Set<PointTransaction>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

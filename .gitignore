@@ -19,6 +19,8 @@ out/
 # .NET
 bin/
 obj/
+.vs/
+*.user
 
 # Python
 __pycache__/

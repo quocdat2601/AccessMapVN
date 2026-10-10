@@ -54,6 +54,10 @@ dotnet build
 # Run unit tests
 dotnet test
 
+# Configure database connection securely (prevents leaking password to Git)
+dotnet user-secrets set "ConnectionStrings:SupabaseConnection" "Host=aws-0-ap-southeast-1.pooler.supabase.com;Port=6543;Database=postgres;Username=postgres.rtpurefxxkosfkrbrwyf;Password=<YOUR_PASSWORD>;SSL Mode=Require;Trust Server Certificate=true;" --project src/WebApi/AccessMapVN.WebApi.csproj
+
 # Run WebApi
 dotnet run --project src/WebApi/AccessMapVN.WebApi.csproj
 ```
+

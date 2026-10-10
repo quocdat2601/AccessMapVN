@@ -25,6 +25,7 @@ import {
   type CaptureMode,
   type GpsSnapshot,
 } from '@/entities/contribution';
+import { reverseGeocode } from '@/entities/place';
 
 import { styles } from './CameraContributionScreen.styles';
 
@@ -57,16 +58,17 @@ function ActiveCameraContributionScreen() {
   const mounted = useRef(true);
 
   const [cameraPermission, requestCameraPermission, getCameraPermission] = ExpoCamera.useCameraPermissions();
-  const [microphonePermission, requestMicrophonePermission, getMicrophonePermission] = ExpoCamera.useMicrophonePermissions();
   const [locationPermission, requestLocationPermission, getLocationPermission] = Location.useForegroundPermissions();
 
   const [mode, setMode] = useState<CaptureMode>('photo');
   const [facing, setFacing] = useState<CameraType>('back');
+  const [flashMode, setFlashMode] = useState<'off' | 'on'>('off');
   const [cameraReady, setCameraReady] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [gps, setGps] = useState<GpsSnapshot | null>(null);
+  const [currentAddress, setCurrentAddress] = useState<string | null>(null);
   const [gpsState, setGpsState] = useState<'loading' | 'available' | 'denied' | 'unavailable'>('loading');
   const [capturedMedia, setCapturedMedia] = useState<CapturedContributionMedia | null>(null);
   const [savedLocally, setSavedLocally] = useState(false);
@@ -84,6 +86,34 @@ function ActiveCameraContributionScreen() {
         timestamp: current.timestamp,
       });
       setGpsState('available');
+
+      void (async () => {
+        try {
+          const [geo] = await Location.reverseGeocodeAsync({
+            latitude: current.coords.latitude,
+            longitude: current.coords.longitude,
+          });
+          if (geo && mounted.current) {
+            const parts = [
+              geo.street || geo.name,
+              geo.subregion || geo.district,
+              geo.city || geo.region,
+            ].filter(Boolean);
+            if (parts.length > 0) {
+              setCurrentAddress(parts.join(', '));
+              return;
+            }
+          }
+        } catch {
+          // ignore native geocode error
+        }
+        try {
+          const fallback = await reverseGeocode(current.coords.latitude, current.coords.longitude);
+          if (fallback && mounted.current) setCurrentAddress(fallback);
+        } catch {
+          // ignore fallback error
+        }
+      })();
     } catch {
       if (!mounted.current) return;
       setGps(null);
@@ -120,14 +150,13 @@ function ActiveCameraContributionScreen() {
         const [cameraResult, locationResult] = await Promise.all([
           getCameraPermission(),
           getLocationPermission(),
-          getMicrophonePermission(),
         ]);
         if (locationResult.granted && !gps) await loadCurrentLocation();
         if (!cameraResult.granted) setCameraReady(false);
       })();
     });
     return () => subscription.remove();
-  }, [getCameraPermission, getLocationPermission, getMicrophonePermission, gps, loadCurrentLocation]);
+  }, [getCameraPermission, getLocationPermission, gps, loadCurrentLocation]);
 
   useEffect(() => {
     if (!isRecording) return;
@@ -158,21 +187,11 @@ function ActiveCameraContributionScreen() {
     else setGpsState('denied');
   }, [loadCurrentLocation, locationPermission, requestLocationPermission]);
 
-  const handleModeChange = useCallback(async (nextMode: CaptureMode) => {
+  const handleModeChange = useCallback((nextMode: CaptureMode) => {
     if (isRecording || nextMode === mode) return;
     setMessage(null);
-    if (nextMode === 'video' && !microphonePermission?.granted) {
-      const permission = microphonePermission?.canAskAgain === false
-        ? microphonePermission
-        : await requestMicrophonePermission();
-      if (!permission.granted) {
-        setMessage('Cần quyền micrô để quay video có âm thanh. Bạn vẫn có thể chụp ảnh.');
-        return;
-      }
-    }
-    setCameraReady(false);
     setMode(nextMode);
-  }, [isRecording, microphonePermission, mode, requestMicrophonePermission]);
+  }, [isRecording, mode]);
 
   const capturePhoto = useCallback(async () => {
     if (!cameraRef.current || !cameraReady || isCapturing) return;
@@ -201,16 +220,6 @@ function ActiveCameraContributionScreen() {
 
   const startVideoRecording = useCallback(async () => {
     if (!cameraRef.current || !cameraReady || isCapturing) return;
-    let permission = microphonePermission;
-    if (!permission?.granted) {
-      if (permission && !permission.canAskAgain) {
-        setMessage('Quyền micrô đang bị tắt. Mở cài đặt để cho phép quay video có âm thanh.');
-        return;
-      }
-      permission = await requestMicrophonePermission();
-    }
-    if (!permission.granted || !cameraRef.current) return;
-
     setMessage(null);
     setIsRecording(true);
     setRecordingSeconds(0);
@@ -228,7 +237,10 @@ function ActiveCameraContributionScreen() {
     }, 1000);
 
     try {
-      const result = await cameraRef.current.recordAsync({ maxDuration: 10 });
+      const result = await cameraRef.current.recordAsync({
+        maxDuration: 10,
+        mute: true,
+      });
       const durationSeconds = recordingStartedAt.current == null
         ? 0
         : Math.max(1, Math.round((Date.now() - recordingStartedAt.current) / 1000));
@@ -262,7 +274,7 @@ function ActiveCameraContributionScreen() {
         setRecordingSeconds(0);
       }
     }
-  }, [cameraReady, gps, isCapturing, locationId, locationName, microphonePermission, requestMicrophonePermission]);
+  }, [cameraReady, gps, isCapturing, locationId, locationName]);
 
   const handleCapture = useCallback(() => {
     if (isRecording) {
@@ -340,23 +352,32 @@ function ActiveCameraContributionScreen() {
     <View style={styles.container}>
       <StatusBar style="light" />
       <ExpoCamera.CameraView
-        key={`${facing}-${mode}`}
         ref={cameraRef}
         style={StyleSheet.absoluteFill}
         facing={facing}
         mode={mode === 'photo' ? 'picture' : 'video'}
-        mute={false}
+        flash={flashMode}
+        enableTorch={flashMode === 'on' && facing === 'back'}
+        mute={true}
         videoQuality="720p"
         onCameraReady={() => setCameraReady(true)}
         onMountError={(error: any) => setMessage(`Không thể mở camera: ${error?.message ?? error}`)}
       />
       <View style={styles.previewScrim} pointerEvents="none" />
       <View style={[styles.hud, { paddingTop: insets.top + 8, paddingBottom: insets.bottom }]} pointerEvents="box-none">
-        <CameraHeader locationName={locationName} onBack={handleBack} disabled={isCapturing} />
-        <CameraStatusOverlay
+        <CameraHeader
+          locationName={locationName}
+          onBack={handleBack}
+          disabled={isCapturing}
           gpsAccuracy={gps?.accuracy ?? null}
           gpsState={gpsState}
           onGpsPress={() => void handleGpsPress()}
+          flashMode={flashMode}
+          onToggleFlash={() => setFlashMode((prev) => (prev === 'off' ? 'on' : 'off'))}
+        />
+        <CameraStatusOverlay
+          currentAddress={currentAddress}
+          gps={gps}
         />
         <View style={styles.flexSpace} />
         {message ? (
@@ -380,8 +401,7 @@ function ActiveCameraContributionScreen() {
           onModeChange={(nextMode) => void handleModeChange(nextMode)}
           onCapture={handleCapture}
           onFlip={() => {
-            setCameraReady(false);
-            setFacing((current: CameraType) => current === 'back' ? 'front' : 'back');
+            setFacing((current: CameraType) => (current === 'back' ? 'front' : 'back'));
           }}
         />
       </View>

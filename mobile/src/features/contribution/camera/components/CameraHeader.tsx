@@ -6,9 +6,31 @@ interface CameraHeaderProps {
   locationName: string;
   onBack: () => void;
   disabled?: boolean;
+  gpsAccuracy?: number | null;
+  gpsState?: 'loading' | 'available' | 'denied' | 'unavailable';
+  onGpsPress?: () => void;
+  flashMode?: 'off' | 'on';
+  onToggleFlash?: () => void;
 }
 
-export function CameraHeader({ locationName, onBack, disabled = false }: CameraHeaderProps) {
+export function CameraHeader({
+  locationName,
+  onBack,
+  disabled = false,
+  gpsAccuracy,
+  gpsState,
+  onGpsPress,
+  flashMode = 'off',
+  onToggleFlash,
+}: CameraHeaderProps) {
+  const gpsLabel = gpsState === 'available'
+    ? `±${Math.round(gpsAccuracy ?? 0)}m`
+    : gpsState === 'loading'
+      ? 'Đang tìm…'
+      : gpsState === 'denied'
+        ? 'GPS tắt'
+        : 'Mất GPS';
+
   return (
     <View style={styles.container}>
       <Pressable
@@ -29,8 +51,41 @@ export function CameraHeader({ locationName, onBack, disabled = false }: CameraH
         </Text>
       </View>
 
-      <View style={styles.iconButton}>
-        <MaterialCommunityIcons name="help-circle-outline" size={22} color="rgba(255,255,255,0.75)" />
+      <View style={styles.rightGroup}>
+        {onToggleFlash ? (
+          <Pressable
+            style={({ pressed }) => [
+              styles.iconButton,
+              flashMode === 'on' && styles.flashActive,
+              pressed && styles.pressed,
+            ]}
+            onPress={onToggleFlash}
+            accessibilityRole="button"
+            accessibilityLabel={flashMode === 'on' ? 'Tắt flash' : 'Bật flash'}
+            hitSlop={8}
+          >
+            <MaterialCommunityIcons
+              name={flashMode === 'on' ? 'flash' : 'flash-off'}
+              size={20}
+              color={flashMode === 'on' ? '#facc15' : '#ffffff'}
+            />
+          </Pressable>
+        ) : null}
+
+        {gpsState && onGpsPress ? (
+          <Pressable
+            style={({ pressed }) => [styles.gpsBadge, pressed && styles.pressed]}
+            onPress={onGpsPress}
+            accessibilityRole="button"
+            accessibilityLabel={`GPS: ${gpsLabel}. Chạm để thử lại.`}
+            hitSlop={8}
+          >
+            <View style={[styles.dot, gpsState !== 'available' && styles.dotWarning]} />
+            <Text style={styles.gpsText}>{gpsLabel}</Text>
+          </Pressable>
+        ) : !onToggleFlash ? (
+          <View style={styles.spacer} />
+        ) : null}
       </View>
     </View>
   );

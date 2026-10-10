@@ -49,16 +49,14 @@ export function CaptureControls({
         ))}
       </View>
 
-      {/* Subtle Hint */}
-      <Text style={styles.hint} numberOfLines={1}>
-        {isRecording
-          ? recordingSeconds < 5
+      {/* Recording status timer banner */}
+      {isRecording ? (
+        <Text style={styles.recordingHint} numberOfLines={1}>
+          {recordingSeconds < 5
             ? `🔴 Đang quay 00:0${recordingSeconds} / 00:10 (Tối thiểu 5s)`
-            : `🟢 Đã đạt chuẩn: ${formatDuration(recordingSeconds)} / 00:10 (Chạm để lưu)`
-          : isVideo
-            ? 'Quay 5–10 giây, giữ máy ổn định'
-            : 'Chụp rõ ram dốc và lối vào'}
-      </Text>
+            : `🟢 Đã đạt chuẩn: ${formatDuration(recordingSeconds)} / 00:10 (Chạm để lưu)`}
+        </Text>
+      ) : null}
 
       {/* Shutter & Actions Row */}
       <View style={styles.actionRow}>
@@ -96,7 +94,7 @@ export function CaptureControls({
             disabled={isRecording}
             accessibilityRole="button"
             accessibilityLabel="Đổi camera"
-            hitSlop={8}
+            hitSlop={16}
           >
             <MaterialCommunityIcons name="camera-flip-outline" size={24} color="#ffffff" />
           </Pressable>

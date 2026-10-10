@@ -17,6 +17,7 @@ export const styles = StyleSheet.create({
     padding: 3,
     flexDirection: 'row',
     backgroundColor: 'rgba(255,255,255,0.12)',
+    marginBottom: 12,
   },
   modeOption: {
     flex: 1,
@@ -36,12 +37,11 @@ export const styles = StyleSheet.create({
   modeTextActive: {
     color: '#ffffff',
   },
-  hint: {
-    marginTop: 8,
-    marginBottom: 12,
-    color: 'rgba(255,255,255,0.82)',
-    fontSize: 11.5,
-    fontWeight: '500',
+  recordingHint: {
+    marginBottom: 10,
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
     textAlign: 'center',
   },
   actionRow: {
@@ -52,7 +52,7 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   sideSpacer: {
-    width: 48,
+    width: 52,
   },
   captureOuter: {
     width: 68,
@@ -83,16 +83,16 @@ export const styles = StyleSheet.create({
     borderRadius: 5,
   },
   sideAction: {
-    width: 48,
+    width: 52,
     alignItems: 'center',
   },
   flipButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: 'rgba(255,255,255,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -1,4 +1,5 @@
 using AccessMapVN.Application.Common.Interfaces;
+using AccessMapVN.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace AccessMapVN.Infrastructure.Persistence;
@@ -9,6 +10,8 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
         : base(options)
     {
     }
+
+    public DbSet<Place> Places => Set<Place>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

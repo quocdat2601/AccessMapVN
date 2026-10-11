@@ -23,6 +23,8 @@ export interface CapturedContributionMedia {
 export interface ContributionLocation {
   id: string;
   name: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface ContributionSubmissionRecord {

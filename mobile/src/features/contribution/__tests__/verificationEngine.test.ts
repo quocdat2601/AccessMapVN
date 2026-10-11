@@ -4,7 +4,7 @@ import {
   evaluateVerificationMatrix,
   verifyWithAiOrFallback,
   type VerificationMatrixInput,
-} from '../services/verificationEngine.ts';
+} from '../lib/verificationEngine.ts';
 
 export function runVerificationEngineTests() {
   console.log('🧪 [TEST SUITE 1] verificationEngine.test.ts');
@@ -87,6 +87,27 @@ export function runVerificationEngineTests() {
     // Khi vi phạm ranh giới GPS > 50m, theo BR-13 không được AutoVerified
     assert.notStrictEqual(result.status, 'AutoVerified');
     console.log(`  ✅ Test Case 4: Distance ${distance}m > 50m -> spatialValid = false (PASSED)`);
+  }
+
+  // Test Case 4B: Distance = 55m với sai số GPS accuracy ±15m -> Dung sai hợp lệ (spatialValid = true)
+  {
+    const coordUser = { latitude: 10.7736, longitude: 106.7011, accuracy: 15 };
+    const coordPoi = { latitude: 10.7741, longitude: 106.7011 };
+
+    const distance = calculateHaversineDistanceMeters(coordUser, coordPoi);
+    assert.ok(distance >= 50 && distance <= 65, `Expected distance ~55m, got ${distance}m`);
+
+    const input: VerificationMatrixInput = {
+      cvConfidence: 0.95,
+      textDescription: 'Ram dốc chuẩn',
+      contributorCoords: coordUser,
+      poiCoords: coordPoi,
+      selectedTags: ['exterior_ramp_present'],
+    };
+
+    const result = evaluateVerificationMatrix(input);
+    assert.strictEqual(result.spatialValid, true);
+    console.log(`  ✅ Test Case 4B: Distance ${distance}m with ±15m accuracy margin -> spatialValid = true (PASSED)`);
   }
 
   // Test Case 5: Bậc tam cấp không có ram dốc -> Phạt -40% điểm xe lăn & Inaccessible
@@ -193,7 +214,7 @@ export function runVerificationEngineTests() {
     assert.strictEqual(result.hasDiscrepancy, true, 'Expected hasDiscrepancy to be true');
     assert.ok(result.overallScore <= 35, `Expected score <= 35, got ${result.overallScore}`);
     assert.strictEqual(result.status, 'AwaitingMoreInfo');
-    assert.strictEqual(result.personaFit.electricWheelchair, 'NeedsAssistance');
+    assert.strictEqual(result.personaFit.electricWheelchair, 'Inaccessible');
     assert.ok(result.statusDescription.includes('Ảnh chưa thể hiện đặc tính bạn đã chọn'));
     console.log('  ✅ Test Case 10: Anti-Cheat Discrepancy Gate -> score <= 35% & AwaitingMoreInfo (PASSED)');
   }

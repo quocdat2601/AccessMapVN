@@ -5,7 +5,7 @@ import {
   QCVN_FEATURE_TAGS,
   toggleFeatureTagKey,
   updateFieldNotes,
-} from '../review/model/tagReviewModel.ts';
+} from '../model/tagReviewModel.ts';
 
 export function runTagReviewTests() {
   console.log('🧪 [TEST SUITE 3] tagReview.test.ts');

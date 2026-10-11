@@ -1,7 +1,7 @@
 import assert from 'node:assert';
 import { adaptPickerImageToMediaResult, type PickerImageInput } from '../testing/adapters/testImageAdapter.ts';
 import { getPoiAnchorCoords } from '../testing/mocks/mockPoiAnchor.ts';
-import { calculateHaversineDistanceMeters } from '../services/verificationEngine.ts';
+import { calculateHaversineDistanceMeters } from '../lib/verificationEngine.ts';
 
 export function runTestImageAdapterTests() {
   console.log('🧪 [TEST SUITE 2] testImageAdapter.test.ts');

@@ -1,5 +1,27 @@
 export type VerificationStatus = 'AutoVerified' | 'PendingModeration' | 'AwaitingMoreInfo';
 
+export interface PersonaFitEvaluation {
+  electricWheelchair: 'FullyAccessible' | 'Accessible' | 'Inaccessible';
+  manualWheelchairSelf: 'FullyAccessible' | 'NeedsAssistance' | 'Inaccessible';
+  visualImpaired: 'Safe' | 'NeedsCaution' | 'Unsafe';
+}
+
+export interface DataConfidenceAssessment {
+  rampGeometryMeasured: boolean;
+  confidenceLevel: number; // 0-100%
+  recommendationPrompt?: string;
+}
+
+export interface PersonaScores {
+  wheelchairScore: number; // 0-100%
+  blindScore: number; // 0-100%
+}
+
+export interface VerificationPenalties {
+  stepsWithoutRamp: boolean;
+  tactileBlocked: boolean;
+}
+
 export interface VerificationMatrixInput {
   cvConfidence: number; // 0.0 to 1.0 (average / key feature CV confidence)
   textDescription?: string;
@@ -34,6 +56,11 @@ export interface VerificationMatrixResult {
       isWithin50m: boolean;
     };
   };
+  // QCVN 10:2014 Persona & Confidence Extensions
+  personaScores: PersonaScores;
+  personaFit: PersonaFitEvaluation;
+  dataConfidence: DataConfidenceAssessment;
+  penalties: VerificationPenalties;
   recommendedExp: number;
 }
 
@@ -54,6 +81,8 @@ const ACCESSIBILITY_KEYWORDS = [
   'xúc giác',
   'bằng phẳng',
   'gờ',
+  'braille',
+  'chữ nổi',
 ];
 
 /**
@@ -78,7 +107,7 @@ export function calculateHaversineDistanceMeters(
 
 /**
  * Evaluates the full multi-modal verification matrix combining Computer Vision,
- * NLP context notes, and Spatial Proximity Geofence (<= 50m).
+ * NLP context notes, Spatial Proximity Geofence (<= 50m), and QCVN 10:2014 Persona fits.
  */
 export function evaluateVerificationMatrix(
   input: VerificationMatrixInput
@@ -125,29 +154,119 @@ export function evaluateVerificationMatrix(
     }
   }
 
-  // Combined weighted score
-  // CV: 50%, NLP: 20%, Spatial: 30%
+  // Baseline Combined weighted score (CV: 50%, NLP: 20%, Spatial: 30%)
   let overallScore = Math.round(cvRawScore * 0.5 + nlpScore * 0.2 + spatialScore * 0.3);
 
   // BR-13 Penalty: If spatial distance exceeds 50m, enforce maximum threshold of 75%
-  // (Cannot be AutoVerified without valid spatial anchor)
   if (!spatialValid) {
     overallScore = Math.min(overallScore, 75);
   }
 
-  // Categorize status according to BR-09 & BR-10
+  // ── QCVN 10:2014 Persona Scoring & Penalty Rules ───────────────────────────
+  const selectedSet = new Set(input.selectedTags);
+  const hasRamp = selectedSet.has('exterior_ramp_present');
+  const hasComfortableRamp = selectedSet.has('ramp_slope_comfortable');
+  const hasSteps = selectedSet.has('steps_present');
+  const hasDoorWidth = selectedSet.has('door_width_ok');
+  const hasFlatThreshold = selectedSet.has('door_threshold_flat');
+  const hasElevator = selectedSet.has('elevator_accessible');
+  const hasAccessibleRestroom =
+    selectedSet.has('restroom_accessible_stall') || selectedSet.has('restroom_grab_bars');
+
+  const hasTactileGuiding = selectedSet.has('tactile_paving_guiding');
+  const hasTactileWarning = selectedSet.has('tactile_paving_warning');
+  const isTactileBlocked = selectedSet.has('tactile_paving_blocked');
+  const hasOverheadClearance = selectedSet.has('overhead_clearance_ok');
+  const hasBraille = selectedSet.has('braille_signage_present');
+  const hasAudio = selectedSet.has('audible_signal_present');
+
+  // Penalty Flags
+  const stepsWithoutRamp = hasSteps && !hasRamp;
+  const tactileBlocked = isTactileBlocked;
+
+  // ── Wheelchair Score Formula ──────────────────────────────────────────────
+  // CV Component for Wheelchair: accounts for ramp, doors, restrooms, elevator
+  let cvWheelchair = cvRawScore;
+  if (!hasRamp && !hasSteps && !hasDoorWidth) {
+    // neutral
+    cvWheelchair = Math.round(cvRawScore * 0.9);
+  }
+
+  let wheelchairScore = Math.round(cvWheelchair * 0.5 + spatialScore * 0.3 + nlpScore * 0.2);
+
+  // Severe Penalty: Steps present without Ramp -> Deduct 40%
+  if (stepsWithoutRamp) {
+    wheelchairScore = Math.max(10, wheelchairScore - 40);
+  }
+
+  // ── Blind Score Formula ───────────────────────────────────────────────────
+  let cvBlind = cvRawScore;
+  if (!hasTactileGuiding && !hasTactileWarning && !hasBraille) {
+    cvBlind = Math.round(cvRawScore * 0.85);
+  }
+
+  let blindScore = Math.round(cvBlind * 0.5 + spatialScore * 0.3 + nlpScore * 0.2);
+
+  // Severe Penalty: Tactile blocked by obstacles -> Clamp to AwaitingMoreInfo
+  if (tactileBlocked) {
+    blindScore = Math.min(45, blindScore);
+  }
+
+  // ── Persona Fit Qualitative Evaluation ────────────────────────────────────
+  let electricWheelchair: PersonaFitEvaluation['electricWheelchair'] = 'Accessible';
+  let manualWheelchairSelf: PersonaFitEvaluation['manualWheelchairSelf'] = 'NeedsAssistance';
+  let visualImpaired: PersonaFitEvaluation['visualImpaired'] = 'NeedsCaution';
+
+  if (stepsWithoutRamp) {
+    electricWheelchair = 'Inaccessible';
+    manualWheelchairSelf = 'Inaccessible';
+  } else if (hasRamp) {
+    if (hasComfortableRamp && (hasDoorWidth || hasFlatThreshold)) {
+      electricWheelchair = 'FullyAccessible';
+      manualWheelchairSelf = 'FullyAccessible';
+    } else {
+      electricWheelchair = 'FullyAccessible';
+      manualWheelchairSelf = 'NeedsAssistance'; // e.g. 1/12 standard slope
+    }
+  } else if (hasElevator || hasAccessibleRestroom) {
+    electricWheelchair = 'Accessible';
+    manualWheelchairSelf = 'NeedsAssistance';
+  }
+
+  if (tactileBlocked) {
+    visualImpaired = 'Unsafe';
+  } else if ((hasTactileGuiding || hasTactileWarning) && (hasOverheadClearance || hasAudio || hasBraille)) {
+    visualImpaired = 'Safe';
+  } else if (hasTactileGuiding || hasTactileWarning) {
+    visualImpaired = 'NeedsCaution';
+  }
+
+  // ── Data Confidence Assessment (2D Monocular vs Multi-Angle/Sensor) ────────
+  // A single frontal photo has 75% data confidence because slope angle (1/12 vs 1/20)
+  // cannot be certified without IMU pitch telemetry or side profile geometry.
+  const dataConfidence: DataConfidenceAssessment = {
+    rampGeometryMeasured: false,
+    confidenceLevel: 75,
+    recommendationPrompt:
+      'Để thẩm định độ dốc 1/20 tuyệt đối theo QCVN, hãy chụp thêm ảnh góc nghiêng hoặc quay video bước dọc theo dốc.',
+  };
+
+  // Categorize overall status according to BR-09 & BR-10
   let status: VerificationStatus = 'PendingModeration';
   let statusLabel = 'Chờ duyệt viên';
-  let statusDescription = 'Độ tin cậy ở mức khá (60–79%). Bản ghi sẽ được chuyển đến hàng đợi kiểm duyệt viên.';
+  let statusDescription =
+    'Độ tin cậy ở mức khá (60–79%). Bản ghi sẽ được chuyển đến hàng đợi kiểm duyệt viên.';
 
   if (overallScore >= 80 && spatialValid) {
     status = 'AutoVerified';
     statusLabel = 'Tự động duyệt';
-    statusDescription = 'Độ tin cậy cao (≥80%), thông tin ảnh và vị trí chuẩn xác. Đủ điều kiện xuất bản ngay.';
+    statusDescription =
+      'Độ tin cậy cao (≥80%), thông tin ảnh và vị trí chuẩn xác. Đủ điều kiện xuất bản ngay.';
   } else if (overallScore < 60) {
     status = 'AwaitingMoreInfo';
     statusLabel = 'Cần thêm thông tin';
-    statusDescription = 'Ảnh mờ hoặc thông tin chưa rõ ràng (<60%). Cần chụp lại góc rộng hoặc bổ sung hình ảnh.';
+    statusDescription =
+      'Ảnh mờ hoặc thông tin chưa rõ ràng (<60%). Cần chụp lại góc rộng hoặc bổ sung hình ảnh.';
   }
 
   return {
@@ -175,6 +294,20 @@ export function evaluateVerificationMatrix(
         distanceMeters,
         isWithin50m: spatialValid,
       },
+    },
+    personaScores: {
+      wheelchairScore,
+      blindScore,
+    },
+    personaFit: {
+      electricWheelchair,
+      manualWheelchairSelf,
+      visualImpaired,
+    },
+    dataConfidence,
+    penalties: {
+      stepsWithoutRamp,
+      tactileBlocked,
     },
     recommendedExp: 50,
   };

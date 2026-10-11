@@ -103,6 +103,7 @@ export function FinalScorecardScreen({
 
         {/* Breakdown Matrix */}
         <ScoreMatrixBreakdown
+          matrixResult={matrixResult}
           pillars={pillars}
           spatialValid={spatialValid}
           spatialDistanceMeters={spatialDistanceMeters}

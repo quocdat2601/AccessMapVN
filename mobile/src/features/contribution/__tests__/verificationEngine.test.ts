@@ -87,8 +87,62 @@ export function runVerificationEngineTests() {
     assert.notStrictEqual(result.status, 'AutoVerified');
     console.log(`  ✅ Test Case 4: Distance ${distance}m > 50m -> spatialValid = false (PASSED)`);
   }
+
+  // Test Case 5: Bậc tam cấp không có ram dốc -> Phạt -40% điểm xe lăn & Inaccessible
+  {
+    const input: VerificationMatrixInput = {
+      cvConfidence: 0.90,
+      textDescription: 'Có 3 bậc tam cấp cao',
+      contributorCoords: { latitude: 10.7736, longitude: 106.7011 },
+      poiCoords: { latitude: 10.7736, longitude: 106.7011 },
+      selectedTags: ['steps_present'], // Có bậc nhưng không có ram dốc
+    };
+
+    const result = evaluateVerificationMatrix(input);
+    assert.strictEqual(result.penalties.stepsWithoutRamp, true);
+    assert.strictEqual(result.personaFit.manualWheelchairSelf, 'Inaccessible');
+    assert.strictEqual(result.personaFit.electricWheelchair, 'Inaccessible');
+    assert.ok(result.personaScores.wheelchairScore <= 55, `Expected penalized wheelchairScore <= 55, got ${result.personaScores.wheelchairScore}`);
+    console.log('  ✅ Test Case 5: Steps without ramp -> -40% wheelchair penalty & Inaccessible (PASSED)');
+  }
+
+  // Test Case 6: Gạch xúc giác bị vật cản đè lên -> Blind Score <= 45% & visualImpaired = Unsafe
+  {
+    const input: VerificationMatrixInput = {
+      cvConfidence: 0.88,
+      textDescription: 'Lối đi có gạch xúc giác nhưng xe máy dựng đè lên',
+      contributorCoords: { latitude: 10.7736, longitude: 106.7011 },
+      poiCoords: { latitude: 10.7736, longitude: 106.7011 },
+      selectedTags: ['tactile_paving_guiding', 'tactile_paving_blocked'],
+    };
+
+    const result = evaluateVerificationMatrix(input);
+    assert.strictEqual(result.penalties.tactileBlocked, true);
+    assert.strictEqual(result.personaFit.visualImpaired, 'Unsafe');
+    assert.ok(result.personaScores.blindScore <= 45, `Expected blindScore <= 45, got ${result.personaScores.blindScore}`);
+    console.log('  ✅ Test Case 6: Tactile paving blocked -> Blind score <= 45% & Unsafe alert (PASSED)');
+  }
+
+  // Test Case 7: Dốc thoải <= 1/20 & cửa rộng -> Manual Wheelchair = FullyAccessible
+  {
+    const input: VerificationMatrixInput = {
+      cvConfidence: 0.92,
+      textDescription: 'Ram dốc thoải xe lăn tự đẩy lên dễ dàng, cửa tự động rộng rãi',
+      contributorCoords: { latitude: 10.7736, longitude: 106.7011 },
+      poiCoords: { latitude: 10.7736, longitude: 106.7011 },
+      selectedTags: ['exterior_ramp_present', 'ramp_slope_comfortable', 'door_width_ok'],
+    };
+
+    const result = evaluateVerificationMatrix(input);
+    assert.strictEqual(result.personaFit.manualWheelchairSelf, 'FullyAccessible');
+    assert.strictEqual(result.personaFit.electricWheelchair, 'FullyAccessible');
+    assert.strictEqual(result.dataConfidence.confidenceLevel, 75);
+    assert.ok(result.dataConfidence.recommendationPrompt?.includes('1/20'));
+    console.log('  ✅ Test Case 7: Ramp <= 1/20 -> FullyAccessible with 75% data confidence (PASSED)');
+  }
 }
 
 if (process.argv[1]?.endsWith('verificationEngine.test.ts')) {
   runVerificationEngineTests();
 }
+

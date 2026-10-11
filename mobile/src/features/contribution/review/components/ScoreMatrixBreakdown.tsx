@@ -8,6 +8,7 @@ interface ScoreMatrixBreakdownProps {
   pillars: VerificationMatrixResult['pillars'];
   spatialValid: boolean;
   spatialDistanceMeters: number | null;
+  selectedTagKeys?: string[];
 }
 
 export function ScoreMatrixBreakdown({
@@ -15,6 +16,7 @@ export function ScoreMatrixBreakdown({
   pillars,
   spatialValid,
   spatialDistanceMeters,
+  selectedTagKeys,
 }: ScoreMatrixBreakdownProps) {
   const { computerVision, nlpContext, spatialProximity } = pillars;
   const personaScores = matrixResult?.personaScores;
@@ -91,9 +93,9 @@ export function ScoreMatrixBreakdown({
                 >
                   Xe lăn tay:{' '}
                   {personaFit.manualWheelchairSelf === 'FullyAccessible'
-                    ? 'Tự hành độc lập (≤1/20)'
+                    ? 'Tự di chuyển độc lập'
                     : personaFit.manualWheelchairSelf === 'NeedsAssistance'
-                    ? 'Cần trợ giúp (1/12 - 1/16)'
+                    ? 'Cần người hỗ trợ đẩy'
                     : 'Không thể tiếp cận'}
                 </Text>
               </View>
@@ -125,7 +127,7 @@ export function ScoreMatrixBreakdown({
                   {personaFit.electricWheelchair === 'FullyAccessible'
                     ? 'Tiếp cận tốt'
                     : personaFit.electricWheelchair === 'Accessible'
-                    ? 'Đạt chuẩn'
+                    ? 'Tiếp cận được'
                     : 'Không tiếp cận'}
                 </Text>
               </View>
@@ -141,7 +143,7 @@ export function ScoreMatrixBreakdown({
                 </View>
                 <View>
                   <Text style={styles.personaName}>Người khiếm thị & thị lực kém</Text>
-                  <Text style={styles.personaSub}>Gạch xúc giác, tĩnh không an toàn, âm thanh</Text>
+                  <Text style={styles.personaSub}>Gạch xúc giác, lối đi và âm thanh</Text>
                 </View>
               </View>
               <View style={styles.scorePill}>
@@ -194,9 +196,9 @@ export function ScoreMatrixBreakdown({
                 >
                   Độ an toàn lối đi:{' '}
                   {personaFit.visualImpaired === 'Safe'
-                    ? 'An toàn'
+                    ? 'Lối đi thông thoáng'
                     : personaFit.visualImpaired === 'NeedsCaution'
-                    ? 'Cần thận trọng'
+                    ? 'Cần chú ý cẩn thận'
                     : 'Cảnh báo nguy hiểm'}
                 </Text>
               </View>
@@ -210,7 +212,7 @@ export function ScoreMatrixBreakdown({
         <View style={styles.penaltyAlert}>
           <MaterialCommunityIcons name="alert-decagram" size={18} color="#f43f5e" />
           <Text style={styles.penaltyAlertText}>
-            Phạt vi phạm (-40% điểm xe lăn): Có bậc tam cấp nhưng không có ram dốc tiếp cận.
+            Lưu ý: Có bậc tam cấp cản trở, xe lăn chưa thể tự di chuyển qua.
           </Text>
         </View>
       ) : null}
@@ -219,121 +221,150 @@ export function ScoreMatrixBreakdown({
         <View style={styles.penaltyAlert}>
           <MaterialCommunityIcons name="alert-octagon" size={18} color="#f43f5e" />
           <Text style={styles.penaltyAlertText}>
-            Cảnh báo an toàn: Gạch xúc giác bị vật cản/xe máy đè lên, hạ điểm khiếm thị về mức Cần bổ sung.
+            Cảnh báo: Lối đi xúc giác có vật cản, người khiếm thị cần chú ý.
           </Text>
         </View>
       ) : null}
 
-      {/* ── 3. Data Confidence Card (2D vs 3D/IMU) ───────────────────────── */}
-      {dataConfidence ? (
-        <View style={styles.dataConfidenceCard}>
-          <View style={styles.dataConfidenceHeader}>
-            <MaterialCommunityIcons name="cube-scan" size={16} color="#38bdf8" />
-            <Text style={styles.dataConfidenceTitle}>Độ tin cậy dữ liệu hình học: Cơ bản ({dataConfidence.confidenceLevel}%)</Text>
-          </View>
-          <Text style={styles.dataConfidencePrompt}>
-            {dataConfidence.recommendationPrompt}
-          </Text>
-        </View>
-      ) : null}
-
-      {/* ── 4. Technical 3 Pillars Breakdown (CV, NLP, Spatial) ──────────── */}
-      <Text style={styles.sectionTitle}>Phân rã ma trận 3 trụ cột kỹ thuật</Text>
-
-      {/* Computer Vision */}
-      <View style={styles.pillarCard}>
-        <View style={styles.pillarHeader}>
-          <View style={styles.pillarTitleRow}>
-            <MaterialCommunityIcons name="image-filter-center-focus" size={18} color="#38bdf8" />
-            <Text style={styles.pillarName}>1. Thị giác máy tính (CV)</Text>
-          </View>
-          <Text style={[styles.pillarScoreText, { color: '#38bdf8' }]}>
-            {computerVision.score}%
-          </Text>
-        </View>
-        <View style={styles.progressBarBg}>
+      {/* ── 3. Cơ sở xác thực thông tin (Lý do đạt điểm này) ─────────────── */}
+      <Text style={styles.sectionTitle}>Cơ sở xác thực thông tin</Text>
+      <View style={styles.evidenceCard}>
+        {/* Hình ảnh */}
+        <View style={styles.evidenceRow}>
           <View
             style={[
-              styles.progressBarFill,
-              { width: `${computerVision.score}%`, backgroundColor: '#38bdf8' },
-            ]}
-          />
-        </View>
-        <Text style={styles.pillarDetail}>{computerVision.label} (Trọng số 50%)</Text>
-      </View>
-
-      {/* NLP Context */}
-      <View style={styles.pillarCard}>
-        <View style={styles.pillarHeader}>
-          <View style={styles.pillarTitleRow}>
-            <MaterialCommunityIcons name="text-box-search-outline" size={18} color="#a855f7" />
-            <Text style={styles.pillarName}>2. Bối cảnh ngữ nghĩa (NLP)</Text>
-          </View>
-          <Text style={[styles.pillarScoreText, { color: '#a855f7' }]}>
-            {nlpContext.score}%
-          </Text>
-        </View>
-        <View style={styles.progressBarBg}>
-          <View
-            style={[
-              styles.progressBarFill,
-              { width: `${nlpContext.score}%`, backgroundColor: '#a855f7' },
-            ]}
-          />
-        </View>
-        <Text style={styles.pillarDetail}>{nlpContext.label} (Trọng số 20%)</Text>
-        {nlpContext.matchedKeywords.length > 0 ? (
-          <View style={styles.keywordsRow}>
-            {nlpContext.matchedKeywords.map((kw, i) => (
-              <View key={i} style={styles.keywordBadge}>
-                <Text style={styles.keywordText}>#{kw}</Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
-      </View>
-
-      {/* Spatial Proximity */}
-      <View style={styles.pillarCard}>
-        <View style={styles.pillarHeader}>
-          <View style={styles.pillarTitleRow}>
-            <MaterialCommunityIcons
-              name={spatialValid ? 'map-marker-check' : 'map-marker-alert'}
-              size={18}
-              color={spatialValid ? '#10b981' : '#f43f5e'}
-            />
-            <Text style={styles.pillarName}>3. Sai số không gian GPS</Text>
-          </View>
-          <View style={styles.spatialBadgeWrap}>
-            <Text
-              style={[
-                styles.pillarScoreText,
-                { color: spatialValid ? '#10b981' : '#f43f5e' },
-              ]}
-            >
-              {spatialProximity.score}%
-            </Text>
-          </View>
-        </View>
-        <View style={styles.progressBarBg}>
-          <View
-            style={[
-              styles.progressBarFill,
+              styles.evidenceIconWrap,
               {
-                width: `${spatialProximity.score}%`,
-                backgroundColor: spatialValid ? '#10b981' : '#f43f5e',
+                backgroundColor:
+                  computerVision.score >= 80 ? '#ecfdf5' : computerVision.score > 0 ? '#f0fdfa' : '#f8fafc',
               },
             ]}
+          >
+            <MaterialCommunityIcons
+              name={computerVision.score > 0 ? 'image-check-outline' : 'image-filter-center-focus'}
+              size={18}
+              color={computerVision.score > 0 ? '#059669' : '#64748b'}
+            />
+          </View>
+          <View style={styles.evidenceTextCol}>
+            <Text style={styles.evidenceTitle}>Hình ảnh chụp tại chỗ</Text>
+            <Text style={styles.evidenceSub}>
+              {computerVision.score >= 80
+                ? 'Ảnh rõ nét, nhận diện tốt ram dốc và lối vào'
+                : computerVision.score > 0
+                ? `Ảnh cơ bản, nhận diện đặc trưng tiếp cận (${computerVision.score}%)`
+                : 'Chưa phát hiện tiện ích tiếp cận trong ảnh'}
+            </Text>
+          </View>
+          <MaterialCommunityIcons
+            name={computerVision.score > 0 ? 'check-circle' : 'information'}
+            size={16}
+            color={computerVision.score > 0 ? '#059669' : '#94a3b8'}
           />
         </View>
-        <Text style={styles.pillarDetail}>
-          {spatialDistanceMeters != null
-            ? `Cách POI ${spatialDistanceMeters}m ${
-                spatialValid ? '(Đạt chuẩn địa đỗ ≤50m)' : '(Vượt phạm vi cho phép >50m)'
-              }`
-            : 'Định vị GPS chưa khả dụng'}{' '}
-          (Trọng số 30%)
-        </Text>
+
+        <View style={styles.evidenceDivider} />
+
+        {/* Vị trí GPS */}
+        <View style={styles.evidenceRow}>
+          <View
+            style={[
+              styles.evidenceIconWrap,
+              { backgroundColor: spatialValid ? '#ecfdf5' : '#fff1f2' },
+            ]}
+          >
+            <MaterialCommunityIcons
+              name={spatialValid ? 'map-marker-check-outline' : 'map-marker-alert-outline'}
+              size={18}
+              color={spatialValid ? '#059669' : '#dc2626'}
+            />
+          </View>
+          <View style={styles.evidenceTextCol}>
+            <Text style={styles.evidenceTitle}>Vị trí địa điểm</Text>
+            <Text style={styles.evidenceSub}>
+              {spatialDistanceMeters != null
+                ? spatialValid
+                  ? spatialDistanceMeters === 0
+                    ? 'Khớp tọa độ tại chỗ (0m)'
+                    : `Khớp với vị trí thực tế (cách ${spatialDistanceMeters}m)`
+                  : `Cách địa điểm ${spatialDistanceMeters}m (Vượt quá bán kính 50m)`
+                : 'Đã xác thực tọa độ'}
+            </Text>
+          </View>
+          <MaterialCommunityIcons
+            name={spatialValid ? 'check-circle' : 'alert-circle'}
+            size={16}
+            color={spatialValid ? '#059669' : '#dc2626'}
+          />
+        </View>
+
+        <View style={styles.evidenceDivider} />
+
+        {/* Đặc điểm tiếp cận */}
+        {(() => {
+          const count = selectedTagKeys ? selectedTagKeys.length : (matrixResult?.overallScore && matrixResult.overallScore > 25 ? 1 : 0);
+          const hasTags = count > 0;
+          const verifiedCount = matrixResult?.verifiedTagCount ?? (computerVision.score > 0 ? 1 : 0);
+          const unverifiedCount = matrixResult?.unverifiedTagCount ?? Math.max(0, count - verifiedCount);
+
+          const isFullyVerified = hasTags && verifiedCount > 0 && unverifiedCount === 0;
+          const isPartiallyVerified = hasTags && verifiedCount > 0 && unverifiedCount > 0;
+
+          const rowBg = isFullyVerified
+            ? '#ecfdf5'
+            : isPartiallyVerified
+            ? '#eff6ff'
+            : '#fffbeb';
+
+          const rowColor = isFullyVerified
+            ? '#059669'
+            : isPartiallyVerified
+            ? '#0284c7'
+            : '#d97706';
+
+          const mainIcon = isFullyVerified
+            ? 'checkbox-marked-circle-outline'
+            : isPartiallyVerified
+            ? 'information-outline'
+            : 'alert-circle-outline';
+
+          const statusIcon = isFullyVerified
+            ? 'check-circle'
+            : isPartiallyVerified
+            ? 'clock-outline'
+            : 'alert-circle';
+
+          const title = !hasTags
+            ? 'Chưa chọn đặc tính nào'
+            : isFullyVerified
+            ? 'Đặc điểm bạn đã chọn'
+            : isPartiallyVerified
+            ? `Đặc điểm đã chọn (${verifiedCount} khớp ảnh, ${unverifiedCount} tự khai)`
+            : 'Đặc điểm tự khai (Chưa khớp ảnh)';
+
+          const subtitle = !hasTags
+            ? '0 đặc tính được xác nhận. Cần bổ sung để đủ điều kiện xét duyệt.'
+            : isFullyVerified
+            ? nlpContext.matchedKeywords.length > 0
+              ? `Đã chọn ${count} đặc điểm (khớp ${nlpContext.matchedKeywords.length} từ khóa ghi chú)`
+              : `Đã xác thực toàn bộ ${count} đặc điểm tiếp cận qua ảnh`
+            : isPartiallyVerified
+            ? `Đã xác thực ${verifiedCount}/${count} đặc điểm qua ảnh. ${unverifiedCount} đặc điểm còn lại cần kiểm duyệt viên xác minh.`
+            : `Đã chọn ${count} đặc điểm nhưng ảnh chưa thể hiện. Cần kiểm duyệt viên xác minh.`;
+
+          return (
+            <View style={styles.evidenceRow}>
+              <View style={[styles.evidenceIconWrap, { backgroundColor: rowBg }]}>
+                <MaterialCommunityIcons name={mainIcon} size={18} color={rowColor} />
+              </View>
+              <View style={styles.evidenceTextCol}>
+                <Text style={styles.evidenceTitle}>{title}</Text>
+                <Text style={styles.evidenceSub}>{subtitle}</Text>
+              </View>
+              <MaterialCommunityIcons name={statusIcon} size={16} color={rowColor} />
+            </View>
+          );
+        })()}
       </View>
     </View>
   );
@@ -346,7 +377,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#e2e8f0',
+    color: '#0f172a',
     marginBottom: 8,
     marginTop: 4,
   },
@@ -354,12 +385,17 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   personaCard: {
-    backgroundColor: 'rgba(30, 41, 59, 0.7)',
+    backgroundColor: '#ffffff',
     borderRadius: 14,
     padding: 12,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: 'rgba(51, 65, 85, 0.5)',
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
   },
   personaHeader: {
     flexDirection: 'row',
@@ -383,20 +419,20 @@ const styles = StyleSheet.create({
   personaName: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#f8fafc',
+    color: '#0f172a',
   },
   personaSub: {
-    fontSize: 10.5,
-    color: '#94a3b8',
+    fontSize: 11,
+    color: '#64748b',
     marginTop: 1,
   },
   scorePill: {
-    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+    backgroundColor: '#f1f5f9',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.2)',
+    borderColor: '#e2e8f0',
   },
   scorePillText: {
     fontSize: 13,
@@ -417,20 +453,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   badgeSuccess: {
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    borderColor: 'rgba(16, 185, 129, 0.3)',
+    backgroundColor: '#ecfdf5',
+    borderColor: '#a7f3d0',
   },
   badgeWarning: {
-    backgroundColor: 'rgba(245, 158, 11, 0.1)',
-    borderColor: 'rgba(245, 158, 11, 0.3)',
+    backgroundColor: '#fffbeb',
+    borderColor: '#fde68a',
   },
   badgeDanger: {
-    backgroundColor: 'rgba(244, 63, 94, 0.1)',
-    borderColor: 'rgba(244, 63, 94, 0.3)',
+    backgroundColor: '#fff1f2',
+    borderColor: '#fecdd3',
   },
   badgeInfo: {
-    backgroundColor: 'rgba(56, 189, 248, 0.1)',
-    borderColor: 'rgba(56, 189, 248, 0.3)',
+    backgroundColor: '#f0f9ff',
+    borderColor: '#bae6fd',
   },
   fitBadgeText: {
     fontSize: 11,
@@ -440,106 +476,77 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(244, 63, 94, 0.12)',
+    backgroundColor: '#fff1f2',
     borderWidth: 1,
-    borderColor: 'rgba(244, 63, 94, 0.3)',
+    borderColor: '#fecdd3',
     borderRadius: 10,
     padding: 10,
     marginBottom: 8,
   },
   penaltyAlertText: {
     fontSize: 11.5,
-    color: '#fda4af',
+    color: '#9f1239',
     fontWeight: '600',
     flex: 1,
   },
-  dataConfidenceCard: {
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(56, 189, 248, 0.25)',
-  },
-  dataConfidenceHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 4,
-  },
-  dataConfidenceTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#38bdf8',
-  },
-  dataConfidencePrompt: {
-    fontSize: 11,
-    color: '#94a3b8',
-    lineHeight: 16,
-  },
-  pillarCard: {
-    backgroundColor: 'rgba(30, 41, 59, 0.7)',
-    borderRadius: 12,
-    padding: 12,
+  evidenceCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 14,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: 'rgba(51, 65, 85, 0.5)',
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  pillarHeader: {
+  evidenceRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    gap: 10,
   },
-  pillarTitleRow: {
-    flexDirection: 'row',
+  evidenceIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
   },
-  pillarName: {
+  evidenceTextCol: {
+    flex: 1,
+  },
+  evidenceTitle: {
     fontSize: 12.5,
     fontWeight: '700',
-    color: '#e2e8f0',
+    color: '#0f172a',
   },
-  pillarScoreText: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  progressBarBg: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(15, 23, 42, 0.6)',
-    overflow: 'hidden',
-    marginBottom: 6,
-  },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  pillarDetail: {
+  evidenceSub: {
     fontSize: 11,
-    color: '#94a3b8',
+    color: '#64748b',
+    marginTop: 2,
   },
-  spatialBadgeWrap: {
+  evidenceDivider: {
+    height: 1,
+    backgroundColor: '#f1f5f9',
+    marginVertical: 10,
+  },
+  tipCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 8,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 8,
   },
-  keywordsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 5,
-    marginTop: 6,
-  },
-  keywordBadge: {
-    backgroundColor: 'rgba(168, 85, 247, 0.15)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  keywordText: {
-    fontSize: 10,
-    color: '#c084fc',
-    fontWeight: '600',
+  tipText: {
+    fontSize: 11,
+    color: '#166534',
+    flex: 1,
+    lineHeight: 16,
   },
 });

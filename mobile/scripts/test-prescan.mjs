@@ -12,14 +12,14 @@ function getMockPreScanResult() {
   };
 
   return {
-    summary: 'AI nhận diện sơ bộ: Phát hiện ram dốc và lối vào tiếp cận phù hợp cho xe lăn.',
+    summary: 'Chưa kết nối được dịch vụ AI. Vui lòng tự chọn các đặc điểm tiếp cận bên dưới.',
     isMockFallback: true,
-    features: [
-      { key: 'exterior_ramp_present', label: FEATURE_LABEL_MAP.exterior_ramp_present, detected: true, confidence: 0.92 },
-      { key: 'door_width_ok', label: FEATURE_LABEL_MAP.door_width_ok, detected: true, confidence: 0.86 },
-      { key: 'elevator_present', label: FEATURE_LABEL_MAP.elevator_present, detected: false, confidence: 0.74 },
-      { key: 'accessible_restroom_sign', label: FEATURE_LABEL_MAP.accessible_restroom_sign, detected: false, confidence: 0.65 },
-    ],
+    features: Object.entries(FEATURE_LABEL_MAP).map(([key, label]) => ({
+      key,
+      label,
+      detected: false,
+      confidence: 0,
+    })),
   };
 }
 
@@ -38,9 +38,10 @@ async function runTests() {
   const res = getMockPreScanResult();
 
   assert.strictEqual(res.isMockFallback, true);
-  assert.ok(res.features.length >= 2);
+  assert.strictEqual(res.features.length, 6);
+  // Verify offline/fallback mode does not falsely assert positive detections
+  assert.ok(res.features.every(f => f.detected === false));
   const ramp = res.features.find(f => f.key === 'exterior_ramp_present');
-  assert.ok(ramp && ramp.detected);
   assert.strictEqual(ramp.label, 'Ram dốc tiếp cận');
 
   console.log('✅ AI Pre-Scan contract verified!');

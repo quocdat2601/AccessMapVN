@@ -126,17 +126,22 @@ def _build_summary(features: FeaturesDict, nlp_result: dict | None) -> str:
 
     parts: list[str] = []
     if features.exterior_ramp_present.value is True:
-        parts.append("có ramp tiếp cận")
+        parts.append("có ram dốc tiếp cận")
     if features.steps_present.value is True:
         parts.append("có bậc thang")
     if features.elevator_present.value is True:
         parts.append("có thang máy")
-    elif features.elevator_present.value is False:
-        parts.append("không có thang máy")
-    if features.door_width_ok.value is False:
-        parts.append("cửa hơi hẹp")
+    if features.door_width_ok.value is True:
+        parts.append("cửa rộng thuận tiện")
+    elif features.door_width_ok.value is False:
+        parts.append("cửa hẹp")
+    if features.tactile_paving_present.value is True:
+        parts.append("có gạch xúc giác")
+    if features.accessible_restroom_sign.value is True:
+        parts.append("có nhà vệ sinh tiếp cận")
+
     if not parts:
-        return "Chưa đủ thông tin để đánh giá khả năng tiếp cận."
+        return "Chưa phát hiện tiện ích tiếp cận nào trong ảnh."
     return "Địa điểm " + ", ".join(parts) + "."
 
 

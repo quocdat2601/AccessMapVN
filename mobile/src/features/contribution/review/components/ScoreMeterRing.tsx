@@ -1,29 +1,68 @@
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 
-interface ScoreMeterRingProps {
+export interface ScoreMeterRingProps {
   score: number; // 0 to 100
   size?: number;
   strokeWidth?: number;
+  animated?: boolean;
+  onAnimationComplete?: () => void;
 }
 
 export function ScoreMeterRing({
   score,
   size = 130,
   strokeWidth = 11,
+  animated = true,
+  onAnimationComplete,
 }: ScoreMeterRingProps) {
   const clampedScore = Math.max(0, Math.min(100, Math.round(score)));
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (circumference * clampedScore) / 100;
+
+  const [displayScore, setDisplayScore] = useState(animated ? 0 : clampedScore);
+  const animatedValue = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!animated) {
+      setDisplayScore(clampedScore);
+      onAnimationComplete?.();
+      return;
+    }
+
+    animatedValue.setValue(0);
+    setDisplayScore(0);
+
+    const listenerId = animatedValue.addListener(({ value }) => {
+      setDisplayScore(Math.round(value));
+    });
+
+    Animated.timing(animatedValue, {
+      toValue: clampedScore,
+      duration: 950,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start(({ finished }) => {
+      if (finished) {
+        onAnimationComplete?.();
+      }
+    });
+
+    return () => {
+      animatedValue.removeListener(listenerId);
+      animatedValue.stopAnimation();
+    };
+  }, [animated, clampedScore]);
+
+  const strokeDashoffset = circumference - (circumference * displayScore) / 100;
 
   let strokeColor = '#10b981'; // >= 80% AutoVerified (Emerald)
   let statusBadge = 'CAO';
-  if (clampedScore < 60) {
+  if (displayScore < 60) {
     strokeColor = '#f43f5e'; // < 60% AwaitingMoreInfo (Rose)
     statusBadge = 'THẤP';
-  } else if (clampedScore < 80) {
+  } else if (displayScore < 80) {
     strokeColor = '#f59e0b'; // 60-79% PendingModeration (Amber)
     statusBadge = 'TRUNG BÌNH';
   }
@@ -56,7 +95,7 @@ export function ScoreMeterRing({
       </Svg>
 
       <View style={styles.contentWrap}>
-        <Text style={[styles.scoreNumber, { color: strokeColor }]}>{clampedScore}%</Text>
+        <Text style={[styles.scoreNumber, { color: strokeColor }]}>{displayScore}%</Text>
         <Text style={styles.scoreLabel}>ĐỘ TIN CẬY</Text>
         <View style={[styles.badge, { backgroundColor: `${strokeColor}25` }]}>
           <Text style={[styles.badgeText, { color: strokeColor }]}>{statusBadge}</Text>
@@ -89,7 +128,7 @@ const styles = StyleSheet.create({
   scoreLabel: {
     fontSize: 9.5,
     fontWeight: '700',
-    color: '#94a3b8',
+    color: '#64748b',
     letterSpacing: 0.8,
     marginTop: -1,
   },

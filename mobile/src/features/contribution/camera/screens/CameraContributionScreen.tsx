@@ -59,9 +59,16 @@ function createMediaId() {
 function ActiveCameraContributionScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ locationId?: string | string[]; locationName?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    locationId?: string | string[];
+    locationName?: string | string[];
+    latitude?: string | string[];
+    longitude?: string | string[];
+  }>();
   const locationId = firstParam(params.locationId, 'saigon-centre');
-  const locationName = firstParam(params.locationName, 'Saigon Centre (Takashimaya)');
+  const locationName = firstParam(params.locationName, 'S9.01');
+  const paramLat = parseFloat(firstParam(params.latitude, ''));
+  const paramLng = parseFloat(firstParam(params.longitude, ''));
   const cameraRef = useRef<any>(null);
   const requestedInitialPermissions = useRef(false);
   const recordingStartedAt = useRef<number | null>(null);
@@ -232,7 +239,7 @@ function ActiveCameraContributionScreen() {
     setIsCapturing(true);
     setMessage(null);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.9 });
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.7, skipProcessing: true });
       if (!mounted.current) return;
       const media: CapturedContributionMedia = {
         id: createMediaId(),
@@ -336,22 +343,70 @@ function ActiveCameraContributionScreen() {
       setConfirmedTagKeys(selectedKeys);
       setFieldNotes(notes);
 
-      // Average CV confidence from confirmed tags
-      const matchedTags = preScanTags.filter((t) => selectedKeys.includes(t.key));
-      const cvConfidence =
-        matchedTags.length > 0
-          ? matchedTags.reduce((acc, t) => acc + t.confidence, 0) / matchedTags.length
-          : 0.85;
+      // Map QCVN sub-features to their pre-scan parent detection keys
+      const PARENT_MAP: Record<string, string> = {
+        ramp_slope_comfortable: 'exterior_ramp_present',
+        ramp_handrails_present: 'exterior_ramp_present',
+        door_width_wide: 'door_width_ok',
+        door_threshold_flat: 'door_width_ok',
+        door_handle_lever: 'door_width_ok',
+        door_lever_handle: 'door_width_ok',
+        elevator_accessible: 'elevator_present',
+        restroom_accessible_stall: 'accessible_restroom_sign',
+        restroom_grab_bars: 'accessible_restroom_sign',
+        tactile_paving_guiding: 'tactile_paving_present',
+        tactile_paving_warning: 'tactile_paving_present',
+      };
 
-      const poiCoords = getPoiAnchorCoords(locationId);
+      const detectedPreScan = preScanTags.filter((t) => t.detected && t.confidence > 0);
+      const detectedMap = new Map(detectedPreScan.map((t) => [t.key, t.confidence]));
+
+      // Determine CV confidence strictly based on actual detections verified in the photo
+      let cvConfidence = 0.0;
+      let matchedCount = 0;
+      if (selectedKeys.length > 0 && detectedMap.size > 0) {
+        let totalConfidence = 0;
+
+        for (const key of selectedKeys) {
+          const directConf = detectedMap.get(key);
+          if (directConf !== undefined) {
+            matchedCount++;
+            totalConfidence += directConf;
+          } else {
+            const parentKey = PARENT_MAP[key];
+            if (parentKey && detectedMap.has(parentKey)) {
+              matchedCount++;
+              totalConfidence += detectedMap.get(parentKey)!;
+            }
+          }
+        }
+
+        if (matchedCount > 0) {
+          // Proportionate CV confidence across all claimed tags
+          cvConfidence = totalConfidence / selectedKeys.length;
+        }
+      }
+
+      const verifiedTagCount = matchedCount;
+      const unverifiedTagCount = Math.max(0, selectedKeys.length - matchedCount);
+
+      const contributorCoords = capturedMedia.gps
+        ? { latitude: capturedMedia.gps.latitude, longitude: capturedMedia.gps.longitude }
+        : null;
+
+      const poiCoords =
+        !isNaN(paramLat) && !isNaN(paramLng)
+          ? { latitude: paramLat, longitude: paramLng }
+          : getPoiAnchorCoords(locationId, locationName, contributorCoords);
+
       const evalInput: VerificationMatrixInput = {
         cvConfidence,
         textDescription: notes,
-        contributorCoords: capturedMedia.gps
-          ? { latitude: capturedMedia.gps.latitude, longitude: capturedMedia.gps.longitude }
-          : null,
+        contributorCoords,
         poiCoords,
         selectedTags: selectedKeys,
+        verifiedTagCount,
+        unverifiedTagCount,
       };
 
       const result = await verifyWithAiOrFallback(capturedMedia.uri, evalInput);
@@ -362,7 +417,7 @@ function ActiveCameraContributionScreen() {
     [capturedMedia, locationId, preScanTags]
   );
 
-  // Workflow 1: Final Scorecard Screen (Test stop-point, no DB record created)
+  // Workflow 1: Final Scorecard Screen
   if (workflowStep === 'final_scorecard' && capturedMedia && matrixResult) {
     return (
       <FinalScorecardScreen
@@ -372,6 +427,7 @@ function ActiveCameraContributionScreen() {
         notes={fieldNotes}
         onRetakeOrReset={handleRetake}
         onEditTags={() => setWorkflowStep('tag_review')}
+        onFinish={() => router.back()}
       />
     );
   }

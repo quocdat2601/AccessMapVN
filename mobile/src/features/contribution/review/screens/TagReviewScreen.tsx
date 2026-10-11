@@ -29,6 +29,26 @@ interface TagReviewScreenProps {
   onBack: () => void;
 }
 
+const AI_TO_QCVN_MAP: Record<string, string[]> = {
+  exterior_ramp_present: ['exterior_ramp_present'],
+  steps_present: ['steps_present'],
+  elevator_present: ['elevator_accessible'],
+  door_width_ok: ['door_width_ok'],
+  accessible_restroom_sign: ['restroom_accessible_stall'],
+  tactile_paving_present: ['tactile_paving_guiding'],
+};
+
+function mapDetectedToQcvn(tags: PreScanFeatureTag[]): string[] {
+  const result: string[] = [];
+  for (const t of tags) {
+    if (t.detected) {
+      const mapped = AI_TO_QCVN_MAP[t.key] || [t.key];
+      result.push(...mapped);
+    }
+  }
+  return result;
+}
+
 export function TagReviewScreen({
   media,
   availableTags,
@@ -40,45 +60,63 @@ export function TagReviewScreen({
 }: TagReviewScreenProps) {
   const insets = useSafeAreaInsets();
   const [selectedKeys, setSelectedKeys] = useState<string[]>(() =>
-    availableTags.filter((t) => t.detected).map((t) => t.key)
+    mapDetectedToQcvn(availableTags)
   );
   const [notes, setNotes] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Auto-fill tags detected by AI pre-scan once scanning completes
+  React.useEffect(() => {
+    if (!isPreScanning && availableTags.length > 0) {
+      const detectedKeys = mapDetectedToQcvn(availableTags);
+      if (detectedKeys.length > 0) {
+        setSelectedKeys((prev) => {
+          const merged = new Set([...prev, ...detectedKeys]);
+          return Array.from(merged);
+        });
+      }
+    }
+  }, [availableTags, isPreScanning]);
 
   const handleToggle = (key: string) => {
     setSelectedKeys((prev) => toggleFeatureTagKey(prev, key));
   };
 
   const handleProceed = () => {
-    onProceedToVerification(selectedKeys, updateFieldNotes('', notes));
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    setTimeout(() => {
+      onProceedToVerification(selectedKeys, updateFieldNotes('', notes));
+    }, 600);
   };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
 
       {/* Navigation Header */}
       <View style={styles.header}>
         <Pressable
-          style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+          style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
           onPress={onBack}
           accessibilityRole="button"
           accessibilityLabel="Quay lại"
         >
-          <MaterialCommunityIcons name="arrow-left" size={24} color="#f8fafc" />
+          <MaterialCommunityIcons name="arrow-left" size={22} color="#0f172a" />
         </Pressable>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerStep}>BƯỚC 2.5 / 5</Text>
+          <Text style={styles.headerStep}>BƯỚC 2 / 3</Text>
           <Text style={styles.headerTitle} numberOfLines={1}>
-            Duyệt nhãn & Mô tả thực địa
+            Xác nhận đặc điểm tiếp cận
           </Text>
         </View>
         <Pressable
-          style={({ pressed }) => [styles.retakeBtn, pressed && styles.pressed]}
+          style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
           onPress={onRetake}
           accessibilityRole="button"
           accessibilityLabel="Chụp lại"
         >
-          <MaterialCommunityIcons name="camera-retake-outline" size={20} color="#94a3b8" />
+          <MaterialCommunityIcons name="camera-retake-outline" size={20} color="#64748b" />
         </Pressable>
       </View>
 
@@ -88,7 +126,7 @@ export function TagReviewScreen({
       >
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
           showsVerticalScrollIndicator={false}
         >
           {/* Media Preview Card */}
@@ -96,14 +134,14 @@ export function TagReviewScreen({
             <Image source={{ uri: media.uri }} style={styles.mediaImage} contentFit="cover" />
             <View style={styles.mediaOverlay}>
               <View style={styles.locationPill}>
-                <MaterialCommunityIcons name="map-marker-radius" size={13} color="#5eead4" />
+                <MaterialCommunityIcons name="map-marker-radius" size={13} color="#004e58" />
                 <Text style={styles.locationPillText} numberOfLines={1}>
                   {media.locationName}
                 </Text>
               </View>
               {media.gps ? (
                 <View style={styles.gpsPill}>
-                  <MaterialCommunityIcons name="crosshairs-gps" size={12} color="#facc15" />
+                  <MaterialCommunityIcons name="crosshairs-gps" size={12} color="#b45309" />
                   <Text style={styles.gpsPillText}>
                     GPS ±{Math.round(media.gps.accuracy ?? 5)}m
                   </Text>
@@ -112,25 +150,25 @@ export function TagReviewScreen({
             </View>
           </View>
 
-          {/* AI Pre-Scan Summary Banner */}
+          {/* AI Suggestions Summary */}
           <View style={styles.aiBanner}>
             <View style={styles.aiBannerHeader}>
               <View style={styles.aiIconBadge}>
-                <MaterialCommunityIcons name="robot-confused-outline" size={16} color="#38bdf8" />
+                <MaterialCommunityIcons name="creation" size={15} color="#004e58" />
               </View>
-              <Text style={styles.aiBannerTitle}>Kết quả AI Pre-Scan (SLA &lt;2s)</Text>
+              <Text style={styles.aiBannerTitle}>Gợi ý tự động từ ảnh</Text>
               {isPreScanning ? (
-                <ActivityIndicator size="small" color="#38bdf8" style={{ marginLeft: 'auto' }} />
+                <ActivityIndicator size="small" color="#004e58" style={{ marginLeft: 'auto' }} />
               ) : null}
             </View>
             <Text style={styles.aiBannerBody}>
               {isPreScanning
-                ? 'Đang gửi ảnh tới AI FastAPI để phân tích nhanh đặc tính...'
-                : aiSummary || 'AI đã phân tích ảnh xong. Vui lòng kiểm tra và xác nhận nhãn bên dưới.'}
+                ? 'Đang phân tích nhanh hình ảnh...'
+                : aiSummary || 'AI đã nhận diện đặc tính tiếp cận. Bạn có thể chọn hoặc chỉnh sửa thêm bên dưới.'}
             </Text>
           </View>
 
-          {/* Tag Selector (Human in the loop) */}
+          {/* Tag Selector */}
           <View style={styles.card}>
             <FeatureTagSelector
               availableTags={availableTags}
@@ -139,48 +177,59 @@ export function TagReviewScreen({
             />
           </View>
 
-          {/* Field Notes Input */}
+          {/* Optional Field Notes */}
           <View style={styles.card}>
             <View style={styles.inputHeader}>
-              <MaterialCommunityIcons name="file-document-edit-outline" size={16} color="#a855f7" />
-              <Text style={styles.inputTitle}>Ghi chú thực địa (Cung cấp cho NLP)</Text>
+              <MaterialCommunityIcons name="note-edit-outline" size={16} color="#004e58" />
+              <Text style={styles.inputTitle}>Ghi chú thêm (không bắt buộc)</Text>
             </View>
-            <Text style={styles.inputSubtitle}>
-              Mô tả chi tiết ram dốc, độ dốc, cửa ra vào để tầng phân tích ngôn ngữ tự nhiên đối chiếu.
-            </Text>
             <TextInput
               style={styles.textInput}
               value={notes}
               onChangeText={setNotes}
-              placeholder="Vd: Ram dốc ở cửa hông bên phải, bề mặt nhám chống trượt, cửa tự động rộng..."
-              placeholderTextColor="#64748b"
+              placeholder="Ví dụ: Dốc ở cửa bên phải, bề mặt chống trượt, cửa tự động..."
+              placeholderTextColor="#94a3b8"
               multiline
-              numberOfLines={3}
+              numberOfLines={2}
               textAlignVertical="top"
-              accessibilityLabel="Ghi chú thực địa"
+              accessibilityLabel="Ghi chú thêm"
             />
           </View>
 
           {/* EXP Reward Info */}
           <View style={styles.expInfoRow}>
-            <MaterialCommunityIcons name="star-circle" size={18} color="#facc15" />
+            <MaterialCommunityIcons name="star-circle" size={16} color="#d97706" />
             <Text style={styles.expInfoText}>
-              Dự phóng +50 EXP khi vượt qua ngưỡng thẩm định ≥80%.
+              +50 EXP sau khi thông tin được duyệt
             </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Bottom Sticky Action Bar */}
-      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
+      {/* Bottom Action Button */}
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 14) + 6 }]}>
         <Pressable
-          style={({ pressed }) => [styles.proceedBtn, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            styles.proceedBtn,
+            isSubmitting && styles.proceedBtnDisabled,
+            pressed && !isSubmitting && styles.pressed,
+          ]}
           onPress={handleProceed}
+          disabled={isSubmitting}
           accessibilityRole="button"
-          accessibilityLabel="Tiến hành thẩm định chi tiết"
+          accessibilityLabel="Xem kết quả đánh giá"
         >
-          <Text style={styles.proceedBtnText}>Tiến hành thẩm định chi tiết (Full Scan)</Text>
-          <MaterialCommunityIcons name="arrow-right" size={20} color="#0f172a" />
+          {isSubmitting ? (
+            <View style={styles.proceedBtnInner}>
+              <ActivityIndicator size="small" color="#ffffff" />
+              <Text style={styles.proceedBtnText}>Đang tổng hợp điểm số...</Text>
+            </View>
+          ) : (
+            <View style={styles.proceedBtnInner}>
+              <Text style={styles.proceedBtnText}>Xem kết quả đánh giá</Text>
+              <MaterialCommunityIcons name="arrow-right" size={18} color="#ffffff" />
+            </View>
+          )}
         </Pressable>
       </View>
     </View>
@@ -190,25 +239,24 @@ export function TagReviewScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0f1d',
+    backgroundColor: '#f8faf9',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
+    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(148, 163, 184, 0.12)',
+    borderBottomColor: '#f1f5f9',
   },
-  backBtn: {
-    padding: 6,
-    borderRadius: 8,
-    backgroundColor: 'rgba(30, 41, 59, 0.6)',
-  },
-  retakeBtn: {
-    padding: 6,
-    borderRadius: 8,
-    backgroundColor: 'rgba(30, 41, 59, 0.6)',
+  iconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerCenter: {
     flex: 1,
@@ -216,14 +264,14 @@ const styles = StyleSheet.create({
   },
   headerStep: {
     fontSize: 10,
-    fontWeight: '800',
-    color: '#38bdf8',
+    fontWeight: '700',
+    color: '#004e58',
     letterSpacing: 0.8,
   },
   headerTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#f8fafc',
+    color: '#0f172a',
   },
   pressed: {
     opacity: 0.75,
@@ -234,16 +282,16 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    gap: 14,
+    gap: 12,
   },
   mediaCard: {
-    height: 190,
+    height: 180,
     borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: '#1e293b',
+    backgroundColor: '#e2e8f0',
     position: 'relative',
     borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.15)',
+    borderColor: '#e2e8f0',
   },
   mediaImage: {
     width: '100%',
@@ -261,96 +309,95 @@ const styles = StyleSheet.create({
   locationPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
-    paddingHorizontal: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    paddingHorizontal: 9,
     paddingVertical: 4,
     borderRadius: 12,
     gap: 4,
     maxWidth: '65%',
   },
   locationPillText: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '700',
-    color: '#e2e8f0',
+    color: '#0f172a',
   },
   gpsPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
-    paddingHorizontal: 7,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
     gap: 4,
   },
   gpsPillText: {
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: '700',
-    color: '#facc15',
+    color: '#b45309',
   },
   aiBanner: {
-    backgroundColor: 'rgba(14, 165, 233, 0.1)',
+    backgroundColor: '#f0fdfa',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(14, 165, 233, 0.25)',
+    borderColor: '#ccfbf1',
     padding: 12,
-    gap: 6,
+    gap: 5,
   },
   aiBannerHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 7,
   },
   aiIconBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: 'rgba(14, 165, 233, 0.2)',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#ccfbf1',
     alignItems: 'center',
     justifyContent: 'center',
   },
   aiBannerTitle: {
     fontSize: 12.5,
     fontWeight: '700',
-    color: '#38bdf8',
+    color: '#004e58',
   },
   aiBannerBody: {
     fontSize: 12,
-    color: '#cbd5e1',
+    color: '#334155',
     lineHeight: 18,
   },
   card: {
-    backgroundColor: 'rgba(30, 41, 59, 0.6)',
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.15)',
+    borderColor: '#e2e8f0',
     padding: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
   },
   inputHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 4,
+    marginBottom: 8,
   },
   inputTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#f1f5f9',
-  },
-  inputSubtitle: {
-    fontSize: 11,
-    color: '#94a3b8',
-    marginBottom: 8,
-    lineHeight: 16,
+    color: '#0f172a',
   },
   textInput: {
-    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+    backgroundColor: '#f8faf9',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.2)',
-    color: '#f8fafc',
+    borderColor: '#e2e8f0',
+    color: '#0f172a',
     fontSize: 13,
     padding: 10,
-    minHeight: 70,
+    minHeight: 60,
   },
   expInfoRow: {
     flexDirection: 'row',
@@ -361,7 +408,7 @@ const styles = StyleSheet.create({
   },
   expInfoText: {
     fontSize: 11.5,
-    color: '#facc15',
+    color: '#d97706',
     fontWeight: '600',
   },
   bottomBar: {
@@ -369,29 +416,39 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(10, 15, 29, 0.95)',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(148, 163, 184, 0.12)',
+    borderTopColor: '#f1f5f9',
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 10,
   },
   proceedBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#5eead4',
+    backgroundColor: '#004e58',
     paddingVertical: 14,
     borderRadius: 14,
     gap: 8,
-    shadowColor: '#5eead4',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowColor: '#004e58',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  proceedBtnDisabled: {
+    backgroundColor: '#0d9488',
+    opacity: 0.85,
+  },
+  proceedBtnInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
   proceedBtnText: {
     fontSize: 14.5,
-    fontWeight: '800',
-    color: '#0f172a',
+    fontWeight: '700',
+    color: '#ffffff',
   },
 });

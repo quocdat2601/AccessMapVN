@@ -1,9 +1,10 @@
-import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { CapturedContributionMedia } from '@/entities/contribution';
+import { addContributionRecord, type CapturedContributionMedia } from '@/entities/contribution';
+import { apiClient } from '@/shared/api/client';
 import type { VerificationMatrixResult } from '../../services/verificationEngine';
 import { ScoreMatrixBreakdown } from '../components/ScoreMatrixBreakdown';
 import { ScoreMeterRing } from '../components/ScoreMeterRing';
@@ -15,6 +16,7 @@ interface FinalScorecardScreenProps {
   notes: string;
   onRetakeOrReset: () => void;
   onEditTags: () => void;
+  onFinish?: () => void;
 }
 
 export function FinalScorecardScreen({
@@ -24,10 +26,105 @@ export function FinalScorecardScreen({
   notes,
   onRetakeOrReset,
   onEditTags,
+  onFinish,
 }: FinalScorecardScreenProps) {
   const insets = useSafeAreaInsets();
   const { overallScore, status, statusLabel, statusDescription, pillars, spatialValid, spatialDistanceMeters } =
     matrixResult;
+
+  const badgeScale = useRef(new Animated.Value(0.7)).current;
+  const badgeOpacity = useRef(new Animated.Value(0)).current;
+  const contentOpacity = useRef(new Animated.Value(0)).current;
+  const contentTranslateY = useRef(new Animated.Value(12)).current;
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittedResult, setSubmittedResult] = useState<{
+    submissionId: string;
+    message: string;
+    pointsAwarded: number;
+  } | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const handleSubmit = async () => {
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      const payload = {
+        location_id: media.locationId || 'custom-location',
+        user_id: 'mobile-contributor',
+        media_urls: [media.uri],
+        feature_tags: selectedTagKeys,
+        gps_lat: media.gps ? media.gps.latitude : 10.8454,
+        gps_lng: media.gps ? media.gps.longitude : 106.8373,
+        accuracy_meters: media.gps?.accuracy ?? 5.0,
+        text_description: notes || '',
+      };
+
+      const res = await apiClient.post<any>('/api/v1/submissions', payload);
+
+      if (res && res.submission_id) {
+        addContributionRecord({
+          id: res.submission_id,
+          locationId: media.locationId,
+          locationName: media.locationName,
+          mediaUri: media.uri,
+          mediaType: media.type,
+          featureTags: selectedTagKeys,
+          textDescription: notes,
+          gps: media.gps ? { latitude: media.gps.latitude, longitude: media.gps.longitude } : null,
+          status: 'Submitted',
+          confidenceScore: overallScore / 100,
+          pointsAwarded: res.points_awarded || 50,
+          createdAt: Date.now(),
+        });
+
+        setSubmittedResult({
+          submissionId: res.submission_id,
+          message: res.message || 'Đã tiếp nhận hồ sơ đóng góp thành công.',
+          pointsAwarded: res.points_awarded || 50,
+        });
+      }
+    } catch (err: any) {
+      const serverErr =
+        err?.data?.errors?.GpsLat?.[0] ||
+        err?.data?.errors?.LocationId?.[0] ||
+        err?.data?.title ||
+        err?.message ||
+        'Không thể gửi đóng góp lên máy chủ. Vui lòng thử lại.';
+      setSubmitError(serverErr);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleScoreAnimationComplete = () => {
+    Animated.parallel([
+      Animated.spring(badgeScale, {
+        toValue: 1,
+        friction: 6,
+        tension: 80,
+        useNativeDriver: true,
+      }),
+      Animated.timing(badgeOpacity, {
+        toValue: 1,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+      Animated.timing(contentOpacity, {
+        toValue: 1,
+        duration: 350,
+        delay: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(contentTranslateY, {
+        toValue: 0,
+        duration: 350,
+        delay: 100,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
 
   let statusBg = 'rgba(16, 185, 129, 0.15)';
   let statusBorder = '#10b981';
@@ -48,7 +145,7 @@ export function FinalScorecardScreen({
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
 
       {/* Header */}
       <View style={styles.header}>
@@ -58,12 +155,12 @@ export function FinalScorecardScreen({
           accessibilityRole="button"
           accessibilityLabel="Chỉnh sửa nhãn"
         >
-          <MaterialCommunityIcons name="arrow-left" size={24} color="#f8fafc" />
+          <MaterialCommunityIcons name="arrow-left" size={22} color="#0f172a" />
         </Pressable>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerStep}>BƯỚC 4 / 4 · ĐIỂM DỪNG THỬ NGHIỆM</Text>
+          <Text style={styles.headerStep}>BƯỚC 3 / 3</Text>
           <Text style={styles.headerTitle} numberOfLines={1}>
-            Bảng điểm tin cậy (Final Scorecard)
+            Kết quả đánh giá tiếp cận
           </Text>
         </View>
         <Pressable
@@ -72,7 +169,7 @@ export function FinalScorecardScreen({
           accessibilityRole="button"
           accessibilityLabel="Quét lại từ đầu"
         >
-          <MaterialCommunityIcons name="refresh" size={22} color="#94a3b8" />
+          <MaterialCommunityIcons name="refresh" size={20} color="#64748b" />
         </Pressable>
       </View>
 
@@ -83,35 +180,88 @@ export function FinalScorecardScreen({
       >
         {/* Top Hero: Score Meter & Status Badge */}
         <View style={styles.heroCard}>
-          <ScoreMeterRing score={overallScore} size={135} strokeWidth={11} />
+          <ScoreMeterRing
+            score={overallScore}
+            size={130}
+            strokeWidth={11}
+            animated={true}
+            onAnimationComplete={handleScoreAnimationComplete}
+          />
 
-          <View style={[styles.statusBadge, { backgroundColor: statusBg, borderColor: statusBorder }]}>
+          <Animated.View
+            style={[
+              styles.statusBadge,
+              {
+                backgroundColor: statusBg,
+                borderColor: statusBorder,
+                opacity: badgeOpacity,
+                transform: [{ scale: badgeScale }],
+              },
+            ]}
+          >
             <MaterialCommunityIcons name={statusIcon} size={18} color={statusColor} />
             <Text style={[styles.statusTitle, { color: statusColor }]}>{statusLabel}</Text>
-          </View>
+          </Animated.View>
 
-          <Text style={styles.statusDescription}>{statusDescription}</Text>
+          <Animated.View
+            style={{
+              width: '100%',
+              alignItems: 'center',
+              opacity: contentOpacity,
+              transform: [{ translateY: contentTranslateY }],
+            }}
+          >
+            <Text style={styles.statusDescription}>{statusDescription}</Text>
 
-          {/* Test Stop Safeguard Notice */}
-          <View style={styles.testStopBanner}>
-            <MaterialCommunityIcons name="shield-check-outline" size={16} color="#38bdf8" />
-            <Text style={styles.testStopText}>
-              Chế độ kiểm thử: Dừng tại bước này, không gửi bản ghi xuống cơ sở dữ liệu backend.
-            </Text>
-          </View>
+            {/* Submission Status or Info Banner */}
+            {submittedResult ? (
+              <View style={styles.successBanner}>
+                <MaterialCommunityIcons name="check-decagram" size={22} color="#059669" />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={styles.successTitle}>
+                    Đã gửi hồ sơ thành công (+{submittedResult.pointsAwarded} EXP)
+                  </Text>
+                  <Text style={styles.successCode}>Mã: {submittedResult.submissionId}</Text>
+                  <Text style={styles.successSub}>{submittedResult.message}</Text>
+                </View>
+              </View>
+            ) : submitError ? (
+              <View style={styles.errorBanner}>
+                <MaterialCommunityIcons name="alert-circle-outline" size={18} color="#e11d48" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.errorTitle}>Lỗi gửi hồ sơ</Text>
+                  <Text style={styles.errorText}>{submitError}</Text>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.testStopBanner}>
+                <MaterialCommunityIcons name="cloud-upload-outline" size={15} color="#004e58" />
+                <Text style={styles.testStopText}>
+                  Sẵn sàng gửi lên máy chủ để nhận +50 EXP tích luỹ.
+                </Text>
+              </View>
+            )}
+          </Animated.View>
         </View>
 
-        {/* Breakdown Matrix */}
-        <ScoreMatrixBreakdown
-          matrixResult={matrixResult}
-          pillars={pillars}
-          spatialValid={spatialValid}
-          spatialDistanceMeters={spatialDistanceMeters}
-        />
+        {/* Breakdown Matrix & Details */}
+        <Animated.View
+          style={{
+            opacity: contentOpacity,
+            transform: [{ translateY: contentTranslateY }],
+          }}
+        >
+          <ScoreMatrixBreakdown
+            matrixResult={matrixResult}
+            pillars={pillars}
+            spatialValid={spatialValid}
+            spatialDistanceMeters={spatialDistanceMeters}
+            selectedTagKeys={selectedTagKeys}
+          />
 
         {/* POI & Submission Details Card */}
         <View style={styles.detailsCard}>
-          <Text style={styles.detailsTitle}>Thông tin khảo sát đã đối chiếu</Text>
+          <Text style={styles.detailsTitle}>Thông tin ghi nhận</Text>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Địa điểm:</Text>
             <Text style={styles.detailValue} numberOfLines={1}>
@@ -119,7 +269,7 @@ export function FinalScorecardScreen({
             </Text>
           </View>
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Số nhãn đã duyệt:</Text>
+            <Text style={styles.detailLabel}>Đặc tính đã chọn:</Text>
             <Text style={styles.detailValue}>{selectedTagKeys.length} đặc tính</Text>
           </View>
           {notes ? (
@@ -131,34 +281,74 @@ export function FinalScorecardScreen({
             </View>
           ) : null}
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Điểm thưởng dự phóng:</Text>
+            <Text style={styles.detailLabel}>Điểm thưởng dự kiến:</Text>
             <View style={styles.expPill}>
-              <MaterialCommunityIcons name="star-circle" size={14} color="#facc15" />
+              <MaterialCommunityIcons name="star-circle" size={14} color="#d97706" />
               <Text style={styles.expPillText}>+50 EXP</Text>
             </View>
           </View>
         </View>
-      </ScrollView>
+      </Animated.View>
+    </ScrollView>
 
       {/* Bottom Actions */}
-      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
-        <Pressable
-          style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
-          onPress={onEditTags}
-          accessibilityRole="button"
-        >
-          <MaterialCommunityIcons name="tag-outline" size={18} color="#94a3b8" />
-          <Text style={styles.secondaryBtnText}>Chỉnh sửa nhãn</Text>
-        </Pressable>
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 14) + 6 }]}>
+        {submittedResult ? (
+          <>
+            <Pressable
+              style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
+              onPress={onRetakeOrReset}
+              accessibilityRole="button"
+            >
+              <MaterialCommunityIcons name="camera-retake" size={16} color="#334155" />
+              <Text style={styles.secondaryBtnText}>Đóng góp khác</Text>
+            </Pressable>
 
-        <Pressable
-          style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
-          onPress={onRetakeOrReset}
-          accessibilityRole="button"
-        >
-          <MaterialCommunityIcons name="camera-retake" size={18} color="#0f172a" />
-          <Text style={styles.primaryBtnText}>Quét lại ảnh khác</Text>
-        </Pressable>
+            <Pressable
+              style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
+              onPress={onFinish || onRetakeOrReset}
+              accessibilityRole="button"
+            >
+              <MaterialCommunityIcons name="check" size={16} color="#ffffff" />
+              <Text style={styles.primaryBtnText}>Hoàn tất</Text>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <Pressable
+              style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
+              onPress={onEditTags}
+              accessibilityRole="button"
+              disabled={isSubmitting}
+            >
+              <MaterialCommunityIcons name="tag-outline" size={16} color="#334155" />
+              <Text style={styles.secondaryBtnText}>Sửa đặc tính</Text>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.primaryBtn,
+                pressed && styles.pressed,
+                isSubmitting && { opacity: 0.8 },
+              ]}
+              onPress={handleSubmit}
+              disabled={isSubmitting}
+              accessibilityRole="button"
+            >
+              {isSubmitting ? (
+                <>
+                  <ActivityIndicator size="small" color="#ffffff" />
+                  <Text style={styles.primaryBtnText}>Đang gửi...</Text>
+                </>
+              ) : (
+                <>
+                  <MaterialCommunityIcons name="send" size={16} color="#ffffff" />
+                  <Text style={styles.primaryBtnText}>Gửi đóng góp</Text>
+                </>
+              )}
+            </Pressable>
+          </>
+        )}
       </View>
     </View>
   );
@@ -167,35 +357,39 @@ export function FinalScorecardScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0f1d',
+    backgroundColor: '#f8faf9',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 12,
+    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(148, 163, 184, 0.12)',
+    borderBottomColor: '#f1f5f9',
   },
   iconBtn: {
-    padding: 6,
-    borderRadius: 8,
-    backgroundColor: 'rgba(30, 41, 59, 0.6)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerCenter: {
     flex: 1,
     marginHorizontal: 12,
   },
   headerStep: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    color: '#38bdf8',
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#004e58',
     letterSpacing: 0.8,
   },
   headerTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#f8fafc',
+    color: '#0f172a',
   },
   pressed: {
     opacity: 0.75,
@@ -209,13 +403,18 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   heroCard: {
-    backgroundColor: 'rgba(30, 41, 59, 0.6)',
+    backgroundColor: '#ffffff',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.15)',
+    borderColor: '#e2e8f0',
     padding: 20,
     alignItems: 'center',
     gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
   },
   statusBadge: {
     flexDirection: 'row',
@@ -232,7 +431,7 @@ const styles = StyleSheet.create({
   },
   statusDescription: {
     fontSize: 12,
-    color: '#cbd5e1',
+    color: '#475569',
     textAlign: 'center',
     lineHeight: 18,
     paddingHorizontal: 8,
@@ -240,7 +439,9 @@ const styles = StyleSheet.create({
   testStopBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(14, 165, 233, 0.12)',
+    backgroundColor: '#f0fdfa',
+    borderWidth: 1,
+    borderColor: '#ccfbf1',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
@@ -249,23 +450,80 @@ const styles = StyleSheet.create({
   },
   testStopText: {
     fontSize: 11,
-    color: '#38bdf8',
+    color: '#004e58',
     fontWeight: '600',
     flex: 1,
     lineHeight: 15,
   },
+  successBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 10,
+    marginTop: 4,
+    width: '100%',
+  },
+  successTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#065f46',
+  },
+  successCode: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#047857',
+  },
+  successSub: {
+    fontSize: 11,
+    color: '#065f46',
+    lineHeight: 15,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#fff1f2',
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 8,
+    marginTop: 4,
+    width: '100%',
+  },
+  errorTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#9f1239',
+    marginBottom: 2,
+  },
+  errorText: {
+    fontSize: 11,
+    color: '#be123c',
+    lineHeight: 15,
+  },
   detailsCard: {
-    backgroundColor: 'rgba(30, 41, 59, 0.6)',
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.15)',
+    borderColor: '#e2e8f0',
     padding: 14,
     gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
   },
   detailsTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#e2e8f0',
+    color: '#0f172a',
     marginBottom: 4,
   },
   detailRow: {
@@ -275,18 +533,18 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: '#64748b',
   },
   detailValue: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#f1f5f9',
+    color: '#0f172a',
     maxWidth: '65%',
   },
   expPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(250, 204, 21, 0.15)',
+    backgroundColor: '#fef3c7',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
@@ -295,18 +553,18 @@ const styles = StyleSheet.create({
   expPillText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#facc15',
+    color: '#b45309',
   },
   bottomBar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(10, 15, 29, 0.95)',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderTopWidth: 1,
-    borderTopColor: 'rgba(148, 163, 184, 0.12)',
+    borderTopColor: '#f1f5f9',
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 10,
     flexDirection: 'row',
     gap: 10,
   },
@@ -315,36 +573,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(30, 41, 59, 0.9)',
+    backgroundColor: '#f1f5f9',
     borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.25)',
+    borderColor: '#e2e8f0',
     paddingVertical: 13,
+    paddingHorizontal: 10,
     borderRadius: 12,
     gap: 6,
   },
   secondaryBtnText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '700',
-    color: '#94a3b8',
+    color: '#334155',
   },
   primaryBtn: {
-    flex: 1.3,
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#5eead4',
+    backgroundColor: '#004e58',
     paddingVertical: 13,
+    paddingHorizontal: 10,
     borderRadius: 12,
     gap: 6,
-    shadowColor: '#5eead4',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 3,
+    shadowColor: '#004e58',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    elevation: 2,
   },
   primaryBtnText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#0f172a',
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#ffffff',
   },
 });

@@ -8,7 +8,12 @@ export default function MapRoute() {
   return (
     <DiscoveryScreen
       onNavigateToContribute={(place) => {
-        startContributionFlow(router, { id: place.id, name: place.name });
+        startContributionFlow(router, {
+          id: place.id,
+          name: place.name,
+          latitude: place.latitude,
+          longitude: place.longitude,
+        });
       }}
     />
   );

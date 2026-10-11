@@ -14,7 +14,7 @@ import { useUserLocation } from '../hooks/useUserLocation';
 import { forwardGeocode, type GeocodeResult, type PlaceDto } from '@/entities/place';
 
 interface DiscoveryScreenProps {
-  onNavigateToContribute?: (place: { id: string; name: string }) => void;
+  onNavigateToContribute?: (place: { id: string; name: string; latitude?: number; longitude?: number }) => void;
 }
 
 const QUICK_SEARCH_SUGGESTIONS = [
@@ -273,7 +273,7 @@ export function DiscoveryScreen({ onNavigateToContribute }: DiscoveryScreenProps
             setOsmPlace(null);
           }}
           onContribute={(p) => {
-            onNavigateToContribute?.({ id: p.id, name: p.name });
+            onNavigateToContribute?.({ id: p.id, name: p.name, latitude: p.latitude, longitude: p.longitude });
           }}
         />
       )}

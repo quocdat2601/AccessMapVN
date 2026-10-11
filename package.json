@@ -10,6 +10,7 @@
     "dev:web": "concurrently -k -n \"BACKEND,WEB\" -c \"blue.bold,green.bold\" \"npm run dev:backend\" \"npm --prefix web-admin run dev\"",
     "mobile": "npm run dev:mobile",
     "web": "npm run dev:web",
+    "android": "npm --prefix mobile run android",
     "test:mobile": "npm --prefix mobile test"
   },
   "devDependencies": {

@@ -10,9 +10,9 @@ Classifies a piece of text as either:
 PhoBERT is loaded from ``settings.phobert_model_path`` (a local directory
 containing ``config.json`` + ``pytorch_model.bin`` + tokenizer files).
 
-Stub mode
----------
-If the model path does not exist the classifier falls back to a simple
+Rule-based mode
+----------------
+If the model path does not exist the classifier falls back to a Vietnamese
 keyword-matching heuristic so the service remains functional during
 development without downloading the full model.
 """
@@ -25,7 +25,7 @@ from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-# Vietnamese accessibility keywords used by the keyword stub
+# Vietnamese accessibility keywords used by KeywordRuleClassifier
 _ACCESSIBILITY_KEYWORDS = [
     "ramp", "dốc", "bậc", "cầu thang", "thang máy", "thang cuốn",
     "cửa", "nhà vệ sinh", "toilet", "khuyết tật", "xe lăn",
@@ -58,10 +58,10 @@ class PhoBERTClassifier:
 
         path = Path(self._model_path)
         if not path.exists():
-            logger.warning(
-                "PhoBERT model not found at '%s' – using keyword stub.", self._model_path
+            logger.info(
+                "PhoBERT model not found at '%s' – using KeywordRuleClassifier.", self._model_path
             )
-            self._pipeline = _KeywordStub()
+            self._pipeline = KeywordRuleClassifier()
             return self._pipeline
 
         try:
@@ -78,7 +78,7 @@ class PhoBERTClassifier:
             logger.info("PhoBERT classifier loaded.")
         except Exception as exc:
             logger.exception("Failed to load PhoBERT: %s", exc)
-            self._pipeline = _KeywordStub()
+            self._pipeline = KeywordRuleClassifier()
 
         return self._pipeline
 
@@ -96,7 +96,7 @@ class PhoBERTClassifier:
         """
         pipe = self._load_pipeline()
 
-        if isinstance(pipe, _KeywordStub):
+        if isinstance(pipe, KeywordRuleClassifier):
             return pipe.classify(text)
 
         # HuggingFace pipeline returns a list of [{"label": ..., "score": ...}]
@@ -111,8 +111,8 @@ class PhoBERTClassifier:
         }
 
 
-class _KeywordStub:
-    """Simple keyword-based fallback classifier."""
+class KeywordRuleClassifier:
+    """Vietnamese keyword rule-based accessibility text classifier."""
 
     def classify(self, text: str) -> dict:
         lower = text.lower()

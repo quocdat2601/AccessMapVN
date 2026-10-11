@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { PreScanFeatureTag } from '../../services/aiPreScanService';
 import {
@@ -28,8 +28,21 @@ export function FeatureTagSelector({
 
   // Quick lookup for AI confidence from pre-scan
   const aiTagMap = new Map<string, PreScanFeatureTag>();
+  const AI_KEY_MAPPING: Record<string, string[]> = {
+    exterior_ramp_present: ['exterior_ramp_present'],
+    steps_present: ['steps_present'],
+    elevator_present: ['elevator_accessible'],
+    door_width_ok: ['door_width_ok'],
+    accessible_restroom_sign: ['restroom_accessible_stall'],
+    tactile_paving_present: ['tactile_paving_guiding'],
+  };
+
   for (const tag of availableTags) {
     aiTagMap.set(tag.key, tag);
+    const qcvnKeys = AI_KEY_MAPPING[tag.key] || [];
+    for (const qk of qcvnKeys) {
+      aiTagMap.set(qk, tag);
+    }
   }
 
   // Count active selections per category
@@ -46,14 +59,21 @@ export function FeatureTagSelector({
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <View style={styles.titleWrap}>
-          <MaterialCommunityIcons name="checkbox-multiple-marked-outline" size={16} color="#5eead4" />
-          <Text style={styles.title}>Duyệt nhãn tiếp cận (QCVN 10:2014)</Text>
+          <MaterialCommunityIcons name="checkbox-multiple-marked-outline" size={18} color="#004e58" />
+          <Text style={styles.title}>Đặc điểm tiếp cận</Text>
         </View>
-        <Text style={styles.hint}>Đã chọn {selectedKeys.length}/18</Text>
+        <View style={styles.countPill}>
+          <Text style={styles.countPillText}>{selectedKeys.length} đã chọn</Text>
+        </View>
       </View>
 
       {/* 4 Category Tabs */}
-      <View style={styles.tabBar}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.tabScrollContent}
+        style={styles.tabScrollView}
+      >
         {CATEGORIES.map((cat) => {
           const cfg = CATEGORY_CONFIG[cat];
           const isActive = activeCategory === cat;
@@ -63,21 +83,20 @@ export function FeatureTagSelector({
             <Pressable
               key={cat}
               style={({ pressed }) => [
-                styles.tabItem,
-                isActive ? styles.tabItemActive : styles.tabItemInactive,
+                styles.tabPill,
+                isActive ? styles.tabPillActive : styles.tabPillInactive,
                 pressed && styles.pressed,
               ]}
               onPress={() => setActiveCategory(cat)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: isActive }}
-              accessibilityLabel={`${cfg.label}, ${count} nhãn đã chọn`}
+              accessibilityRole="button"
+              accessibilityLabel={`${cfg.label}, ${count} đã chọn`}
             >
               <MaterialCommunityIcons
                 name={cfg.icon as any}
                 size={14}
-                color={isActive ? '#0f172a' : '#94a3b8'}
+                color={isActive ? '#ffffff' : '#64748b'}
               />
-              <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
+              <Text style={[styles.tabPillLabel, isActive && styles.tabPillLabelActive]}>
                 {cfg.shortLabel}
               </Text>
               {count > 0 ? (
@@ -90,9 +109,9 @@ export function FeatureTagSelector({
             </Pressable>
           );
         })}
-      </View>
+      </ScrollView>
 
-      {/* Active Category Description Banner */}
+      {/* Active Category Description */}
       <View style={styles.categoryInfoBar}>
         <Text style={styles.categoryInfoText}>
           {CATEGORY_CONFIG[activeCategory].label} ({currentCategoryTags.length} tiêu chí)
@@ -105,22 +124,21 @@ export function FeatureTagSelector({
           const isSelected = selectedSet.has(tag.key);
           const isViolation = isViolationOrObstacleTag(tag.key);
           const aiTag = aiTagMap.get(tag.key);
-          const hasConfidence = aiTag != null && aiTag.confidence > 0;
-          const percent = hasConfidence ? Math.round(aiTag.confidence * 100) : null;
+          const isAiDetected = aiTag != null && aiTag.detected;
 
           let chipStyle = styles.chipUnselected;
-          let textColor = '#cbd5e1';
-          let iconColor = '#94a3b8';
+          let textColor = '#334155';
+          let iconColor = '#64748b';
 
           if (isSelected) {
             if (isViolation) {
               chipStyle = styles.chipViolation;
-              textColor = '#fff';
-              iconColor = '#fff';
+              textColor = '#b91c1c';
+              iconColor = '#dc2626';
             } else {
               chipStyle = styles.chipSelected;
-              textColor = '#0f172a';
-              iconColor = '#0f172a';
+              textColor = '#065f46';
+              iconColor = '#059669';
             }
           }
 
@@ -135,7 +153,7 @@ export function FeatureTagSelector({
               onPress={() => onToggleKey(tag.key)}
               accessibilityRole="checkbox"
               accessibilityState={{ checked: isSelected }}
-              accessibilityLabel={`${tag.label}${percent != null ? `, AI tin cậy ${percent}%` : ''}`}
+              accessibilityLabel={`${tag.label}${isAiDetected ? ', AI phát hiện' : ''}`}
             >
               <MaterialCommunityIcons
                 name={
@@ -152,20 +170,20 @@ export function FeatureTagSelector({
                 {tag.label}
               </Text>
 
-              {percent != null ? (
+              {isAiDetected ? (
                 <View
                   style={[
-                    styles.confidenceBadge,
-                    isSelected && (isViolation ? styles.confidenceBadgeViolation : styles.confidenceBadgeSelected),
+                    styles.aiBadge,
+                    isSelected ? styles.aiBadgeSelected : styles.aiBadgeUnselected,
                   ]}
                 >
                   <Text
                     style={[
-                      styles.confidenceText,
-                      isSelected && (isViolation ? styles.confidenceTextViolation : styles.confidenceTextSelected),
+                      styles.aiBadgeText,
+                      isSelected ? styles.aiBadgeTextSelected : styles.aiBadgeTextUnselected,
                     ]}
                   >
-                    {percent}%
+                    ✨ AI
                   </Text>
                 </View>
               ) : null}
@@ -179,13 +197,13 @@ export function FeatureTagSelector({
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 6,
+    marginVertical: 4,
   },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   titleWrap: {
     flexDirection: 'row',
@@ -193,130 +211,137 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   title: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#e2e8f0',
+    color: '#0f172a',
   },
-  hint: {
-    fontSize: 11,
-    color: '#94a3b8',
-    fontWeight: '500',
-  },
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+  countPill: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 12,
-    padding: 3,
-    gap: 4,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(51, 65, 85, 0.6)',
   },
-  tabItem: {
-    flex: 1,
+  countPillText: {
+    fontSize: 11,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  tabScrollView: {
+    marginBottom: 12,
+  },
+  tabScrollContent: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 2,
+    paddingHorizontal: 2,
+  },
+  tabPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    borderRadius: 9,
-    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+    overflow: 'hidden',
+    gap: 6,
   },
-  tabItemActive: {
-    backgroundColor: '#5eead4',
+  tabPillActive: {
+    backgroundColor: '#004e58',
+    borderColor: '#004e58',
   },
-  tabItemInactive: {
-    backgroundColor: 'transparent',
+  tabPillInactive: {
+    backgroundColor: '#f1f5f9',
+    borderColor: '#e2e8f0',
   },
   pressed: {
     opacity: 0.8,
   },
-  tabLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#94a3b8',
+  tabPillLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#475569',
   },
-  tabLabelActive: {
-    color: '#0f172a',
+  tabPillLabelActive: {
+    color: '#ffffff',
     fontWeight: '700',
   },
   countBadge: {
-    backgroundColor: 'rgba(148, 163, 184, 0.25)',
-    borderRadius: 8,
-    paddingHorizontal: 4,
+    backgroundColor: '#cbd5e1',
+    borderRadius: 10,
+    paddingHorizontal: 5,
     paddingVertical: 1,
+    minWidth: 16,
+    alignItems: 'center',
   },
   countBadgeActive: {
-    backgroundColor: 'rgba(15, 23, 42, 0.25)',
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
   },
   countText: {
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: '700',
-    color: '#cbd5e1',
+    color: '#334155',
   },
   countTextActive: {
-    color: '#0f172a',
+    color: '#ffffff',
   },
   categoryInfoBar: {
-    marginBottom: 8,
+    marginBottom: 10,
     paddingHorizontal: 2,
   },
   categoryInfoText: {
-    fontSize: 11.5,
+    fontSize: 12,
     fontWeight: '600',
-    color: '#38bdf8',
+    color: '#004e58',
   },
   chipsWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 9,
   },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 7,
-    paddingHorizontal: 11,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
     borderRadius: 20,
     borderWidth: 1,
-    gap: 6,
+    gap: 7,
   },
   chipUnselected: {
-    backgroundColor: 'rgba(30, 41, 59, 0.7)',
-    borderColor: 'rgba(148, 163, 184, 0.3)',
+    backgroundColor: '#ffffff',
+    borderColor: '#e2e8f0',
   },
   chipSelected: {
-    backgroundColor: '#5eead4',
-    borderColor: '#2dd4bf',
+    backgroundColor: '#ecfdf5',
+    borderColor: '#10b981',
   },
   chipViolation: {
-    backgroundColor: '#f43f5e',
-    borderColor: '#e11d48',
+    backgroundColor: '#fff1f2',
+    borderColor: '#f43f5e',
   },
   chipText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 12.5,
+    fontWeight: '500',
   },
-  confidenceBadge: {
+  aiBadge: {
     paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingVertical: 1.5,
+    borderRadius: 8,
   },
-  confidenceBadgeSelected: {
-    backgroundColor: 'rgba(15, 23, 42, 0.2)',
+  aiBadgeUnselected: {
+    backgroundColor: '#f1f5f9',
   },
-  confidenceBadgeViolation: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+  aiBadgeSelected: {
+    backgroundColor: '#d1fae5',
   },
-  confidenceText: {
-    fontSize: 10,
+  aiBadgeText: {
+    fontSize: 9.5,
     fontWeight: '700',
-    color: '#94a3b8',
   },
-  confidenceTextSelected: {
-    color: '#0f172a',
+  aiBadgeTextUnselected: {
+    color: '#004e58',
   },
-  confidenceTextViolation: {
-    color: '#ffffff',
+  aiBadgeTextSelected: {
+    color: '#065f46',
   },
 });

@@ -23,7 +23,7 @@ export const CATEGORY_CONFIG: Record<
   },
   sanitation: {
     label: 'WC & Thang máy',
-    shortLabel: 'Vệ sinh / Thang',
+    shortLabel: 'WC & Thang',
     icon: 'wheelchair-accessibility',
   },
   visual: {

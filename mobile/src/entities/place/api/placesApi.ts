@@ -54,6 +54,44 @@ export async function fetchPlacesInBBox(
   }
 }
 
+export async function fetchPlaceById(id: string): Promise<PlaceDto | null> {
+  try {
+    const p = await apiClient.get<any>(`/api/v1/places/${encodeURIComponent(id)}`);
+    if (!p || !p.id) return null;
+
+    return {
+      id: String(p.id ?? ''),
+      name: String(p.name ?? ''),
+      category: (p.category ?? 'other') as PoiCategory,
+      address: p.address ?? null,
+      phone: p.phone ?? null,
+      website: p.website ?? null,
+      opening_hours: p.openingHours ?? p.opening_hours ?? null,
+      brand: p.brand ?? null,
+      operator: p.operator ?? null,
+      lng: Number(p.lng ?? 0),
+      lat: Number(p.lat ?? 0),
+      has_ramp: Boolean(p.hasRamp ?? p.has_ramp),
+      has_elevator: Boolean(p.hasAccessibleElevator ?? p.has_accessible_elevator ?? p.has_elevator),
+      has_tactile_paving: Boolean(p.hasTactilePaving ?? p.has_tactile_paving),
+      has_accessible_restroom: Boolean(p.hasAccessibleRestroom ?? p.has_accessible_restroom),
+      door_width_ok: Boolean(p.doorWidthOk ?? p.door_width_ok),
+      accessibility_score: typeof p.accessibilityScore === 'number'
+        ? p.accessibilityScore
+        : typeof p.accessibility_score === 'number'
+        ? p.accessibility_score
+        : -1,
+      accessibility_note: p.accessibilityNote ?? p.accessibility_note ?? null,
+      floor_level: p.floorLevel ?? p.floor_level ?? null,
+      building_id: p.buildingId ?? p.building_id ?? null,
+      has_accessible_elevator: Boolean(p.hasAccessibleElevator ?? p.has_accessible_elevator),
+      last_verified_at: p.lastVerifiedAt ?? p.last_verified_at ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 const geocodeCache = new Map<string, string>();
 
 function cleanDisplayName(raw: string): string {

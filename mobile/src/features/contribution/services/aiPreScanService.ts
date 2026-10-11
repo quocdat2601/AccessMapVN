@@ -14,14 +14,13 @@ export interface PreScanFeatureTag {
   confidence: number;
 }
 
+import { postMultipart, resolveServiceUrl } from '@/shared/api/client';
+
 export interface PreScanResult {
   features: PreScanFeatureTag[];
   summary: string;
   isMockFallback?: boolean;
 }
-
-const DEFAULT_AI_URL = isAndroid ? 'http://10.0.2.2:8000' : 'http://localhost:8000';
-const AI_SERVICE_URL = process.env.EXPO_PUBLIC_AI_SERVICE_URL || DEFAULT_AI_URL;
 
 const FEATURE_LABEL_MAP: Record<string, string> = {
   exterior_ramp_present: 'Ram dốc tiếp cận',
@@ -34,20 +33,20 @@ const FEATURE_LABEL_MAP: Record<string, string> = {
 
 function generateFallbackResult(): PreScanResult {
   return {
-    summary: 'AI nhận diện sơ bộ: Phát hiện ram dốc và lối vào tiếp cận phù hợp cho xe lăn.',
+    summary: 'Chưa kết nối được dịch vụ AI. Vui lòng tự chọn các đặc điểm tiếp cận bên dưới.',
     isMockFallback: true,
-    features: [
-      { key: 'exterior_ramp_present', label: 'Ram dốc tiếp cận', detected: true, confidence: 0.92 },
-      { key: 'door_width_ok', label: 'Cửa rộng ≥80cm', detected: true, confidence: 0.86 },
-      { key: 'elevator_present', label: 'Thang máy tiếp cận', detected: false, confidence: 0.74 },
-      { key: 'accessible_restroom_sign', label: 'WC tiếp cận', detected: false, confidence: 0.65 },
-    ],
+    features: Object.entries(FEATURE_LABEL_MAP).map(([key, label]) => ({
+      key,
+      label,
+      detected: false,
+      confidence: 0,
+    })),
   };
 }
 
 export async function runAiPreScan(imageUri: string, textDescription?: string): Promise<PreScanResult> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 4000);
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
 
   try {
     const formData = new FormData();
@@ -61,19 +60,12 @@ export async function runAiPreScan(imageUri: string, textDescription?: string): 
       formData.append('text_description', textDescription);
     }
 
-    const response = await fetch(`${AI_SERVICE_URL}/api/v1/ai/pre-scan`, {
-      method: 'POST',
-      body: formData,
-      signal: controller.signal,
-    });
-
+    const aiBaseUrl = resolveServiceUrl(8000, process.env.EXPO_PUBLIC_AI_SERVICE_URL);
+    console.log('[runAiPreScan] Calling:', `${aiBaseUrl}/api/v1/ai/pre-scan`, 'with imageUri:', imageUri);
+    const data = await postMultipart(`${aiBaseUrl}/api/v1/ai/pre-scan`, formData, 15000);
     clearTimeout(timeoutId);
 
-    if (!response.ok) {
-      throw new Error(`AI service responded with status ${response.status}`);
-    }
-
-    const data = await response.json();
+    console.log('[runAiPreScan] SUCCESS data:', JSON.stringify(data));
     const rawFeatures = data.features || {};
 
     const features: PreScanFeatureTag[] = Object.keys(rawFeatures).map((key) => {
@@ -94,6 +86,7 @@ export async function runAiPreScan(imageUri: string, textDescription?: string): 
     };
   } catch (error) {
     clearTimeout(timeoutId);
+    console.warn('[runAiPreScan] FAILED:', error);
     // Graceful fallback allows instant testing on device even if ai-service is not currently launched locally
     return generateFallbackResult();
   }

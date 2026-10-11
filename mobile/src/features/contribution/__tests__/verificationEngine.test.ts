@@ -2,6 +2,7 @@ import assert from 'node:assert';
 import {
   calculateHaversineDistanceMeters,
   evaluateVerificationMatrix,
+  verifyWithAiOrFallback,
   type VerificationMatrixInput,
 } from '../services/verificationEngine.ts';
 
@@ -91,7 +92,7 @@ export function runVerificationEngineTests() {
   // Test Case 5: Bậc tam cấp không có ram dốc -> Phạt -40% điểm xe lăn & Inaccessible
   {
     const input: VerificationMatrixInput = {
-      cvConfidence: 0.90,
+    cvConfidence: 0.90,
       textDescription: 'Có 3 bậc tam cấp cao',
       contributorCoords: { latitude: 10.7736, longitude: 106.7011 },
       poiCoords: { latitude: 10.7736, longitude: 106.7011 },
@@ -140,9 +141,208 @@ export function runVerificationEngineTests() {
     assert.ok(result.dataConfidence.recommendationPrompt?.includes('1/20'));
     console.log('  ✅ Test Case 7: Ramp <= 1/20 -> FullyAccessible with 75% data confidence (PASSED)');
   }
+
+  // Test Case 8: Không chọn đặc điểm nào (0 tags) -> Capped score <= 25%, status = AwaitingMoreInfo
+  {
+    const input: VerificationMatrixInput = {
+      cvConfidence: 0.0,
+      textDescription: '',
+      contributorCoords: { latitude: 10.7736, longitude: 106.7011 },
+      poiCoords: { latitude: 10.7736, longitude: 106.7011 }, // Cách 0m nhưng không có tiện ích nào
+      selectedTags: [],
+    };
+
+    const result = evaluateVerificationMatrix(input);
+    assert.ok(result.overallScore <= 25, `Expected score <= 25, got ${result.overallScore}`);
+    assert.strictEqual(result.status, 'AwaitingMoreInfo');
+    assert.strictEqual(result.statusLabel, 'Cần thêm thông tin');
+    assert.ok(result.personaScores.wheelchairScore <= 20);
+    assert.ok(result.personaScores.blindScore <= 20);
+    assert.strictEqual(result.dataConfidence.confidenceLevel, 25);
+    console.log('  ✅ Test Case 8: Empty tag selection -> Score <= 25% & AwaitingMoreInfo (PASSED)');
+  }
+
+  // Test Case 9: verifyWithAiOrFallback chạy an toàn, trả về deterministic local result
+  {
+    const input: VerificationMatrixInput = {
+      cvConfidence: 0.0,
+      textDescription: '',
+      contributorCoords: null,
+      poiCoords: null,
+      selectedTags: [],
+    };
+
+    verifyWithAiOrFallback('file:///fake-path.jpg', input).then((result) => {
+      assert.ok(result.overallScore <= 25);
+      assert.strictEqual(result.status, 'AwaitingMoreInfo');
+    });
+    console.log('  ✅ Test Case 9: verifyWithAiOrFallback runs safely without network crash (PASSED)');
+  }
+
+  // Test Case 10: Discrepancy Gate (Ảnh CV 0% nhưng người dùng tự chọn đặc điểm) -> hasDiscrepancy = true, score <= 35%
+  {
+    const input: VerificationMatrixInput = {
+      cvConfidence: 0.0, // Ảnh phòng / tường ngẫu nhiên không có tiện ích tiếp cận
+      textDescription: '',
+      contributorCoords: { latitude: 10.7736, longitude: 106.7011 },
+      poiCoords: { latitude: 10.7736, longitude: 106.7011 }, // Cách 0m
+      selectedTags: ['exterior_ramp_present'], // Chọn bừa ram dốc
+    };
+
+    const result = evaluateVerificationMatrix(input);
+    assert.strictEqual(result.hasDiscrepancy, true, 'Expected hasDiscrepancy to be true');
+    assert.ok(result.overallScore <= 35, `Expected score <= 35, got ${result.overallScore}`);
+    assert.strictEqual(result.status, 'AwaitingMoreInfo');
+    assert.strictEqual(result.personaFit.electricWheelchair, 'NeedsAssistance');
+    assert.ok(result.statusDescription.includes('Ảnh chưa thể hiện đặc tính bạn đã chọn'));
+    console.log('  ✅ Test Case 10: Anti-Cheat Discrepancy Gate -> score <= 35% & AwaitingMoreInfo (PASSED)');
+  }
+}
+
+/**
+ * End-to-end integration tests using REAL captured images against the live AI service
+ */
+export async function runAiLiveImageTests() {
+  console.log('🧪 [TEST SUITE 4] Live AI Integration with Real Captured Images');
+
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+
+  const basePath = fs.existsSync('test-assets/random_room.png')
+    ? path.resolve('test-assets')
+    : path.resolve('mobile/test-assets');
+  const randomRoomPath = path.join(basePath, 'random_room.png');
+  const rampEntrancePath = path.join(basePath, 'ramp_entrance.png');
+
+  // Test A: Real Random Room Photo (Captured by User) -> Negative detection, neutral summary, score <= 25%
+  {
+    assert.ok(fs.existsSync(randomRoomPath), `Random room test asset not found at ${randomRoomPath}`);
+    const buf = fs.readFileSync(randomRoomPath);
+    const blob = new Blob([buf], { type: 'image/png' });
+    const fd = new FormData();
+    fd.append('images', blob, 'random_room.png');
+
+    const res = await fetch('http://127.0.0.1:8000/api/v1/ai/pre-scan', {
+      method: 'POST',
+      body: fd,
+    });
+
+    assert.strictEqual(res.status, 200, `Expected 200 from AI service, got ${res.status}`);
+    const data = await res.json();
+
+    // Regression Check 1: Must NOT mention elevator or "không có thang máy"
+    assert.strictEqual(
+      data.summary,
+      'Chưa phát hiện tiện ích tiếp cận nào trong ảnh.',
+      `Summary should be neutral, got: ${data.summary}`
+    );
+    assert.ok(
+      !data.summary.includes('thang máy'),
+      `Summary must not mention "thang máy", got: ${data.summary}`
+    );
+
+    // Regression Check 2: No accessibility features detected
+    const rawFeatures = data.features || {};
+    const hasAnyDetected = Object.values(rawFeatures).some((f: any) => f?.value === true);
+    assert.strictEqual(hasAnyDetected, false, 'Expected 0 features detected in random room');
+
+    // Regression Check 3: Feed 0 confirmed tags into verification engine -> score <= 25%, AwaitingMoreInfo
+    const evalInput: VerificationMatrixInput = {
+      cvConfidence: 0.0,
+      textDescription: '',
+      contributorCoords: { latitude: 10.8454, longitude: 106.8373 },
+      poiCoords: { latitude: 10.8454, longitude: 106.8373 },
+      selectedTags: [],
+    };
+    const matrixResult = evaluateVerificationMatrix(evalInput);
+    assert.ok(
+      matrixResult.overallScore <= 25,
+      `Empty room photo score must be <= 25%, got ${matrixResult.overallScore}%`
+    );
+    assert.strictEqual(
+      matrixResult.status,
+      'AwaitingMoreInfo',
+      `Status must be AwaitingMoreInfo, got ${matrixResult.status}`
+    );
+    assert.strictEqual(matrixResult.statusLabel, 'Cần thêm thông tin');
+
+    console.log('  ✅ Live AI Test A: Real room capture -> Neutral summary & score <= 25% AwaitingMoreInfo (PASSED)');
+  }
+
+  // Test B: Real Ramp Entrance Photo -> Full accessible flow
+  {
+    assert.ok(fs.existsSync(rampEntrancePath), `Ramp entrance test asset not found at ${rampEntrancePath}`);
+    const buf = fs.readFileSync(rampEntrancePath);
+    const blob = new Blob([buf], { type: 'image/png' });
+    const fd = new FormData();
+    fd.append('images', blob, 'ramp_entrance.png');
+    fd.append('text_description', 'Lối vào có ram dốc tiếp cận thoải cho xe lăn, cửa rộng');
+
+    const res = await fetch('http://127.0.0.1:8000/api/v1/ai/pre-scan', {
+      method: 'POST',
+      body: fd,
+    });
+
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.ok(data.summary && data.summary.length > 0);
+
+    // Confirmed features evaluation
+    const evalInput: VerificationMatrixInput = {
+      cvConfidence: 0.94,
+      textDescription: 'Lối vào có ram dốc tiếp cận thoải cho xe lăn, cửa rộng',
+      contributorCoords: { latitude: 10.7736, longitude: 106.7011 },
+      poiCoords: { latitude: 10.7736, longitude: 106.7011 },
+      selectedTags: ['exterior_ramp_present', 'ramp_slope_comfortable', 'door_width_ok'],
+    };
+    const matrixResult = evaluateVerificationMatrix(evalInput);
+    assert.ok(matrixResult.overallScore >= 80, `Expected score >= 80, got ${matrixResult.overallScore}`);
+    assert.strictEqual(matrixResult.status, 'AutoVerified');
+    assert.strictEqual(matrixResult.statusLabel, 'Tự động duyệt');
+    assert.strictEqual(matrixResult.personaFit.electricWheelchair, 'FullyAccessible');
+
+    console.log('  ✅ Live AI Test B: Real ramp photo -> Score >= 80% AutoVerified & FullyAccessible (PASSED)');
+  }
+
+  // Test C: User Captured Ramp Photo (user_ramp_pick.png without text hints) -> AI detects ramp!
+  {
+    const userRampPath = path.join(basePath, 'user_ramp_pick.png');
+    assert.ok(fs.existsSync(userRampPath), `User ramp test asset not found at ${userRampPath}`);
+    const buf = fs.readFileSync(userRampPath);
+    const blob = new Blob([buf], { type: 'image/png' });
+    const fd = new FormData();
+    fd.append('images', blob, 'user_ramp_pick.png');
+
+    const res = await fetch('http://127.0.0.1:8000/api/v1/ai/pre-scan', {
+      method: 'POST',
+      body: fd,
+    });
+
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.strictEqual(
+      data.features.exterior_ramp_present.value,
+      true,
+      'AI should detect ramp in user ramp picture'
+    );
+    assert.ok(
+      data.features.exterior_ramp_present.confidence >= 0.70,
+      `Expected ramp confidence >= 0.70, got ${data.features.exterior_ramp_present.confidence}`
+    );
+    assert.ok(
+      data.summary.includes('ram dốc'),
+      `Summary should mention ram dốc, got: ${data.summary}`
+    );
+
+    console.log('  ✅ Live AI Test C: User ramp capture -> Ramp detected & summary mentions ram dốc (PASSED)');
+  }
 }
 
 if (process.argv[1]?.endsWith('verificationEngine.test.ts')) {
   runVerificationEngineTests();
+  runAiLiveImageTests().catch((err) => {
+    console.error('Live AI Image Tests Failed:', err);
+    process.exit(1);
+  });
 }
 

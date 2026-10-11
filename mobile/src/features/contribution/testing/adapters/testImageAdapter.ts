@@ -1,5 +1,5 @@
 import type { CapturedContributionMedia, GpsSnapshot } from '@/entities/contribution';
-import { getPoiAnchorCoords } from '../mocks/mockPoiAnchor';
+import { getPoiAnchorCoords } from '../mocks/mockPoiAnchor.ts';
 
 export interface PickerImageInput {
   uri: string;
@@ -22,7 +22,7 @@ export function adaptPickerImageToMediaResult(
   targetPoiId: string = 'saigon-centre',
   targetPoiName: string = 'Saigon Centre (Takashimaya)'
 ): CapturedContributionMedia {
-  const anchor = getPoiAnchorCoords(targetPoiId);
+  const anchor = getPoiAnchorCoords(targetPoiId, targetPoiName);
   const now = Date.now();
 
   const mockGps: GpsSnapshot = {

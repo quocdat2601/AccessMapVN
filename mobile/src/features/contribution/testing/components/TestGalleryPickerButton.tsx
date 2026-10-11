@@ -1,9 +1,21 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import type { CapturedContributionMedia } from '@/entities/contribution';
 import { adaptPickerImageToMediaResult } from '../adapters/testImageAdapter';
+
+function getNativeImagePicker(): typeof import('expo-image-picker') | null {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const picker = require('expo-image-picker');
+    if (picker?.launchImageLibraryAsync) {
+      return picker;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 interface TestGalleryPickerButtonProps {
   locationId: string;
@@ -32,6 +44,15 @@ export function TestGalleryPickerButton({
     if (picking) return;
     setPicking(true);
     try {
+      const ImagePicker = getNativeImagePicker();
+      if (!ImagePicker) {
+        Alert.alert(
+          'Thư viện ảnh chưa có trong APK',
+          'Bản Development Build APK hiện tại chưa chứa native module expo-image-picker.\n\nBạn có thể chụp ảnh trực tiếp bằng Camera của app để test quy trình AI ngay, hoặc chạy "npx expo run:android" để build lại APK hỗ trợ chọn ảnh từ thư viện.'
+        );
+        return;
+      }
+
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
         Alert.alert(

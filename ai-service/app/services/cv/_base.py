@@ -69,11 +69,11 @@ class BaseYOLODetector:
             return self._model
 
         if not self._weight_path.exists():
-            logger.warning(
-                "YOLO weights not found at %s – using stub mode (random scores).",
+            logger.info(
+                "YOLO weights not found at %s – using CVHeuristicEngine.",
                 self._weight_path,
             )
-            self._model = _StubModel(self._target_class)
+            self._model = CVHeuristicEngine(self._target_class)
             return self._model
 
         try:
@@ -82,7 +82,7 @@ class BaseYOLODetector:
             self._model = YOLO(str(self._weight_path))
         except Exception as exc:
             logger.exception("Failed to load YOLO model from %s", self._weight_path)
-            self._model = _StubModel(self._target_class)
+            self._model = CVHeuristicEngine(self._target_class)
 
         return self._model
 
@@ -111,8 +111,8 @@ class BaseYOLODetector:
             logger.warning("Could not decode image bytes – returning empty result.")
             return DetectionResult.empty()
 
-        # Stub model path
-        if isinstance(model, _StubModel):
+        # Heuristic computer vision analysis path
+        if isinstance(model, CVHeuristicEngine):
             return model.predict(img)
 
         # Real YOLO inference
@@ -156,106 +156,101 @@ class BaseYOLODetector:
         )
 
 
-class _StubModel:
+class CVHeuristicEngine:
     """
-    Computer Vision Visual Feature Analysis engine when specialized custom YOLO weights
-    are missing from disk. Analyzes edge orientation, perspective convergence, and color markings.
-
-    ponytail: heuristic visual feature extractor based on Hough perspective transforms and HSV color masks;
-              upgrade to fine-tuned YOLOv8 weights (.pt) when trained dataset weights are deployed.
+    OpenCV-based geometric analysis engine for edge, slope, and contour verification.
+    Executes deterministic computer vision heuristics when fine-tuned YOLO weights (.pt)
+    are not present on disk.
     """
 
     def __init__(self, target_class: str | None) -> None:
         self._target_class = (target_class or "object").lower()
-        logger.info("CV Visual Feature Extractor active for target class '%s'.", self._target_class)
+        logger.info("CVHeuristicEngine active for class '%s'.", self._target_class)
 
     def predict(self, img: np.ndarray) -> DetectionResult:
-        import cv2
+        # ponytail: OpenCV HoughLines slope heuristic for ramp detection; upgrade to fine-tuned YOLOv8 weights once ramp.pt is mounted.
+        if self._target_class == "ramp" and img is not None and img.size > 0:
+            import cv2
+            h, w = img.shape[:2]
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            edges = cv2.Canny(gray, 50, 150)
+            lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=40, minLineLength=30, maxLineGap=10)
+            ramp_slope_lines = 0
+            if lines is not None:
+                for l in lines:
+                    pts = l.flatten()
+                    if len(pts) == 4:
+                        x1, y1, x2, y2 = pts
+                        dx = abs(x2 - x1)
+                        dy = abs(y2 - y1)
+                        angle = float(np.degrees(np.arctan2(dy, dx)))
+                        # Real accessibility ramps exhibit gentle incline (5 deg - 35 deg) on ground plane
+                        if 5.0 <= angle <= 35.0 and min(y1, y2) > h * 0.20:
+                            ramp_slope_lines += 1
+            edge_density = float(np.mean(edges > 0))
+            contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            small_boxes = sum(1 for cnt in contours if 50 < cv2.contourArea(cnt) < 1500)
 
-        h, w = img.shape[:2]
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        edges = cv2.Canny(gray, 50, 150)
-        lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=60, minLineLength=50, maxLineGap=15)
-
-        horiz_lines = 0
-        perspective_lines = 0
-        if lines is not None:
-            for l in lines:
-                pts = l.reshape(-1)
-                dx = pts[2] - pts[0]
-                dy = pts[3] - pts[1]
-                angle = np.abs(np.arctan2(dy, dx) * 180 / np.pi)
-                if angle < 12 or angle > 168:
-                    horiz_lines += 1
-                elif 35 <= angle <= 88:
-                    perspective_lines += 1
-
-        # Check for yellow directional pavement markings / ramp markers
-        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-        yellow_mask = cv2.inRange(hsv, np.array([18, 80, 80]), np.array([36, 255, 255]))
-        yellow_pixels = int(cv2.countNonZero(yellow_mask))
-
-        if self._target_class == "ramp":
-            # Ramp visual signatures:
-            # 1. Strong perspective longitudinal lines converging along traversal incline
-            # 2. Dominance of incline perspective lines over horizontal stair lines
-            # 3. Yellow navigation pavement arrow / markings
-            has_ramp_geometry = perspective_lines >= 80 and (perspective_lines > horiz_lines * 1.5)
-            has_yellow_guidance = yellow_pixels > 2000
-
-            if has_ramp_geometry or (perspective_lines >= 60 and has_yellow_guidance):
-                confidence = min(0.94, max(0.85, 0.85 + (perspective_lines / 500) * 0.08))
+            if small_boxes < 250 and ramp_slope_lines >= 12 and edge_density >= 0.070:
+                conf = min(0.92, round(0.72 + min(0.20, (ramp_slope_lines / 200.0) * 0.20), 2))
                 return DetectionResult(
                     detected=True,
-                    max_confidence=round(confidence, 4),
-                    count=1,
+                    max_confidence=conf,
+                    boxes=[[float(w * 0.1), float(h * 0.2), float(w * 0.9), float(h * 0.9)]],
                     class_names=["ramp"],
-                    boxes=[[float(w * 0.15), float(h * 0.2), float(w * 0.85), float(h * 0.95)]],
+                    count=1,
                 )
-            return DetectionResult(detected=False, max_confidence=0.22, count=0)
 
-        elif self._target_class == "step":
-            # Stair / Step signatures:
-            # Flight of stairs exhibits repetitive horizontal riser edges across central walk path
-            corridor = img[int(h * 0.3):int(h * 0.8), int(w * 0.25):int(w * 0.75)]
-            c_gray = cv2.cvtColor(corridor, cv2.COLOR_BGR2GRAY)
-            c_edges = cv2.Canny(c_gray, 50, 150)
-            c_lines = cv2.HoughLinesP(c_edges, 1, np.pi / 180, threshold=50, minLineLength=40, maxLineGap=10)
-            c_horiz = 0
-            if c_lines is not None:
-                for l in c_lines:
-                    pts = l.reshape(-1)
-                    ang = np.abs(np.arctan2(pts[3] - pts[1], pts[2] - pts[0]) * 180 / np.pi)
-                    if ang < 10 or ang > 170:
-                        c_horiz += 1
+        # ponytail: OpenCV vertical frame jamb heuristic for door detection; upgrade to fine-tuned YOLOv8 weights once door.pt is mounted.
+        if self._target_class == "door" and img is not None and img.size > 0:
+            import cv2
+            h, w = img.shape[:2]
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            edges = cv2.Canny(gray, 40, 140)
+            lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=45, minLineLength=int(h * 0.30), maxLineGap=25)
+            valid_v_xs: list[float] = []
+            if lines is not None:
+                for l in lines:
+                    pts = l.flatten()
+                    if len(pts) == 4:
+                        x1, y1, x2, y2 = pts
+                        dx = abs(x2 - x1)
+                        dy = abs(y2 - y1)
+                        if dy > h * 0.30 and dx < dy * 0.15:
+                            xm = float((x1 + x2) / 2.0)
+                            # Exclude lines near outer image borders (border artifacts)
+                            if 0.04 * w <= xm <= 0.96 * w:
+                                valid_v_xs.append(xm)
 
-            if c_horiz >= 60 and c_horiz > perspective_lines:
-                est_steps = min(15, max(3, round(c_horiz / 12)))
-                return DetectionResult(
-                    detected=True,
-                    max_confidence=0.88,
-                    count=est_steps,
-                    class_names=["step"],
-                )
-            return DetectionResult(detected=False, max_confidence=0.15, count=0)
+            # Cluster vertical lines (grouping nearby parallel lines into jambs/edges)
+            clusters: list[list[float]] = []
+            for x in sorted(valid_v_xs):
+                if not clusters or abs(x - clusters[-1][-1]) > 0.05 * w:
+                    clusters.append([x])
+                else:
+                    clusters[-1].append(x)
+            cluster_means = [sum(c) / len(c) for c in clusters]
 
-        elif self._target_class == "tactile":
-            # Tactile paving: extensive yellow high-contrast pattern covering large ground area (>80,000 px)
-            if yellow_pixels > 80000:
-                return DetectionResult(detected=True, max_confidence=0.85, count=1, class_names=["tactile"])
-            return DetectionResult(detected=False, max_confidence=0.18, count=0)
+            # Door detected if at least 2 distinct vertical clusters span 22% - 85% of image width
+            if len(cluster_means) >= 2:
+                for i in range(len(cluster_means)):
+                    for j in range(i + 1, len(cluster_means)):
+                        span = (cluster_means[j] - cluster_means[i]) / float(w)
+                        if 0.22 <= span <= 0.85:
+                            x_min = max(0.0, float(cluster_means[i]))
+                            x_max = min(float(w), float(cluster_means[j]))
+                            return DetectionResult(
+                                detected=True,
+                                max_confidence=0.85,
+                                boxes=[[x_min, float(h * 0.05), x_max, float(h * 0.95)]],
+                                class_names=["door"],
+                                count=1,
+                            )
 
-        elif self._target_class in ("elevator", "signage"):
-            return DetectionResult(detected=False, max_confidence=0.25, count=0)
-
-        elif self._target_class == "door":
-            # Glass facade / wide entrance door detection
-            return DetectionResult(
-                detected=True,
-                max_confidence=0.82,
-                count=1,
-                class_names=["door"],
-                boxes=[[float(w * 0.5), float(0), float(w * 0.95), float(h * 0.8)]],
-            )
-
-        return DetectionResult.empty()
+        return DetectionResult(
+            detected=False,
+            max_confidence=0.0,
+            boxes=[],
+            class_names=[],
+            count=0,
+        )

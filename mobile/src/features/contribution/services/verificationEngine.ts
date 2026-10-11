@@ -28,6 +28,8 @@ export interface VerificationMatrixInput {
   contributorCoords: { latitude: number; longitude: number } | null;
   poiCoords: { latitude: number; longitude: number } | null;
   selectedTags: string[];
+  verifiedTagCount?: number;
+  unverifiedTagCount?: number;
 }
 
 export interface VerificationMatrixResult {
@@ -62,6 +64,9 @@ export interface VerificationMatrixResult {
   dataConfidence: DataConfidenceAssessment;
   penalties: VerificationPenalties;
   recommendedExp: number;
+  hasDiscrepancy: boolean;
+  verifiedTagCount: number;
+  unverifiedTagCount: number;
 }
 
 const ACCESSIBILITY_KEYWORDS = [
@@ -125,7 +130,7 @@ export function evaluateVerificationMatrix(
     }
   }
 
-  let nlpScore = 70; // baseline if notes empty
+  let nlpScore = 50; // baseline neutral if notes empty
   if (notes.length > 0) {
     if (matchedKeywords.length >= 2) {
       nlpScore = 95;
@@ -185,11 +190,9 @@ export function evaluateVerificationMatrix(
   const tactileBlocked = isTactileBlocked;
 
   // ── Wheelchair Score Formula ──────────────────────────────────────────────
-  // CV Component for Wheelchair: accounts for ramp, doors, restrooms, elevator
   let cvWheelchair = cvRawScore;
   if (!hasRamp && !hasSteps && !hasDoorWidth) {
-    // neutral
-    cvWheelchair = Math.round(cvRawScore * 0.9);
+    cvWheelchair = Math.round(cvRawScore * 0.5);
   }
 
   let wheelchairScore = Math.round(cvWheelchair * 0.5 + spatialScore * 0.3 + nlpScore * 0.2);
@@ -200,16 +203,17 @@ export function evaluateVerificationMatrix(
   }
 
   // ── Blind Score Formula ───────────────────────────────────────────────────
-  let cvBlind = cvRawScore;
-  if (!hasTactileGuiding && !hasTactileWarning && !hasBraille) {
-    cvBlind = Math.round(cvRawScore * 0.85);
+  // If no tactile/braille/audio features exist, blind CV score is 0
+  let cvBlind = 0;
+  if (hasTactileGuiding || hasTactileWarning || hasBraille || hasAudio) {
+    cvBlind = cvRawScore;
   }
 
   let blindScore = Math.round(cvBlind * 0.5 + spatialScore * 0.3 + nlpScore * 0.2);
 
   // Severe Penalty: Tactile blocked by obstacles -> Clamp to AwaitingMoreInfo
   if (tactileBlocked) {
-    blindScore = Math.min(45, blindScore);
+    blindScore = Math.min(25, blindScore);
   }
 
   // ── Persona Fit Qualitative Evaluation ────────────────────────────────────
@@ -226,7 +230,7 @@ export function evaluateVerificationMatrix(
       manualWheelchairSelf = 'FullyAccessible';
     } else {
       electricWheelchair = 'FullyAccessible';
-      manualWheelchairSelf = 'NeedsAssistance'; // e.g. 1/12 standard slope
+      manualWheelchairSelf = 'NeedsAssistance';
     }
   } else if (hasElevator || hasAccessibleRestroom) {
     electricWheelchair = 'Accessible';
@@ -241,32 +245,65 @@ export function evaluateVerificationMatrix(
     visualImpaired = 'NeedsCaution';
   }
 
-  // ── Data Confidence Assessment (2D Monocular vs Multi-Angle/Sensor) ────────
-  // A single frontal photo has 75% data confidence because slope angle (1/12 vs 1/20)
-  // cannot be certified without IMU pitch telemetry or side profile geometry.
+  // ── Anti-Cheat: Empty Feature Selection & Discrepancy Gates ───────────────
+  const hasNoFeatures = input.selectedTags.length === 0;
+  const hasDiscrepancy = !hasNoFeatures && cvRawScore === 0;
+
+  if (hasNoFeatures) {
+    overallScore = Math.min(overallScore, 25);
+    wheelchairScore = Math.min(wheelchairScore, 20);
+    blindScore = Math.min(blindScore, 20);
+    electricWheelchair = 'NeedsAssistance';
+    manualWheelchairSelf = 'Inaccessible';
+    visualImpaired = 'NeedsCaution';
+  } else if (hasDiscrepancy) {
+    overallScore = Math.min(overallScore, 35);
+    wheelchairScore = Math.min(wheelchairScore, 30);
+    blindScore = Math.min(blindScore, 25);
+    electricWheelchair = 'NeedsAssistance';
+    manualWheelchairSelf = 'Inaccessible';
+    visualImpaired = 'NeedsCaution';
+  }
+
+  // ── Data Confidence Assessment ─────────────────────────────────────────────
   const dataConfidence: DataConfidenceAssessment = {
     rampGeometryMeasured: false,
-    confidenceLevel: 75,
-    recommendationPrompt:
-      'Để thẩm định độ dốc 1/20 tuyệt đối theo QCVN, hãy chụp thêm ảnh góc nghiêng hoặc quay video bước dọc theo dốc.',
+    confidenceLevel: hasNoFeatures || hasDiscrepancy ? 25 : 75,
+    recommendationPrompt: hasNoFeatures
+      ? 'Chưa ghi nhận đặc điểm tiếp cận. Hãy chụp trực diện lối vào, ram dốc hoặc cửa chính.'
+      : hasDiscrepancy
+      ? 'Ảnh chưa thể hiện đặc tính bạn đã chọn. Vui lòng chụp rõ góc lối vào/ram dốc hoặc chờ kiểm duyệt viên xác minh.'
+      : 'Để thẩm định độ dốc 1/20 tuyệt đối theo QCVN, hãy chụp thêm ảnh góc nghiêng hoặc quay video bước dọc theo dốc.',
   };
+
+  // ── Granular Verification: Verified vs Unverified Feature Counts ──────────
+  const verifiedTagCount = input.verifiedTagCount ?? (cvRawScore > 0 ? input.selectedTags.length : 0);
+  const unverifiedTagCount = input.unverifiedTagCount ?? (cvRawScore === 0 ? input.selectedTags.length : 0);
 
   // Categorize overall status according to BR-09 & BR-10
   let status: VerificationStatus = 'PendingModeration';
   let statusLabel = 'Chờ duyệt viên';
   let statusDescription =
-    'Độ tin cậy ở mức khá (60–79%). Bản ghi sẽ được chuyển đến hàng đợi kiểm duyệt viên.';
+    'Thông tin ở mức tốt. Đóng góp sẽ được kiểm duyệt viên xác nhận sớm.';
 
-  if (overallScore >= 80 && spatialValid) {
+  if (hasNoFeatures || hasDiscrepancy || overallScore < 60) {
+    status = 'AwaitingMoreInfo';
+    statusLabel = 'Cần thêm thông tin';
+    statusDescription = hasNoFeatures
+      ? 'Chưa phát hiện hoặc xác nhận đặc điểm tiếp cận nào. Bạn có thể chụp lại góc rộng hơn hoặc chọn thêm tiêu chí.'
+      : hasDiscrepancy
+      ? 'Ảnh chưa thể hiện đặc tính bạn đã chọn. Vui lòng chụp rõ góc lối vào/ram dốc hoặc chờ kiểm duyệt viên xác minh.'
+      : 'Hình ảnh hoặc vị trí chưa rõ ràng. Bạn có thể chụp lại góc rộng hơn để bổ sung.';
+  } else if (unverifiedTagCount > 0) {
+    status = 'PendingModeration';
+    statusLabel = 'Chờ duyệt viên';
+    statusDescription =
+      `Đã xác thực ${verifiedTagCount}/${input.selectedTags.length} đặc điểm qua ảnh. ${unverifiedTagCount} đặc điểm tự khai báo thêm cần kiểm duyệt viên xác minh.`;
+  } else if (overallScore >= 80 && spatialValid) {
     status = 'AutoVerified';
     statusLabel = 'Tự động duyệt';
     statusDescription =
-      'Độ tin cậy cao (≥80%), thông tin ảnh và vị trí chuẩn xác. Đủ điều kiện xuất bản ngay.';
-  } else if (overallScore < 60) {
-    status = 'AwaitingMoreInfo';
-    statusLabel = 'Cần thêm thông tin';
-    statusDescription =
-      'Ảnh mờ hoặc thông tin chưa rõ ràng (<60%). Cần chụp lại góc rộng hoặc bổ sung hình ảnh.';
+      'Độ tin cậy cao, hình ảnh và vị trí chuẩn xác. Đủ điều kiện xuất bản lên bản đồ.';
   }
 
   return {
@@ -310,6 +347,9 @@ export function evaluateVerificationMatrix(
       tactileBlocked,
     },
     recommendedExp: 50,
+    hasDiscrepancy,
+    verifiedTagCount,
+    unverifiedTagCount,
   };
 }
 
@@ -322,74 +362,26 @@ try {
   isAndroid = false;
 }
 
-const DEFAULT_AI_URL = isAndroid ? 'http://10.0.2.2:8000' : 'http://localhost:8000';
-const AI_SERVICE_URL = process.env.EXPO_PUBLIC_AI_SERVICE_URL || DEFAULT_AI_URL;
+let resolveServiceUrlFn: ((port: number, envOverride?: string) => string) | null = null;
+let postMultipartFn: ((url: string, formData: FormData, timeoutMs?: number) => Promise<any>) | null = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const clientModule = require('@/shared/api/client');
+  resolveServiceUrlFn = clientModule.resolveServiceUrl;
+  postMultipartFn = clientModule.postMultipart;
+} catch {
+  resolveServiceUrlFn = null;
+  postMultipartFn = null;
+}
 
 /**
- * Hybrid Verification Adapter: Attempts to invoke the FastAPI POST /api/v1/ai/verify endpoint.
- * If the service is unreachable or offline, seamlessly falls back to the deterministic local engine.
+ * Verification Adapter: Evaluates the multi-modal verification matrix deterministically on mobile.
+ * Backend full verification occurs asynchronously via Hangfire worker after media upload.
  */
 export async function verifyWithAiOrFallback(
-  imageUri: string,
+  _imageUri: string,
   input: VerificationMatrixInput
 ): Promise<VerificationMatrixResult> {
-  const localResult = evaluateVerificationMatrix(input);
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 4000);
-
-  try {
-    const formData = new FormData();
-    formData.append('images', {
-      uri: imageUri,
-      name: 'verify.jpg',
-      type: 'image/jpeg',
-    } as any);
-
-    if (input.textDescription) {
-      formData.append('text_description', input.textDescription);
-    }
-    if (input.selectedTags.length > 0) {
-      formData.append('confirmed_tags', JSON.stringify(input.selectedTags));
-    }
-    if (input.contributorCoords) {
-      formData.append('latitude', input.contributorCoords.latitude.toString());
-      formData.append('longitude', input.contributorCoords.longitude.toString());
-    }
-
-    const res = await fetch(`${AI_SERVICE_URL}/api/v1/ai/verify`, {
-      method: 'POST',
-      body: formData,
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-
-    if (res.ok) {
-      const data = await res.json();
-      if (typeof data.overall_score === 'number') {
-        const score = Math.round(data.overall_score);
-        let status: VerificationStatus = 'PendingModeration';
-        if (score >= 80 && localResult.spatialValid) status = 'AutoVerified';
-        else if (score < 60) status = 'AwaitingMoreInfo';
-
-        return {
-          ...localResult,
-          overallScore: score,
-          status,
-          pillars: {
-            ...localResult.pillars,
-            computerVision: {
-              ...localResult.pillars.computerVision,
-              score: Math.round(data.cv_score ?? localResult.pillars.computerVision.score),
-            },
-          },
-        };
-      }
-    }
-    return localResult;
-  } catch {
-    clearTimeout(timeoutId);
-    return localResult;
-  }
+  return evaluateVerificationMatrix(input);
 }
+

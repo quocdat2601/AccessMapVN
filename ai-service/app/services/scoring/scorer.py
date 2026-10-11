@@ -70,9 +70,11 @@ def _build_feature_result(
 
     # If NLP has a mention, use it to boost/temper confidence
     nlp_m   = nlp_mentions.get(feature_key)
-    nlp_conf = nlp_m["confidence"] if nlp_m else 0.0
-
-    fused_conf = _fuse_confidence(cv_conf, nlp_conf)
+    nlp_conf = nlp_m.get("confidence", 0.0) if nlp_m else 0.0
+    if nlp_m is not None:
+        fused_conf = _fuse_confidence(cv_conf, nlp_conf)
+    else:
+        fused_conf = cv_conf
 
     # Value: CV wins; only override with NLP if CV has no detection and NLP is confident
     if cv_val in (False, "unknown") and nlp_m is not None and nlp_conf > 0.65:

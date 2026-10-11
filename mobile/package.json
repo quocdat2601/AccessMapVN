@@ -16,6 +16,7 @@
     "expo-font": "~57.0.4",
     "expo-glass-effect": "~57.0.3",
     "expo-image": "~57.0.5",
+    "expo-image-picker": "~57.0.20",
     "expo-linking": "~57.0.10",
     "expo-location": "~57.0.20",
     "expo-router": "~57.0.22",
@@ -47,7 +48,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "node scripts/test-prescan.mjs"
+    "test": "node scripts/test-prescan.mjs && node --import ./scripts/register-loader.mjs scripts/run-all-workflow-tests.mjs"
   },
   "private": true
 }

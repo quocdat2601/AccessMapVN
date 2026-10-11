@@ -87,4 +87,58 @@ public class PlaceRepository : IPlaceRepository
 
         return null;
     }
+
+    public async Task UpdateAccessibilityFeaturesAsync(
+        string id,
+        bool? hasRamp,
+        bool? hasAccessibleElevator,
+        bool? hasTactilePaving,
+        bool? hasAccessibleRestroom,
+        bool? doorWidthOk,
+        decimal? accessibilityScore,
+        string? accessibilityNote,
+        CancellationToken cancellationToken = default)
+    {
+        if (!Guid.TryParse(id, out var guid)) return;
+
+        var conn = _context.Database.GetDbConnection();
+        if (conn.State != System.Data.ConnectionState.Open)
+        {
+            await conn.OpenAsync(cancellationToken);
+        }
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+            UPDATE places
+            SET 
+                has_ramp = COALESCE(@has_ramp, has_ramp),
+                has_accessible_elevator = COALESCE(@has_accessible_elevator, has_accessible_elevator),
+                has_tactile_paving = COALESCE(@has_tactile_paving, has_tactile_paving),
+                has_accessible_restroom = COALESCE(@has_accessible_restroom, has_accessible_restroom),
+                door_width_ok = COALESCE(@door_width_ok, door_width_ok),
+                accessibility_score = COALESCE(@accessibility_score, accessibility_score),
+                accessibility_note = COALESCE(@accessibility_note, accessibility_note),
+                last_verified_at = NOW(),
+                updated_at = NOW()
+            WHERE id = @id;";
+
+        void AddParam(string name, object? val)
+        {
+            var p = cmd.CreateParameter();
+            p.ParameterName = name;
+            p.Value = val ?? DBNull.Value;
+            cmd.Parameters.Add(p);
+        }
+
+        AddParam("id", guid);
+        AddParam("has_ramp", hasRamp);
+        AddParam("has_accessible_elevator", hasAccessibleElevator);
+        AddParam("has_tactile_paving", hasTactilePaving);
+        AddParam("has_accessible_restroom", hasAccessibleRestroom);
+        AddParam("door_width_ok", doorWidthOk);
+        AddParam("accessibility_score", accessibilityScore);
+        AddParam("accessibility_note", accessibilityNote);
+
+        await cmd.ExecuteNonQueryAsync(cancellationToken);
+    }
 }

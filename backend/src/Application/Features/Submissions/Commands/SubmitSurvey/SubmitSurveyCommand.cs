@@ -28,4 +28,7 @@ public record SubmitSurveyCommand : IRequest<SubmitSurveyResult>
 
     [JsonPropertyName("text_description")]
     public string? TextDescription { get; init; }
+
+    [JsonPropertyName("confidence_score")]
+    public double? ConfidenceScore { get; init; }
 }

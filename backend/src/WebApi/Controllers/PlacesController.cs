@@ -1,6 +1,5 @@
-using AccessMapVN.Application.Common.Interfaces;
+using AccessMapVN.Application.Features.Places.Queries.GetPlaceById;
 using AccessMapVN.Application.Features.Places.Queries.GetPlacesInBounds;
-using AccessMapVN.Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,12 +10,10 @@ namespace AccessMapVN.WebApi.Controllers;
 public class PlacesController : ControllerBase
 {
     private readonly IMediator _mediator;
-    private readonly IPlaceRepository _placeRepository;
 
-    public PlacesController(IMediator mediator, IPlaceRepository placeRepository)
+    public PlacesController(IMediator mediator)
     {
         _mediator = mediator;
-        _placeRepository = placeRepository;
     }
 
     [HttpGet]
@@ -31,11 +28,11 @@ public class PlacesController : ControllerBase
     }
 
     [HttpGet("{id}")]
-    [ProducesResponseType(typeof(Place), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PlaceDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(string id, CancellationToken cancellationToken = default)
     {
-        var place = await _placeRepository.GetByIdAsync(id, cancellationToken);
+        var place = await _mediator.Send(new GetPlaceByIdQuery(id), cancellationToken);
         if (place == null)
         {
             return NotFound();

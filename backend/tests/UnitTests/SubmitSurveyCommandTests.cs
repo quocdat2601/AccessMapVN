@@ -112,5 +112,16 @@ public class SubmitSurveyCommandTests
             t.UserId == "user-123"), It.IsAny<CancellationToken>()), Times.Once);
 
         _mockSubmissionRepo.Verify(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+
+        _mockPlaceRepo.Verify(r => r.UpdateAccessibilityFeaturesAsync(
+            targetPlace.Id.ToString(),
+            true,
+            null,
+            null,
+            null,
+            true,
+            0.55m,
+            It.Is<string>(note => note.Contains("Có ram dốc") && note.Contains("Cửa đạt chuẩn")),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 }

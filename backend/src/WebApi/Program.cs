@@ -1,5 +1,6 @@
 using AccessMapVN.Application;
 using AccessMapVN.Infrastructure;
+using AccessMapVN.Infrastructure.Persistence;
 using AccessMapVN.WebApi.Middlewares;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -24,6 +25,12 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+
+using (var scope = app.Services.CreateScope())
+{
+    var initialiser = scope.ServiceProvider.GetRequiredService<ApplicationDbContextInitialiser>();
+    await initialiser.InitialiseAsync();
+}
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseCors();

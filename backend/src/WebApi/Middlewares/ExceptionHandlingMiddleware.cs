@@ -20,6 +20,38 @@ public class ExceptionHandlingMiddleware
         {
             await _next(context);
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogWarning("Unauthorized access attempt: {Message}", ex.Message);
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            context.Response.ContentType = "application/json";
+
+            var response = new
+            {
+                type = "https://tools.ietf.org/html/rfc7235#section-3.1",
+                title = "Unauthorized",
+                status = StatusCodes.Status401Unauthorized,
+                detail = ex.Message
+            };
+
+            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+        }
+        catch (AccessMapVN.Application.Features.Submissions.Commands.SubmitSurvey.SubmissionConflictException ex)
+        {
+            _logger.LogWarning("Idempotency conflict: {Message}", ex.Message);
+            context.Response.StatusCode = StatusCodes.Status409Conflict;
+            context.Response.ContentType = "application/json";
+
+            var response = new
+            {
+                type = "https://tools.ietf.org/html/rfc7231#section-6.5.8",
+                title = "Idempotency Conflict",
+                status = StatusCodes.Status409Conflict,
+                detail = ex.Message
+            };
+
+            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+        }
         catch (ValidationException ex)
         {
             _logger.LogWarning("Validation failure: {Message}", ex.Message);

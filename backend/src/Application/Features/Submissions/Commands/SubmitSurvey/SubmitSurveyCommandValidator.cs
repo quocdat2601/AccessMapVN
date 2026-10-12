@@ -6,6 +6,11 @@ public class SubmitSurveyCommandValidator : AbstractValidator<SubmitSurveyComman
 {
     public SubmitSurveyCommandValidator()
     {
+        RuleFor(x => x.ClientSubmissionId)
+            .NotEmpty()
+            .WithMessage("Mã định danh đóng góp (client_submission_id) không được để trống.")
+            .MaximumLength(100);
+
         RuleFor(x => x.LocationId)
             .NotEmpty()
             .WithMessage("Mã địa điểm không được để trống.");

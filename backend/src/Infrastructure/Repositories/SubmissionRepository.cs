@@ -30,6 +30,12 @@ public class SubmissionRepository : ISubmissionRepository
             .FirstOrDefaultAsync(s => s.SubmissionCode == code, cancellationToken);
     }
 
+    public async Task<Submission?> GetByClientSubmissionIdAsync(string userId, string clientSubmissionId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Submissions
+            .FirstOrDefaultAsync(s => s.UserId == userId && s.ClientSubmissionId == clientSubmissionId, cancellationToken);
+    }
+
     public async Task<List<Submission>> GetByUserIdAsync(string userId, CancellationToken cancellationToken = default)
     {
         return await _context.Submissions

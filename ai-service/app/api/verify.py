@@ -53,7 +53,13 @@ async def _collect_frames(url: str) -> list[bytes]:
         logger.info("Extracted %d usable keyframes from video %s", len(frames), url)
         return frames
     # Plain image
-    return [validate_and_preprocess(raw, max_dim=1280)]
+    try:
+        return [validate_and_preprocess(raw, max_dim=1280)]
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Media from '{url}' is corrupted or invalid: {exc}",
+        )
 
 
 @router.post(

@@ -80,9 +80,12 @@ class CVPipeline:
         # Initialise accumulators
         agg: dict[str, dict] = {
             "exterior_ramp_present":   dict(_NOT_SEEN),
+            "ramp_slope_compliant":    {"value": "unknown", "confidence": 0.0, "method": "unmeasured", "reason": "Cần đo đạc thực địa hoặc nhập kích thước chiều cao/chiều dài dốc"},
             "steps_present":           {**_NOT_SEEN, "step_count_estimate": None},
             "elevator_present":        dict(_NOT_SEEN),
-            "door_width_ok":           {"value": "unknown", "confidence": 0.0},
+            "door_detected":           {"value": "unknown", "confidence": 0.0},
+            "door_width_compliant":    {"value": "unknown", "confidence": 0.0, "method": "unmeasured", "reason": "Không thể đo chiều rộng chính xác từ ảnh 2D đơn lẻ"},
+            "door_width_ok":           {"value": "unknown", "confidence": 0.0, "method": "unmeasured", "reason": "Legacy field: chỉ suy ra từ số đo đã xác minh"},
             "accessible_restroom_sign": dict(_NOT_SEEN),
             "tactile_paving_present":  dict(_NOT_SEEN),
         }
@@ -100,7 +103,7 @@ class CVPipeline:
                 agg["exterior_ramp_present"]    = _merge(agg["exterior_ramp_present"], ramp_r)
                 agg["steps_present"]            = _merge(agg["steps_present"], step_r)
                 agg["elevator_present"]         = _merge(agg["elevator_present"], elev_r)
-                agg["door_width_ok"]            = _merge(agg["door_width_ok"], door_r)
+                agg["door_detected"]            = _merge(agg["door_detected"], door_r)
                 agg["accessible_restroom_sign"] = _merge(agg["accessible_restroom_sign"], sign_r)
                 agg["tactile_paving_present"]   = _merge(agg["tactile_paving_present"], tact_r)
 

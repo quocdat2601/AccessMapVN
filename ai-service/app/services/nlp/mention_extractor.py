@@ -46,7 +46,10 @@ _RULES: list[tuple[str, bool | str, float, list[str]]] = [
     # Ramp negative
     (
         "exterior_ramp_present", False, 0.80,
-        [r"không\s+(?:có)?\s*ramp", r"không\s+(?:có)?\s*đường\s+dốc"],
+        [
+            r"không\s+(?:có)?\s*ramp", r"không\s+(?:có)?\s*đường\s+dốc",
+            r"không\s+(?:có)?\s*dốc", r"chưa\s+(?:có)?\s*dốc", r"chưa\s+(?:có)?\s*ramp",
+        ],
     ),
     # Steps positive
     (

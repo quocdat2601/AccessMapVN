@@ -65,8 +65,14 @@ async def pre_scan(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                 detail=f"Image '{upload.filename}' exceeds 10 MB limit.",
             )
-        preprocessed = validate_and_preprocess(raw, max_dim=1024)
-        image_bytes_list.append(preprocessed)
+        try:
+            preprocessed = validate_and_preprocess(raw, max_dim=1024)
+            image_bytes_list.append(preprocessed)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Image '{upload.filename}' is corrupted or invalid: {exc}",
+            )
 
     # ── Run pipelines (in thread pool to not block the event loop) ──────────
     loop = asyncio.get_event_loop()

@@ -35,34 +35,20 @@ class DoorEstimator(BaseYOLODetector):
 
     def detect_door(self, image_bytes: bytes) -> dict:
         """
-        Detect a door and guess if it is wide enough.
+        Detect door presence in the image.
+        Compliance (clear width >= 900mm per QCVN 10:2014) is decoupled and marked unmeasured.
 
         Returns
         -------
         dict
-            ``{"value": bool | "unknown", "confidence": float}``
-            ``value`` is ``True`` if door is present and appears wide enough,
-            ``False`` if door is narrow, or ``"unknown"`` if no door found.
+            ``{"value": "present" | "unknown", "confidence": float}``
         """
-        import cv2
-
-        # Get image dimensions for ratio calculation
-        arr = np.frombuffer(image_bytes, dtype=np.uint8)
-        img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-        img_w = img.shape[1] if img is not None else 1
-
         result: DetectionResult = self._detect(image_bytes)
 
         if not result.detected:
             return {"value": "unknown", "confidence": round(result.max_confidence, 4)}
 
-        # Use the widest detected door box
-        widest_ratio = max(
-            (box[2] - box[0]) / img_w for box in result.boxes
-        ) if result.boxes else 0.0
-
-        door_ok = widest_ratio >= _WIDTH_RATIO_THRESHOLD
         return {
-            "value":      door_ok,
+            "value":      "present",
             "confidence": round(result.max_confidence, 4),
         }

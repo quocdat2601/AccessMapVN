@@ -59,6 +59,9 @@ public class ApplicationDbContextInitialiser
                 ALTER TABLE submissions ADD COLUMN IF NOT EXISTS client_observations_json TEXT NULL;
                 ALTER TABLE submissions ADD COLUMN IF NOT EXISTS ai_observations_json TEXT NULL;
                 ALTER TABLE submissions ADD COLUMN IF NOT EXISTS exp_status VARCHAR(50) NOT NULL DEFAULT 'pending_review';
+                ALTER TABLE submissions ADD COLUMN IF NOT EXISTS distance_meters DOUBLE PRECISION NULL;
+                ALTER TABLE submissions ADD COLUMN IF NOT EXISTS effective_distance_meters DOUBLE PRECISION NULL;
+                ALTER TABLE submissions ADD COLUMN IF NOT EXISTS is_mocked BOOLEAN NULL;
 
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_submissions_user_client_sub 
                 ON submissions (user_id, client_submission_id)

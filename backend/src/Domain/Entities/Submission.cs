@@ -18,6 +18,9 @@ public class Submission : BaseEntity
     public double GpsLat { get; set; }
     public double GpsLng { get; set; }
     public double? AccuracyMeters { get; set; }
+    public double? DistanceMeters { get; set; }
+    public double? EffectiveDistanceMeters { get; set; }
+    public bool? IsMocked { get; set; }
     public string? TextDescription { get; set; }
     public SubmissionStatus Status { get; set; } = SubmissionStatus.PendingModeration;
     public string ExpStatus { get; set; } = "pending_review";

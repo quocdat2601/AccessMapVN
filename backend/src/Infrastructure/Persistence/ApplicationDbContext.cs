@@ -38,6 +38,9 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.GpsLat).HasColumnName("gps_lat");
             entity.Property(e => e.GpsLng).HasColumnName("gps_lng");
             entity.Property(e => e.AccuracyMeters).HasColumnName("accuracy_meters");
+            entity.Property(e => e.DistanceMeters).HasColumnName("distance_meters");
+            entity.Property(e => e.EffectiveDistanceMeters).HasColumnName("effective_distance_meters");
+            entity.Property(e => e.IsMocked).HasColumnName("is_mocked");
             entity.Property(e => e.TextDescription).HasColumnName("text_description");
             entity.Property(e => e.Status).HasColumnName("status").HasConversion<string>();
             entity.Property(e => e.ExpStatus).HasColumnName("exp_status");

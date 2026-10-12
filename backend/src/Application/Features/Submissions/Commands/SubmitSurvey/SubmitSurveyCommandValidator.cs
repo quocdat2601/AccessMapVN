@@ -26,5 +26,9 @@ public class SubmitSurveyCommandValidator : AbstractValidator<SubmitSurveyComman
         RuleFor(x => x.GpsLng)
             .InclusiveBetween(-180.0, 180.0)
             .WithMessage("Tọa độ kinh độ (Longitude) không hợp lệ.");
+
+        RuleFor(x => x.AccuracyMeters)
+            .Must(x => !x.HasValue || (double.IsFinite(x.Value) && x.Value >= 0.0 && x.Value <= 100.0))
+            .WithMessage("Độ chính xác GPS (accuracy_meters) phải là số hữu hạn, không âm và không vượt quá 100m.");
     }
 }

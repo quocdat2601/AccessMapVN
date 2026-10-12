@@ -69,6 +69,8 @@ export function FinalScorecardScreen({
         gps_lat: media.gps ? media.gps.latitude : 10.8454,
         gps_lng: media.gps ? media.gps.longitude : 106.8373,
         accuracy_meters: media.gps?.accuracy ?? 5.0,
+        is_mocked: (media.gps as any)?.mocked ?? false,
+        client_timestamp: media.gps?.timestamp ?? Date.now(),
         text_description: notes || '',
         confidence_score: overallScore / 100,
       };

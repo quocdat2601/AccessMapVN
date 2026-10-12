@@ -157,20 +157,23 @@ public class SubmitSurveyCommandHandler : IRequestHandler<SubmitSurveyCommand, S
                 $"Trùng lặp ClientSubmissionId '{clientSubmissionId}' nhưng dữ liệu payload khác nhau (Conflict). Vui lòng sử dụng submission ID mới.");
         }
 
-        // 4. Kiểm tra vị trí địa điểm mục tiêu (bảo toàn dung sai GPS 50m)
+        // 4. Kiểm tra vị trí địa điểm mục tiêu (chính sách giảm false-rejection, không phải anti-spoof tuyệt đối)
+        double? distance = null;
+        double? effectiveDistance = null;
         var place = await _placeRepository.GetByIdAsync(request.LocationId, cancellationToken);
         if (place != null)
         {
-            var distance = GeoUtils.CalculateDistanceInMeters(
+            distance = GeoUtils.CalculateDistanceInMeters(
                 request.GpsLat,
                 request.GpsLng,
                 place.Lat,
                 place.Lng);
 
-            var accuracyMargin = request.AccuracyMeters.HasValue
-                ? Math.Min(30.0, Math.Max(0.0, request.AccuracyMeters.Value))
+            // Dung sai giảm thiểu false-rejection (tối đa 25m) chỉ áp dụng khi chất lượng fix chấp nhận được (<= 50m).
+            var accuracyMargin = (request.AccuracyMeters.HasValue && request.AccuracyMeters.Value <= 50.0)
+                ? Math.Min(25.0, Math.Max(0.0, request.AccuracyMeters.Value))
                 : 0.0;
-            var effectiveDistance = Math.Max(0.0, distance - accuracyMargin);
+            effectiveDistance = Math.Max(0.0, distance.Value - accuracyMargin);
 
             if (effectiveDistance > 50.0)
             {
@@ -178,7 +181,7 @@ public class SubmitSurveyCommandHandler : IRequestHandler<SubmitSurveyCommand, S
                 {
                     new ValidationFailure(
                         nameof(request.GpsLat),
-                        $"Khoảng cách thực địa ({Math.Round(distance, 1)}m) vượt quá ngưỡng cho phép 50m so với địa điểm '{place.Name}'.")
+                        $"Khoảng cách thực địa ({Math.Round(distance.Value, 1)}m) vượt quá ngưỡng cho phép 50m so với địa điểm '{place.Name}'.")
                 });
             }
         }
@@ -199,6 +202,9 @@ public class SubmitSurveyCommandHandler : IRequestHandler<SubmitSurveyCommand, S
             GpsLat = request.GpsLat,
             GpsLng = request.GpsLng,
             AccuracyMeters = request.AccuracyMeters,
+            DistanceMeters = distance.HasValue ? Math.Round(distance.Value, 1) : null,
+            EffectiveDistanceMeters = effectiveDistance.HasValue ? Math.Round(effectiveDistance.Value, 1) : null,
+            IsMocked = request.IsMocked,
             TextDescription = request.TextDescription,
             Status = SubmissionStatus.PendingModeration,
             ExpStatus = "pending_review",

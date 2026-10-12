@@ -82,6 +82,12 @@ public record SubmitSurveyCommand : IRequest<SubmitSurveyResult>
     [JsonPropertyName("text_description")]
     public string? TextDescription { get; init; }
 
+    [JsonPropertyName("is_mocked")]
+    public bool? IsMocked { get; init; }
+
+    [JsonPropertyName("client_timestamp")]
+    public long? ClientTimestamp { get; init; }
+
     /// <summary>
     /// Legacy client-calculated confidence; not used for authoritative scoring.
     /// </summary>

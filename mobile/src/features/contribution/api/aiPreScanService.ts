@@ -7,11 +7,15 @@ try {
   isAndroid = false;
 }
 
+export type FeatureStatus = 'present' | 'absent' | 'unknown';
+
 export interface PreScanFeatureTag {
   key: string;
   label: string;
+  status: FeatureStatus;
   detected: boolean;
   confidence: number;
+  reason?: string;
 }
 
 import { postMultipart, resolveServiceUrl } from '@/shared/api/client';
@@ -23,10 +27,13 @@ export interface PreScanResult {
 }
 
 const FEATURE_LABEL_MAP: Record<string, string> = {
-  exterior_ramp_present: 'Ram dốc tiếp cận',
+  exterior_ramp_present: 'Ram dốc ngoài trời',
+  ramp_slope_compliant: 'Độ dốc đạt chuẩn (≤ 1/12)',
   steps_present: 'Bậc thang',
   elevator_present: 'Thang máy tiếp cận',
-  door_width_ok: 'Cửa rộng ≥80cm',
+  door_detected: 'Có cửa ra vào',
+  door_width_compliant: 'Cửa thông thủy ≥90cm',
+  door_width_ok: 'Cửa rộng ≥80cm (Legacy)',
   accessible_restroom_sign: 'WC tiếp cận',
   tactile_paving_present: 'Lối đi xúc giác',
 };
@@ -38,6 +45,7 @@ function generateFallbackResult(): PreScanResult {
     features: Object.entries(FEATURE_LABEL_MAP).map(([key, label]) => ({
       key,
       label,
+      status: 'unknown',
       detected: false,
       confidence: 0,
     })),
@@ -70,12 +78,21 @@ export async function runAiPreScan(imageUri: string, textDescription?: string): 
 
     const features: PreScanFeatureTag[] = Object.keys(rawFeatures).map((key) => {
       const item = rawFeatures[key];
-      const detected = item?.value === true || item?.detected === true;
+      const rawVal = item?.value;
+      const status: FeatureStatus =
+        rawVal === 'present' || rawVal === true
+          ? 'present'
+          : rawVal === 'absent' || rawVal === false
+          ? 'absent'
+          : 'unknown';
+
       return {
         key,
         label: FEATURE_LABEL_MAP[key] ?? key,
-        detected,
-        confidence: typeof item?.confidence === 'number' ? item.confidence : 0.8,
+        status,
+        detected: status === 'present',
+        confidence: typeof item?.confidence === 'number' ? item.confidence : 0.0,
+        reason: item?.reason,
       };
     });
 

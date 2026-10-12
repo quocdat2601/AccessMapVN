@@ -38,6 +38,9 @@ export function FinalScorecardScreen({
   const contentTranslateY = useRef(new Animated.Value(12)).current;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const clientSubmissionIdRef = useRef<string>(
+    `mob-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 9)}`
+  );
   const [submittedResult, setSubmittedResult] = useState<{
     submissionId: string;
     message: string;
@@ -50,10 +53,19 @@ export function FinalScorecardScreen({
     setSubmitError(null);
     try {
       const payload = {
+        client_submission_id: clientSubmissionIdRef.current,
         location_id: media.locationId || 'custom-location',
-        user_id: 'mobile-contributor',
         media_urls: [media.uri],
+        client_observations: selectedTagKeys,
         feature_tags: selectedTagKeys,
+        measurements: {
+          door_clear_width: {
+            status: 'not_measured',
+          },
+          ramp_slope: {
+            status: 'not_measured',
+          },
+        },
         gps_lat: media.gps ? media.gps.latitude : 10.8454,
         gps_lng: media.gps ? media.gps.longitude : 106.8373,
         accuracy_meters: media.gps?.accuracy ?? 5.0,
@@ -73,16 +85,16 @@ export function FinalScorecardScreen({
           featureTags: selectedTagKeys,
           textDescription: notes,
           gps: media.gps ? { latitude: media.gps.latitude, longitude: media.gps.longitude } : null,
-          status: 'Submitted',
+          status: 'PendingModeration',
           confidenceScore: overallScore / 100,
-          pointsAwarded: res.points_awarded || 50,
+          pointsAwarded: res.points_awarded ?? 0,
           createdAt: Date.now(),
         });
 
         setSubmittedResult({
           submissionId: res.submission_id,
-          message: res.message || 'Đã tiếp nhận hồ sơ đóng góp thành công.',
-          pointsAwarded: res.points_awarded || 50,
+          message: res.message || 'Hồ sơ đã được tiếp nhận. EXP sẽ được tính sau khi khảo sát được duyệt.',
+          pointsAwarded: res.points_awarded ?? 0,
         });
       }
     } catch (err: any) {
@@ -238,7 +250,7 @@ export function FinalScorecardScreen({
               <View style={styles.testStopBanner}>
                 <MaterialCommunityIcons name="cloud-upload-outline" size={15} color="#004e58" />
                 <Text style={styles.testStopText}>
-                  Sẵn sàng gửi lên máy chủ để nhận +50 EXP tích luỹ.
+                  Sẵn sàng gửi lên máy chủ. EXP sẽ được cộng sau khi khảo sát được duyệt.
                 </Text>
               </View>
             )}
@@ -282,10 +294,10 @@ export function FinalScorecardScreen({
             </View>
           ) : null}
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Điểm thưởng dự kiến:</Text>
+            <Text style={styles.detailLabel}>Ghi nhận EXP:</Text>
             <View style={styles.expPill}>
-              <MaterialCommunityIcons name="star-circle" size={14} color="#d97706" />
-              <Text style={styles.expPillText}>+50 EXP</Text>
+              <MaterialCommunityIcons name="clock-outline" size={14} color="#b45309" />
+              <Text style={styles.expPillText}>Tính sau khi duyệt</Text>
             </View>
           </View>
         </View>

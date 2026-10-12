@@ -264,7 +264,7 @@ export async function runAiLiveImageTests() {
 
     // Regression Check 2: No accessibility features detected
     const rawFeatures = data.features || {};
-    const hasAnyDetected = Object.values(rawFeatures).some((f: any) => f?.value === true);
+    const hasAnyDetected = Object.values(rawFeatures).some((f: any) => f?.value === true || f?.value === 'present');
     assert.strictEqual(hasAnyDetected, false, 'Expected 0 features detected in random room');
 
     // Regression Check 3: Feed 0 confirmed tags into verification engine -> score <= 25%, AwaitingMoreInfo
@@ -341,9 +341,8 @@ export async function runAiLiveImageTests() {
 
     assert.strictEqual(res.status, 200);
     const data = await res.json();
-    assert.strictEqual(
-      data.features.exterior_ramp_present.value,
-      true,
+    assert.ok(
+      data.features.exterior_ramp_present.value === 'present' || data.features.exterior_ramp_present.value === true,
       'AI should detect ramp in user ramp picture'
     );
     assert.ok(

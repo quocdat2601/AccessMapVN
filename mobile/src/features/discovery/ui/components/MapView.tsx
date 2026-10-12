@@ -236,17 +236,48 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         features = nativeEvent?.features ?? [];
       }
 
-      // Priority 0: Check if user tapped directly on or near their current location marker
       const tapCoords: [number, number] | null =
         event?.geometry?.coordinates ||
         nativeEvent?.lngLat ||
         (nativeEvent?.coordinate ? [nativeEvent.coordinate.longitude, nativeEvent.coordinate.latitude] : null);
 
+      if (!features || features.length === 0) {
+        setActiveTapPoint(null);
+        onSelectPlace?.(null);
+        onSelectOsmPlace?.(null);
+        return;
+      }
+
+      const immediateAddress = extractImmediateAddress(features);
+
+      // Priority 1: Check if user tapped directly on an AccessMapVN place marker
+      const appFeature = features.find(
+        (f: any) => f?.properties?.id && places.some((p) => p.id === f.properties.id)
+      );
+      if (appFeature) {
+        await handleSelectAppPlace(appFeature.properties.id, immediateAddress);
+        return;
+      }
+
+      // Priority 2: Check if tapped base map feature matches an existing loaded place
+      const namedFeature = features.find(
+        (f: any) =>
+          f?.properties?.name ||
+          f?.properties?.name_en ||
+          f?.properties?.name_vi ||
+          f?.properties?.['name:vi']
+      );
+
+      // Priority 3: Check if user tapped directly on their current location marker (blue dot)
       const isUserLocationTap =
+        !namedFeature &&
         userLatitude != null &&
         userLongitude != null &&
-        (features.some((f: any) => f?.properties?.isUserLocation || (f?.layer?.id && f.layer.id.includes('user-location'))) ||
-          (tapCoords && getDistanceMeters(userLatitude, userLongitude, tapCoords[1], tapCoords[0]) <= 35));
+        features.some(
+          (f: any) =>
+            f?.properties?.isUserLocation ||
+            (f?.layer?.id && f.layer.id.includes('user-location'))
+        );
 
       if (isUserLocationTap && userLatitude != null && userLongitude != null) {
         flyToPlace(userLongitude, userLatitude);
@@ -255,7 +286,6 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         setActiveTapPoint(null);
         onSelectPlace?.(null);
 
-        const immediateAddress = extractImmediateAddress(features);
         const userPlace: PlaceDto = {
           id: myPlaceId,
           name: 'Vị trí hiện tại của bạn',
@@ -307,33 +337,6 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         }
         return;
       }
-
-      if (!features || features.length === 0) {
-        setActiveTapPoint(null);
-        onSelectPlace?.(null);
-        onSelectOsmPlace?.(null);
-        return;
-      }
-
-      const immediateAddress = extractImmediateAddress(features);
-
-      // Priority 1: Check if user tapped directly on an AccessMapVN place marker
-      const appFeature = features.find(
-        (f: any) => f?.properties?.id && places.some((p) => p.id === f.properties.id)
-      );
-      if (appFeature) {
-        await handleSelectAppPlace(appFeature.properties.id, immediateAddress);
-        return;
-      }
-
-      // Priority 2: Check if tapped base map feature matches an existing loaded place
-      const namedFeature = features.find(
-        (f: any) =>
-          f?.properties?.name ||
-          f?.properties?.name_en ||
-          f?.properties?.name_vi ||
-          f?.properties?.['name:vi']
-      );
 
       if (namedFeature) {
         const props = namedFeature.properties;

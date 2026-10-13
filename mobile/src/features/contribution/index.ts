@@ -10,3 +10,15 @@ export {
 } from './lib/verificationEngine';
 export { TagReviewScreen } from './ui/screens/TagReviewScreen';
 export { FinalScorecardScreen } from './ui/screens/FinalScorecardScreen';
+export {
+  saveSurveyDraft,
+  loadSurveyDraft,
+  deleteSurveyDraft,
+  deleteSurveyDraftOnSuccess,
+  refreshDraftSubmissionId,
+  clearAllSurveyDrafts,
+  type SurveyDraft,
+  type SurveyDraftMedia,
+  type SurveyDraftMeasurements,
+  type SurveyDraftGps,
+} from './model/surveyDraftStore';

@@ -8,6 +8,14 @@ import { apiClient } from '@/shared/api/client';
 import type { VerificationMatrixResult } from '../../lib/verificationEngine';
 import { ScoreMatrixBreakdown } from '../components/review/ScoreMatrixBreakdown';
 import { ScoreMeterRing } from '../components/review/ScoreMeterRing';
+import {
+  saveSurveyDraft,
+  loadSurveyDraft,
+  deleteSurveyDraftOnSuccess,
+  refreshDraftSubmissionId,
+  defaultFileExistenceChecker,
+  type SurveyDraftMedia,
+} from '../../model/surveyDraftStore';
 
 interface FinalScorecardScreenProps {
   media: CapturedContributionMedia;
@@ -47,11 +55,92 @@ export function FinalScorecardScreen({
     pointsAwarded: number;
   } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isConflictError, setIsConflictError] = useState(false);
+
+  // Sync draft on mount (preserve clientSubmissionId across sessions)
+  React.useEffect(() => {
+    async function syncDraft() {
+      if (!media.locationId) return;
+      try {
+        const existing = await loadSurveyDraft(media.locationId);
+        if (existing?.clientSubmissionId) {
+          clientSubmissionIdRef.current = existing.clientSubmissionId;
+          const hasFailedMedia = existing.media?.some((m) => m.uploadStatus === 'failed');
+          if (hasFailedMedia) {
+            setSubmitError('Ảnh trong bản nháp không còn tồn tại trên thiết bị (có thể do hệ thống dọn dẹp cache). Vui lòng chụp lại ảnh.');
+          }
+        } else {
+          await saveSurveyDraft({
+            locationId: media.locationId,
+            locationName: media.locationName,
+            clientSubmissionId: clientSubmissionIdRef.current,
+            media: [{ localUri: media.uri, uploadStatus: 'pending' }],
+            featureTags: selectedTagKeys,
+            textDescription: notes,
+            gps: media.gps,
+          });
+        }
+      } catch {}
+    }
+    void syncDraft();
+  }, [media.locationId]);
+
+  // Keep draft updated when tags or notes change
+  React.useEffect(() => {
+    if (!media.locationId) return;
+    void saveSurveyDraft({
+      locationId: media.locationId,
+      locationName: media.locationName,
+      clientSubmissionId: clientSubmissionIdRef.current,
+      media: [{ localUri: media.uri, uploadStatus: 'pending' }],
+      featureTags: selectedTagKeys,
+      textDescription: notes,
+      gps: media.gps,
+    }).catch(() => {});
+  }, [selectedTagKeys, notes, media.locationId, media.locationName, media.uri, media.gps]);
+
+  const handleResetSubmissionId = async () => {
+    clientSubmissionIdRef.current = `mob-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 9)}`;
+    setIsConflictError(false);
+    setSubmitError(null);
+    if (media.locationId) {
+      await saveSurveyDraft({
+        locationId: media.locationId,
+        locationName: media.locationName,
+        clientSubmissionId: clientSubmissionIdRef.current,
+        media: [{ localUri: media.uri, uploadStatus: 'pending' }],
+        featureTags: selectedTagKeys,
+        textDescription: notes,
+        gps: media.gps,
+      });
+    }
+  };
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
     setSubmitError(null);
+    setIsConflictError(false);
     try {
+      if (media.uri) {
+        const fileExists = await defaultFileExistenceChecker(media.uri);
+        if (!fileExists) {
+          setIsSubmitting(false);
+          setSubmitError('Ảnh chụp cục bộ không còn tồn tại trên thiết bị (đã bị dọn dẹp khỏi cache). Vui lòng chụp lại ảnh.');
+          if (media.locationId) {
+            await saveSurveyDraft({
+              locationId: media.locationId,
+              locationName: media.locationName,
+              clientSubmissionId: clientSubmissionIdRef.current,
+              media: [{ localUri: media.uri, uploadStatus: 'failed' }],
+              featureTags: selectedTagKeys,
+              textDescription: notes,
+              gps: media.gps,
+            });
+          }
+          return;
+        }
+      }
+
       const payload = {
         client_submission_id: clientSubmissionIdRef.current,
         location_id: media.locationId || 'custom-location',
@@ -78,6 +167,15 @@ export function FinalScorecardScreen({
       const res = await apiClient.post<any>('/api/v1/submissions', payload);
 
       if (res && res.submission_id) {
+        // Delete draft ONLY when backend confirms submission creation matching current client ID
+        if (media.locationId) {
+          await deleteSurveyDraftOnSuccess(
+            media.locationId,
+            res.submission_id,
+            clientSubmissionIdRef.current
+          );
+        }
+
         addContributionRecord({
           id: res.submission_id,
           locationId: media.locationId,
@@ -100,6 +198,9 @@ export function FinalScorecardScreen({
         });
       }
     } catch (err: any) {
+      const is409 = err?.status === 409 || err?.statusCode === 409 || err?.data?.status === 409 || err?.data?.statusCode === 409;
+      setIsConflictError(Boolean(is409));
+
       const serverErr =
         err?.data?.errors?.GpsLat?.[0] ||
         err?.data?.errors?.LocationId?.[0] ||
@@ -241,12 +342,27 @@ export function FinalScorecardScreen({
                 </View>
               </View>
             ) : submitError ? (
-              <View style={styles.errorBanner}>
-                <MaterialCommunityIcons name="alert-circle-outline" size={18} color="#e11d48" />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.errorTitle}>Lỗi gửi hồ sơ</Text>
-                  <Text style={styles.errorText}>{submitError}</Text>
+              <View style={[styles.errorBanner, isConflictError && { flexDirection: 'column' }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, width: '100%' }}>
+                  <MaterialCommunityIcons name="alert-circle-outline" size={18} color="#e11d48" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.errorTitle}>
+                      {isConflictError ? 'Trùng mã phiên (409 Conflict)' : 'Lỗi gửi hồ sơ'}
+                    </Text>
+                    <Text style={styles.errorText}>{submitError}</Text>
+                  </View>
                 </View>
+                {isConflictError && (
+                  <Pressable
+                    style={({ pressed }) => [styles.conflictResetBtn, pressed && styles.pressed]}
+                    onPress={handleResetSubmissionId}
+                    accessibilityRole="button"
+                    accessibilityLabel="Tạo phiên khảo sát mới"
+                  >
+                    <MaterialCommunityIcons name="refresh" size={14} color="#9f1239" />
+                    <Text style={styles.conflictResetBtnText}>Tạo phiên khảo sát mới và thử lại</Text>
+                  </Pressable>
+                )}
               </View>
             ) : (
               <View style={styles.testStopBanner}>
@@ -521,6 +637,25 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#be123c',
     lineHeight: 15,
+  },
+  conflictResetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#ffe4e6',
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    marginTop: 6,
+    alignSelf: 'flex-start',
+  },
+  conflictResetBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#9f1239',
   },
   detailsCard: {
     backgroundColor: '#ffffff',

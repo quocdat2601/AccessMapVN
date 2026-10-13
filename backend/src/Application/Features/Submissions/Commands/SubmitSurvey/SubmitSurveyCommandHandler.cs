@@ -157,31 +157,29 @@ public class SubmitSurveyCommandHandler : IRequestHandler<SubmitSurveyCommand, S
                 $"Trùng lặp ClientSubmissionId '{clientSubmissionId}' nhưng dữ liệu payload khác nhau (Conflict). Vui lòng sử dụng submission ID mới.");
         }
 
-        // 4. Kiểm tra vị trí địa điểm mục tiêu (chính sách giảm false-rejection, không phải anti-spoof tuyệt đối)
-        double? distance = null;
-        double? effectiveDistance = null;
+        // 4. Kiểm tra vị trí địa điểm mục tiêu (phân cấp Entrance -> Custom Radius -> Category Fallback)
+        GeofenceEvaluationResult? geofenceResult = null;
         var place = await _placeRepository.GetByIdAsync(request.LocationId, cancellationToken);
         if (place != null)
         {
-            distance = GeoUtils.CalculateDistanceInMeters(
+            geofenceResult = GeofencePolicy.Evaluate(
                 request.GpsLat,
                 request.GpsLng,
+                request.AccuracyMeters,
                 place.Lat,
-                place.Lng);
+                place.Lng,
+                place.EntranceLat,
+                place.EntranceLng,
+                place.GeofenceRadiusMeters,
+                place.Category);
 
-            // Dung sai giảm thiểu false-rejection (tối đa 25m) chỉ áp dụng khi chất lượng fix chấp nhận được (<= 50m).
-            var accuracyMargin = (request.AccuracyMeters.HasValue && request.AccuracyMeters.Value <= 50.0)
-                ? Math.Min(25.0, Math.Max(0.0, request.AccuracyMeters.Value))
-                : 0.0;
-            effectiveDistance = Math.Max(0.0, distance.Value - accuracyMargin);
-
-            if (effectiveDistance > 50.0)
+            if (!geofenceResult.IsPlausible)
             {
                 throw new ValidationException(new[]
                 {
                     new ValidationFailure(
                         nameof(request.GpsLat),
-                        $"Khoảng cách thực địa ({Math.Round(distance.Value, 1)}m) vượt quá ngưỡng cho phép 50m so với địa điểm '{place.Name}'.")
+                        $"Khoảng cách thực địa ({Math.Round(geofenceResult.DistanceMeters, 1)}m) vượt quá ngưỡng cho phép {geofenceResult.AllowedRadiusMeters}m (chính sách {geofenceResult.Policy}) so với địa điểm '{place.Name}'.")
                 });
             }
         }
@@ -202,8 +200,10 @@ public class SubmitSurveyCommandHandler : IRequestHandler<SubmitSurveyCommand, S
             GpsLat = request.GpsLat,
             GpsLng = request.GpsLng,
             AccuracyMeters = request.AccuracyMeters,
-            DistanceMeters = distance.HasValue ? Math.Round(distance.Value, 1) : null,
-            EffectiveDistanceMeters = effectiveDistance.HasValue ? Math.Round(effectiveDistance.Value, 1) : null,
+            DistanceMeters = geofenceResult != null ? Math.Round(geofenceResult.DistanceMeters, 1) : null,
+            EffectiveDistanceMeters = geofenceResult != null ? Math.Round(geofenceResult.EffectiveDistanceMeters, 1) : null,
+            GeofencePolicy = geofenceResult?.Policy,
+            AllowedRadiusMeters = geofenceResult?.AllowedRadiusMeters,
             IsMocked = request.IsMocked,
             TextDescription = request.TextDescription,
             Status = SubmissionStatus.PendingModeration,

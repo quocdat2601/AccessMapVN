@@ -61,7 +61,13 @@ public class ApplicationDbContextInitialiser
                 ALTER TABLE submissions ADD COLUMN IF NOT EXISTS exp_status VARCHAR(50) NOT NULL DEFAULT 'pending_review';
                 ALTER TABLE submissions ADD COLUMN IF NOT EXISTS distance_meters DOUBLE PRECISION NULL;
                 ALTER TABLE submissions ADD COLUMN IF NOT EXISTS effective_distance_meters DOUBLE PRECISION NULL;
+                ALTER TABLE submissions ADD COLUMN IF NOT EXISTS geofence_policy VARCHAR(50) NULL;
+                ALTER TABLE submissions ADD COLUMN IF NOT EXISTS allowed_radius_meters DOUBLE PRECISION NULL;
                 ALTER TABLE submissions ADD COLUMN IF NOT EXISTS is_mocked BOOLEAN NULL;
+
+                ALTER TABLE places ADD COLUMN IF NOT EXISTS entrance_lat DOUBLE PRECISION NULL;
+                ALTER TABLE places ADD COLUMN IF NOT EXISTS entrance_lng DOUBLE PRECISION NULL;
+                ALTER TABLE places ADD COLUMN IF NOT EXISTS geofence_radius_meters DOUBLE PRECISION NULL;
 
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_submissions_user_client_sub 
                 ON submissions (user_id, client_submission_id)

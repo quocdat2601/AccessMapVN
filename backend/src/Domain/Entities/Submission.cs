@@ -20,6 +20,8 @@ public class Submission : BaseEntity
     public double? AccuracyMeters { get; set; }
     public double? DistanceMeters { get; set; }
     public double? EffectiveDistanceMeters { get; set; }
+    public string? GeofencePolicy { get; set; }
+    public double? AllowedRadiusMeters { get; set; }
     public bool? IsMocked { get; set; }
     public string? TextDescription { get; set; }
     public SubmissionStatus Status { get; set; } = SubmissionStatus.PendingModeration;

@@ -30,6 +30,7 @@ export interface VerificationMatrixInput {
   selectedTags: string[];
   verifiedTagCount?: number;
   unverifiedTagCount?: number;
+  allowedRadiusMeters?: number;
 }
 
 export interface VerificationMatrixResult {
@@ -153,14 +154,15 @@ export function evaluateVerificationMatrix(
       ? Math.min(30, Math.max(0, Math.round(input.contributorCoords.accuracy)))
       : 0;
     const effectiveDistance = Math.max(0, distanceMeters - accuracyMargin);
-    spatialValid = effectiveDistance <= 50;
+    const allowedRadius = input.allowedRadiusMeters && input.allowedRadiusMeters > 0 ? input.allowedRadiusMeters : 50;
+    spatialValid = effectiveDistance <= allowedRadius;
 
     if (spatialValid) {
-      // 0m = 100%, 50m = 80%
-      spatialScore = Math.max(80, Math.round(100 - (effectiveDistance / 50) * 20));
+      // 0m = 100%, allowedRadius = 80%
+      spatialScore = Math.max(80, Math.round(100 - (effectiveDistance / allowedRadius) * 20));
     } else {
-      // Penalty when exceeding 50m geofence
-      spatialScore = Math.max(10, Math.round(60 - Math.min(50, effectiveDistance - 50)));
+      // Penalty when exceeding allowedRadius geofence
+      spatialScore = Math.max(10, Math.round(60 - Math.min(50, effectiveDistance - allowedRadius)));
     }
   }
 

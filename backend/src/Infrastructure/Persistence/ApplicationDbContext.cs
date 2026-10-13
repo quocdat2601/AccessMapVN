@@ -40,6 +40,8 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.AccuracyMeters).HasColumnName("accuracy_meters");
             entity.Property(e => e.DistanceMeters).HasColumnName("distance_meters");
             entity.Property(e => e.EffectiveDistanceMeters).HasColumnName("effective_distance_meters");
+            entity.Property(e => e.GeofencePolicy).HasColumnName("geofence_policy");
+            entity.Property(e => e.AllowedRadiusMeters).HasColumnName("allowed_radius_meters");
             entity.Property(e => e.IsMocked).HasColumnName("is_mocked");
             entity.Property(e => e.TextDescription).HasColumnName("text_description");
             entity.Property(e => e.Status).HasColumnName("status").HasConversion<string>();

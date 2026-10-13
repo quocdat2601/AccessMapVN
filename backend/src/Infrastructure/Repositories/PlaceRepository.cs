@@ -48,7 +48,10 @@ public class PlaceRepository : IPlaceRepository
                 door_width_ok,
                 accessibility_score,
                 accessibility_note,
-                last_verified_at
+                last_verified_at,
+                entrance_lat,
+                entrance_lng,
+                geofence_radius_meters
             FROM places
             WHERE id = @id
             LIMIT 1;";
@@ -82,6 +85,9 @@ public class PlaceRepository : IPlaceRepository
                 AccessibilityScore = reader.IsDBNull(16) ? null : reader.GetDecimal(16),
                 AccessibilityNote = reader.IsDBNull(17) ? null : reader.GetString(17),
                 LastVerifiedAt = reader.IsDBNull(18) ? null : reader.GetDateTime(18),
+                EntranceLat = reader.FieldCount > 19 && !reader.IsDBNull(19) ? reader.GetDouble(19) : null,
+                EntranceLng = reader.FieldCount > 20 && !reader.IsDBNull(20) ? reader.GetDouble(20) : null,
+                GeofenceRadiusMeters = reader.FieldCount > 21 && !reader.IsDBNull(21) ? reader.GetDouble(21) : null,
             };
         }
 

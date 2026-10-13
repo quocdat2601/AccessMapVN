@@ -21,5 +21,8 @@ public class Place : BaseEntity
     public bool? DoorWidthOk { get; set; }
     public decimal? AccessibilityScore { get; set; }
     public string? AccessibilityNote { get; set; }
+    public double? EntranceLat { get; set; }
+    public double? EntranceLng { get; set; }
+    public double? GeofenceRadiusMeters { get; set; }
     public DateTimeOffset? LastVerifiedAt { get; set; }
 }

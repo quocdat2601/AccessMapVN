@@ -9,9 +9,11 @@ using AccessMapVN.Infrastructure.Persistence;
 using AccessMapVN.Infrastructure.Repositories;
 using FluentAssertions;
 using FluentValidation;
+using MediatR;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -710,5 +712,230 @@ public class SubmitSurveyCommandTests
         var insertedRows = await dbContext.Submissions.Where(s => s.UserId == testUserId).ToListAsync();
         dbContext.Submissions.RemoveRange(insertedRows);
         await dbContext.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task Handle_WhenPlaceHasEntrance_PrioritizesEntranceOverCentroid()
+    {
+        // Centroid at (10.7720, 106.6980), Entrance at (10.7730, 106.6980) (approx 111m north)
+        var place = new Place
+        {
+            Id = Guid.NewGuid(),
+            Name = "Đại học Bách Khoa - Cổng 1",
+            Category = "university",
+            Lat = 10.7720,
+            Lng = 106.6980,
+            EntranceLat = 10.7730,
+            EntranceLng = 106.6980,
+        };
+
+        _mockPlaceRepo.Setup(r => r.GetByIdAsync(place.Id.ToString(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(place);
+
+        // User stands right at entrance (10.7730, 106.6980)
+        Submission? savedSubmission = null;
+        _mockSubmissionRepo.Setup(r => r.GetByClientSubmissionIdAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Submission?)null);
+        _mockSubmissionRepo.Setup(r => r.AddAsync(It.IsAny<Submission>(), It.IsAny<CancellationToken>()))
+            .Callback<Submission, CancellationToken>((s, _) => savedSubmission = s)
+            .Returns(Task.CompletedTask);
+
+        var handler = new SubmitSurveyCommandHandler(_mockPlaceRepo.Object, _mockSubmissionRepo.Object);
+        var command = new SubmitSurveyCommand
+        {
+            AuthenticatedUserId = "user-entrance-test",
+            ClientSubmissionId = "client-entrance-1",
+            LocationId = place.Id.ToString(),
+            MediaUrls = new List<string> { "https://example.com/entrance.jpg" },
+            GpsLat = 10.7730,
+            GpsLng = 106.6980,
+            AccuracyMeters = 5.0,
+        };
+
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        result.Should().NotBeNull();
+        savedSubmission.Should().NotBeNull();
+        savedSubmission!.GeofencePolicy.Should().Be("entrance");
+        savedSubmission.AllowedRadiusMeters.Should().Be(50.0);
+        savedSubmission.EffectiveDistanceMeters.Should().Be(0.0);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPlaceHasCustomGeofenceRadius_UsesCustomRadius()
+    {
+        var place = new Place
+        {
+            Id = Guid.NewGuid(),
+            Name = "Trung tâm Hội chợ Triển lãm",
+            Category = "other",
+            Lat = 10.7720,
+            Lng = 106.6980,
+            GeofenceRadiusMeters = 180.0,
+        };
+
+        _mockPlaceRepo.Setup(r => r.GetByIdAsync(place.Id.ToString(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(place);
+
+        Submission? savedSubmission = null;
+        _mockSubmissionRepo.Setup(r => r.GetByClientSubmissionIdAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Submission?)null);
+        _mockSubmissionRepo.Setup(r => r.AddAsync(It.IsAny<Submission>(), It.IsAny<CancellationToken>()))
+            .Callback<Submission, CancellationToken>((s, _) => savedSubmission = s)
+            .Returns(Task.CompletedTask);
+
+        var handler = new SubmitSurveyCommandHandler(_mockPlaceRepo.Object, _mockSubmissionRepo.Object);
+        // Approx 130m away
+        var command = new SubmitSurveyCommand
+        {
+            AuthenticatedUserId = "user-custom-test",
+            ClientSubmissionId = "client-custom-1",
+            LocationId = place.Id.ToString(),
+            MediaUrls = new List<string> { "https://example.com/custom.jpg" },
+            GpsLat = 10.77317,
+            GpsLng = 106.6980,
+            AccuracyMeters = 5.0,
+        };
+
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        result.Should().NotBeNull();
+        savedSubmission.Should().NotBeNull();
+        savedSubmission!.GeofencePolicy.Should().Be("custom_radius");
+        savedSubmission.AllowedRadiusMeters.Should().Be(180.0);
+        savedSubmission.EffectiveDistanceMeters.Should().BeLessThan(180.0);
+    }
+
+    [Fact]
+    public async Task Handle_WhenPlaceIsHospitalCategory_Applies250mRadiusFallback()
+    {
+        var hospital = new Place
+        {
+            Id = Guid.NewGuid(),
+            Name = "Bệnh viện Chợ Rẫy",
+            Category = "hospital",
+            Lat = 10.7578,
+            Lng = 106.6596,
+        };
+
+        _mockPlaceRepo.Setup(r => r.GetByIdAsync(hospital.Id.ToString(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(hospital);
+
+        Submission? savedSubmission = null;
+        _mockSubmissionRepo.Setup(r => r.GetByClientSubmissionIdAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Submission?)null);
+        _mockSubmissionRepo.Setup(r => r.AddAsync(It.IsAny<Submission>(), It.IsAny<CancellationToken>()))
+            .Callback<Submission, CancellationToken>((s, _) => savedSubmission = s)
+            .Returns(Task.CompletedTask);
+
+        var handler = new SubmitSurveyCommandHandler(_mockPlaceRepo.Object, _mockSubmissionRepo.Object);
+        // User approx 160m away (lat offset 0.0014 deg)
+        var command = new SubmitSurveyCommand
+        {
+            AuthenticatedUserId = "user-hospital-test",
+            ClientSubmissionId = "client-hospital-1",
+            LocationId = hospital.Id.ToString(),
+            MediaUrls = new List<string> { "https://example.com/hospital.jpg" },
+            GpsLat = 10.7592,
+            GpsLng = 106.6596,
+            AccuracyMeters = 10.0,
+        };
+
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        result.Should().NotBeNull();
+        savedSubmission.Should().NotBeNull();
+        savedSubmission!.GeofencePolicy.Should().Be("category_fallback");
+        savedSubmission.AllowedRadiusMeters.Should().Be(250.0);
+    }
+
+    [Fact]
+    public async Task Handle_WhenGpsAccuracyExceeds50m_DoesNotApplyAccuracyMargin()
+    {
+        var cafe = new Place
+        {
+            Id = Guid.NewGuid(),
+            Name = "Quán Cafe Nhỏ",
+            Category = "cafe",
+            Lat = 10.7720,
+            Lng = 106.6980,
+        };
+
+        _mockPlaceRepo.Setup(r => r.GetByIdAsync(cafe.Id.ToString(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(cafe);
+
+        var handler = new SubmitSurveyCommandHandler(_mockPlaceRepo.Object, _mockSubmissionRepo.Object);
+        // Distance approx 65m away, accuracy 80m (poor GPS fix, should NOT get accuracy margin)
+        var command = new SubmitSurveyCommand
+        {
+            AuthenticatedUserId = "user-poor-accuracy",
+            ClientSubmissionId = "client-poor-acc-1",
+            LocationId = cafe.Id.ToString(),
+            MediaUrls = new List<string> { "https://example.com/cafe.jpg" },
+            GpsLat = 10.7726,
+            GpsLng = 106.6980,
+            AccuracyMeters = 80.0, // > 50m -> 0 margin applied
+        };
+
+        var act = () => handler.Handle(command, CancellationToken.None);
+        await act.Should().ThrowAsync<ValidationException>()
+            .WithMessage("*vượt quá ngưỡng cho phép 50m*");
+    }
+
+    [Fact]
+    public async Task SubmissionsController_WhenCalledWithValidJwtClaimAndGeofence_ReturnsOkResult()
+    {
+        var place = new Place
+        {
+            Id = Guid.NewGuid(),
+            Name = "Bệnh viện Chợ Rẫy",
+            Category = "hospital",
+            Lat = 10.7578,
+            Lng = 106.6596,
+        };
+
+        var mockPlaceRepo = new Mock<IPlaceRepository>();
+        mockPlaceRepo.Setup(r => r.GetByIdAsync(place.Id.ToString(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(place);
+
+        var mockSubRepo = new Mock<ISubmissionRepository>();
+        mockSubRepo.Setup(r => r.GetByClientSubmissionIdAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Submission?)null);
+
+        var handler = new SubmitSurveyCommandHandler(mockPlaceRepo.Object, mockSubRepo.Object);
+
+        var mockMediator = new Mock<IMediator>();
+        mockMediator.Setup(m => m.Send(It.IsAny<SubmitSurveyCommand>(), It.IsAny<CancellationToken>()))
+            .Returns<SubmitSurveyCommand, CancellationToken>((cmd, ct) => handler.Handle(cmd, ct));
+
+        var controller = new AccessMapVN.WebApi.Controllers.SubmissionsController(mockMediator.Object);
+
+        var claims = new[] { new System.Security.Claims.Claim("sub", "authenticated-test-user-uuid") };
+        var identity = new System.Security.Claims.ClaimsIdentity(claims, "Bearer");
+        controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new System.Security.Claims.ClaimsPrincipal(identity)
+            }
+        };
+
+        var command = new SubmitSurveyCommand
+        {
+            ClientSubmissionId = "ctrl-geofence-test-1",
+            LocationId = place.Id.ToString(),
+            MediaUrls = new List<string> { "https://example.com/hospital.jpg" },
+            GpsLat = 10.7592, // ~160m away, within 250m hospital fallback
+            GpsLng = 106.6596,
+            AccuracyMeters = 10.0,
+        };
+
+        var response = await controller.Submit(command, CancellationToken.None);
+
+        response.Should().BeOfType<OkObjectResult>();
+        var okResult = (OkObjectResult)response;
+        okResult.Value.Should().BeOfType<SubmitSurveyResult>();
+        var submitResult = (SubmitSurveyResult)okResult.Value!;
+        submitResult.SubmissionId.Should().StartWith("AMV-");
     }
 }

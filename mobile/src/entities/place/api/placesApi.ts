@@ -1,6 +1,11 @@
 import { apiClient } from '@/shared/api/client';
 import type { BoundingBox, GeocodeResult, PlaceDto, PoiCategory } from '../model/types';
 
+function nullableBoolean(...values: unknown[]): boolean | null {
+  const value = values.find((candidate) => candidate !== undefined && candidate !== null);
+  return value == null ? null : Boolean(value);
+}
+
 export async function fetchPlacesInBBox(
   bbox: BoundingBox,
   zoomLevel: number = 14,
@@ -47,6 +52,13 @@ export async function fetchPlacesInBBox(
       building_id: p.buildingId ?? p.building_id ?? null,
       has_accessible_elevator: Boolean(p.hasAccessibleElevator ?? p.has_accessible_elevator),
       last_verified_at: p.lastVerifiedAt ?? p.last_verified_at ?? null,
+      legacy_feature_values: {
+        ramp: nullableBoolean(p.hasRamp, p.has_ramp),
+        entranceDoor: nullableBoolean(p.doorWidthOk, p.door_width_ok),
+        elevator: nullableBoolean(p.hasAccessibleElevator, p.has_accessible_elevator, p.has_elevator),
+        accessibleRestroom: nullableBoolean(p.hasAccessibleRestroom, p.has_accessible_restroom),
+        tactilePaving: nullableBoolean(p.hasTactilePaving, p.has_tactile_paving),
+      },
     }));
   } catch (error) {
     // Graceful fallback to empty array on transient failure
@@ -86,6 +98,13 @@ export async function fetchPlaceById(id: string): Promise<PlaceDto | null> {
       building_id: p.buildingId ?? p.building_id ?? null,
       has_accessible_elevator: Boolean(p.hasAccessibleElevator ?? p.has_accessible_elevator),
       last_verified_at: p.lastVerifiedAt ?? p.last_verified_at ?? null,
+      legacy_feature_values: {
+        ramp: nullableBoolean(p.hasRamp, p.has_ramp),
+        entranceDoor: nullableBoolean(p.doorWidthOk, p.door_width_ok),
+        elevator: nullableBoolean(p.hasAccessibleElevator, p.has_accessible_elevator, p.has_elevator),
+        accessibleRestroom: nullableBoolean(p.hasAccessibleRestroom, p.has_accessible_restroom),
+        tactilePaving: nullableBoolean(p.hasTactilePaving, p.has_tactile_paving),
+      },
     };
   } catch {
     return null;

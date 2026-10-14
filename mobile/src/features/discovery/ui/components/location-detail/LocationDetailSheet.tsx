@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/immutability -- Reanimated SharedValues are intentionally mutated in gesture worklets. */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
@@ -8,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -18,7 +20,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Colors } from '@/shared/theme';
 import { loadContributionRecords } from '@/entities/contribution';
-import { supabase } from '@/shared/lib/supabase';
+import { useAuth } from '@/features/auth';
+import { CommunityTimelineSection, FeatureCommunitySection } from '@/features/community';
+import { ReportFormModal } from '@/features/reports';
 import type { PlaceDto } from '../../../model';
 import { AccessibilitySummary } from './AccessibilitySummary';
 import { AccuracyConfirmationSection } from './AccuracyConfirmationSection';
@@ -99,6 +103,8 @@ export function LocationDetailSheet({
   onContribute,
   onReportIssue,
 }: LocationDetailSheetProps) {
+  const router = useRouter();
+  const { user } = useAuth();
   const { height: windowHeight } = useWindowDimensions();
   const sheetHeight = Math.min(Math.max(windowHeight * 0.7, 440), 560);
   const collapsedOffset = Math.round(sheetHeight * 0.38);
@@ -107,6 +113,7 @@ export function LocationDetailSheet({
   const translateY = useSharedValue(sheetHeight);
   const dragStartY = useSharedValue(collapsedOffset);
   const [snap, setSnap] = useState<SheetSnap>('collapsed');
+  const [showReportForm, setShowReportForm] = useState(false);
 
   const isUnrated =
     place.accessibility_score == null ||
@@ -125,55 +132,26 @@ export function LocationDetailSheet({
   const localizedCategory = useMemo(() => formatCategory(place.category), [place.category]);
 
   const features = useMemo<AccessibilityDetailFeature[]>(() => {
-    const list: AccessibilityDetailFeature[] = [];
-    const isOutdoorParking = place.category?.toLowerCase() === 'parking';
+    const values = place.legacy_feature_values;
+    if (!values) return [];
 
-    if (place.has_ramp) {
-      list.push({
-        id: 'ramp',
-        icon: 'slope-uphill',
-        label: 'Ram dốc lối vào',
-        status: 'Đạt chuẩn',
-        description: 'Độ dốc an toàn, có tay vịn',
-      });
-    }
-    if (place.door_width_ok) {
-      list.push({
-        id: 'door',
-        icon: 'door',
-        label: 'Cửa rộng (≥90cm)',
-        status: 'Đạt chuẩn',
-        description: 'Lối vào thông thoáng, không gờ bậc',
-      });
-    }
-    if (!isOutdoorParking && place.has_elevator && (place.floor_level ?? 0) > 0) {
-      list.push({
-        id: 'elevator',
-        icon: 'elevator-passenger',
-        label: 'Thang máy tiếp cận',
-        status: 'Có sẵn',
-        description: 'Phím bấm nổi và cửa rộng',
-      });
-    }
-    if (place.has_accessible_restroom) {
-      list.push({
-        id: 'toilet',
-        icon: 'toilet',
-        label: 'Nhà vệ sinh tiếp cận',
-        status: 'Đạt chuẩn',
-        description: 'Có thanh vịn, cửa mở ra ngoài',
-      });
-    }
-    if (place.has_tactile_paving) {
-      list.push({
-        id: 'tactile',
-        icon: 'dots-grid',
-        label: 'Gạch dẫn hướng xúc giác',
-        status: 'Đạt chuẩn',
-        description: 'Lối đi cảnh báo cho người khiếm thị',
-      });
-    }
-    return list;
+    const definitions: Array<
+      Omit<AccessibilityDetailFeature, 'publishedStatus' | 'status'> & { value: boolean | null }
+    > = [
+      { id: 'ramp', featureType: 'Ramp', icon: 'slope-uphill', label: 'Ram dốc lối vào', description: 'Tiếp cận lối vào bằng ram dốc', value: values.ramp },
+      { id: 'door', featureType: 'EntranceDoor', icon: 'door', label: 'Cửa ra vào tiếp cận', description: 'Độ rộng và ngưỡng cửa phù hợp', value: values.entranceDoor },
+      { id: 'elevator', featureType: 'Elevator', icon: 'elevator-passenger', label: 'Thang máy tiếp cận', description: 'Thang máy dành cho lộ trình tiếp cận', value: values.elevator },
+      { id: 'toilet', featureType: 'AccessibleRestroom', icon: 'toilet', label: 'Nhà vệ sinh tiếp cận', description: 'Không gian và tay vịn hỗ trợ', value: values.accessibleRestroom },
+      { id: 'tactile', featureType: 'TactilePaving', icon: 'dots-grid', label: 'Gạch dẫn hướng xúc giác', description: 'Dẫn hướng cho người khiếm thị', value: values.tactilePaving },
+    ];
+
+    return definitions
+      .filter((definition) => definition.value !== null)
+      .map(({ value, ...definition }) => ({
+        ...definition,
+        publishedStatus: value ? 'Available' : 'NotAvailable',
+        status: value ? 'Có sẵn' : 'Không có',
+      }));
   }, [place]);
 
   const [evidenceList, setEvidenceList] = useState<EvidenceItem[]>([]);
@@ -209,35 +187,6 @@ export function LocationDetailSheet({
               });
             }
           });
-      } catch {}
-
-      try {
-        const { data } = await supabase
-          .from('submissions')
-          .select('id, media_urls, feature_tags, created_at')
-          .eq('place_id', place.id)
-          .order('created_at', { ascending: false })
-          .limit(5);
-
-        if (data) {
-          data.forEach((sub: any) => {
-            const urls = sub.media_urls as string[] | undefined;
-            if (Array.isArray(urls)) {
-              urls.forEach((url, idx) => {
-                if (url && !seenUrls.has(url)) {
-                  seenUrls.add(url);
-                  items.push({
-                    id: `${sub.id}-${idx}`,
-                    title: getEvidenceTitle(sub.feature_tags),
-                    subtitle: sub.created_at ? new Date(sub.created_at).toLocaleDateString('vi-VN') : 'Gần đây',
-                    badge: 'Đã duyệt',
-                    imageUrl: url,
-                  });
-                }
-              });
-            }
-          });
-        }
       } catch {}
 
       if (isMounted) {
@@ -373,14 +322,19 @@ export function LocationDetailSheet({
           trustPercent={trustPercent}
           features={features}
           note={place.accessibility_note}
-          hasRamp={place.has_ramp}
-          doorWidthOk={place.door_width_ok}
-          hasTactile={place.has_tactile_paving}
+          hasRamp={Boolean(place.has_ramp)}
+          doorWidthOk={Boolean(place.door_width_ok)}
+          hasTactile={Boolean(place.has_tactile_paving)}
         />
 
         <View style={styles.sectionInset}>
+          {!isUnrated && features.length > 0 ? (
+            <FeatureCommunitySection locationId={place.id} features={features} />
+          ) : null}
           {/* Photos & Evidence with +50 EXP camera tile */}
           <EvidenceGallerySection evidence={evidenceList} onAddEvidence={() => onContribute?.(place)} />
+
+          <CommunityTimelineSection locationId={place.id} onSignIn={() => router.push('/login')} />
 
           {/* Action buttons */}
           {isUnrated ? (
@@ -391,11 +345,32 @@ export function LocationDetailSheet({
             />
           ) : (
             <AccuracyConfirmationSection
-              onReportIssue={() => onReportIssue?.(place)}
+              onReportIssue={() => {
+                if (!user) {
+                  Alert.alert('Cần đăng nhập', 'Bạn cần đăng nhập để gửi báo cáo.', [
+                    { text: 'Để sau', style: 'cancel' },
+                    { text: 'Đăng nhập', onPress: () => router.push('/login') },
+                  ]);
+                  return;
+                }
+                onReportIssue?.(place);
+                setShowReportForm(true);
+              }}
+              onViewReports={() => router.push((user ? '/reports' : '/login') as never)}
             />
           )}
         </View>
       </ScrollView>
+      <ReportFormModal
+        features={features}
+        locationId={place.id}
+        locationName={place.name}
+        onClose={() => setShowReportForm(false)}
+        onCreated={() => {
+          Alert.alert('Đã gửi báo cáo', 'Báo cáo đã được lưu để nhóm kiểm duyệt xem xét.');
+        }}
+        visible={showReportForm}
+      />
     </Animated.View>
   );
 }

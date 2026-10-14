@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { branding } from '@/shared/config/branding';
+import { useAuth } from '@/features/auth';
 
 const INTRO_DURATION = 3_000;
 const CALM_EASING = Easing.bezier(0.22, 1, 0.36, 1);
@@ -19,6 +20,7 @@ const CALM_EASING = Easing.bezier(0.22, 1, 0.36, 1);
 // Prototype welcome only: it establishes the product identity before the future auth flow begins.
 export default function IntroScreen() {
   const router = useRouter();
+  const { isLoading, session } = useAuth();
   const hasNavigated = useRef(false);
   const backgroundOpacity = useRef(new Animated.Value(0)).current;
   const routeOpacity = useRef(new Animated.Value(0)).current;
@@ -31,6 +33,8 @@ export default function IntroScreen() {
   const copyTranslateY = useRef(new Animated.Value(12)).current;
 
   useEffect(() => {
+    if (isLoading) return;
+
     let isMounted = true;
     let animation: Animated.CompositeAnimation | undefined;
     let reducedMotionTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -38,8 +42,7 @@ export default function IntroScreen() {
     const finish = () => {
       if (isMounted && !hasNavigated.current) {
         hasNavigated.current = true;
-        // TODO(auth): Replace this prototype hand-off with the real session/auth decision.
-        router.replace('/login');
+        router.replace(session ? '/map' : '/login');
       }
     };
 
@@ -173,6 +176,8 @@ export default function IntroScreen() {
     routeOpacity,
     routeTranslateX,
     router,
+    session,
+    isLoading,
   ]);
 
   const pulseOpacity = pulseProgress.interpolate({

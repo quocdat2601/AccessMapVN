@@ -24,6 +24,13 @@ export interface PlaceDto {
   has_accessible_elevator?: boolean | null;
   last_verified_at?: string | null;
   isAddressLoading?: boolean;
+  legacy_feature_values?: {
+    ramp: boolean | null;
+    entranceDoor: boolean | null;
+    elevator: boolean | null;
+    accessibleRestroom: boolean | null;
+    tactilePaving: boolean | null;
+  };
 }
 
 export interface BoundingBox {

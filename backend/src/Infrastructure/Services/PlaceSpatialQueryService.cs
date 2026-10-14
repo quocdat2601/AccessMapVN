@@ -94,7 +94,7 @@ public class PlaceSpatialQueryService : IPlaceSpatialQueryService
         {
             results.Add(new PlaceDto
             {
-                Id = reader.IsDBNull(0) ? string.Empty : reader.GetString(0),
+                Id = reader.IsDBNull(0) ? string.Empty : reader.GetGuid(0).ToString(),
                 Name = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
                 Category = reader.IsDBNull(2) ? "other" : reader.GetString(2),
                 Address = reader.IsDBNull(3) ? null : reader.GetString(3),

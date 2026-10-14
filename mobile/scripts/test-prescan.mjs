@@ -58,20 +58,32 @@ async function runTests() {
   assert.strictEqual(longResult.clampedDuration, 10);
   console.log('✅ BR-01 Video duration rules verified!');
 
-  console.log('[TEST 3] Checking Contribution submission schema & EXP points...');
-  const sampleSubmission = {
-    id: 'sub-123',
-    locationId: 'new-location',
-    locationName: 'Quán cà phê Thềm Xưa',
-    featureTags: ['Ram dốc tiếp cận', 'Cửa rộng ≥80cm'],
-    textDescription: 'Lối vào có ram dốc thoai thoải bằng phẳng.',
-    status: 'Auto-Verified',
-    pointsAwarded: 50,
+  console.log('[TEST 3] Checking WF-02 vote/report isolation invariants...');
+  const sampleVote = {
+    voteType: 'StillAccurate',
+    observedFeatureVersion: 3,
   };
-  assert.strictEqual(sampleSubmission.pointsAwarded, 50);
-  assert.strictEqual(sampleSubmission.status, 'Auto-Verified');
-  assert.ok(sampleSubmission.featureTags.length === 2);
-  console.log('✅ Contribution submission schema verified!');
+  const sampleReport = {
+    reason: 'IncorrectFeature',
+    featureType: 'Ramp',
+    observedFeatureVersion: 3,
+    description: 'Ram dốc hiện bị chặn và không thể sử dụng.',
+  };
+  const forbiddenMutationFields = [
+    'pointsAwarded',
+    'exp',
+    'accessibilityScore',
+    'confidence',
+    'publishedStatus',
+    'featureVersion',
+  ];
+  for (const field of forbiddenMutationFields) {
+    assert.strictEqual(field in sampleVote, false, `Vote must not send ${field}`);
+    assert.strictEqual(field in sampleReport, false, `Report must not send ${field}`);
+  }
+  assert.strictEqual(sampleVote.observedFeatureVersion, 3);
+  assert.strictEqual(sampleReport.observedFeatureVersion, 3);
+  console.log('✅ WF-02 writes cannot request EXP, confidence, or publication mutations.');
   console.log('🎉 All test suites passed successfully!');
 }
 

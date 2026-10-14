@@ -1,42 +1,65 @@
 # AccessMapVN
 
-AccessMapVN is a multi-service graduation project for collecting and presenting accessibility
-information about places in Vietnam. This repository is organized as a monorepo, but each service
-owns its runtime, dependencies, and deployment lifecycle.
+AccessMapVN is a multi-service platform for collecting, reviewing, and publishing accessibility
+information about places in Vietnam.
 
-Currently, only the Expo mobile application is implemented. The other directories reserve clear
-ownership boundaries for future work.
+## Services
 
-## Repository structure
+| Directory | Responsibility |
+| --- | --- |
+| `mobile/` | Expo SDK 57 application for public map reads, WF-01 contributions, and WF-02 votes, reports, timeline, and comments |
+| `backend/` | ASP.NET Core 8 API, PostgreSQL persistence, publication rules, moderation, and background jobs |
+| `web-admin/` | Next.js administration portal for authenticated review and moderation |
+| `ai-service/` | FastAPI media pre-scan/verification used only by the WF-01 evidence pipeline |
+| `infra/` | Local PostgreSQL/PostGIS and private S3-compatible object-storage development stack |
 
-| Directory | Responsibility | Status |
-| --- | --- | --- |
-| `mobile/` | Expo React Native application used by end users | Active |
-| `backend/` | Future ASP.NET Core Web API and core server-side business logic | Not initialized |
-| `web-admin/` | Future Next.js administration portal | Not initialized |
-| `ai-service/` | Future Python/FastAPI AI capabilities | Not initialized |
-| `infra/` | Future deployment, infrastructure, and DevOps configuration | Not initialized |
+The mobile and admin clients call the API; they do not read or write application tables directly.
+Supabase owns user authentication, while the backend derives the actor from the verified JWT
+subject and enforces application roles and policies server-side.
 
-## Service boundaries
+## Local setup
 
-- Each service keeps its own source code, configuration, dependencies, and documentation.
-- Services communicate through agreed APIs; they must not import source code from another service.
-- The mobile and web clients must not access service databases directly.
-- API contracts should be agreed by the affected teams before dependent work is merged.
-- Secrets and local environment files must never be committed.
+Requirements: Node `22.13.x`, .NET 8 SDK, Python 3.11+, and Docker.
 
-No root workspace or shared runtime package is configured. Add service tooling only when that
-service is initialized and the team has agreed on it.
-
-## Run the mobile application
-
-From the repository root:
-
-```bash
-cd mobile
+```powershell
+Copy-Item infra/.env.example infra/.env
+Copy-Item mobile/.env.example mobile/.env
+Copy-Item web-admin/.env.example web-admin/.env.local
 npm install
-npm start
+npm --prefix mobile install
+npm --prefix web-admin install
+npm run dev:infra
 ```
 
-See the [mobile onboarding guide](mobile/README.md) for Expo Go setup, architecture rules, naming
-conventions, and the frontend/backend boundary.
+Run the application surfaces from separate terminals:
+
+```powershell
+npm run dev:backend
+npm --prefix mobile start
+npm --prefix web-admin run dev
+```
+
+Supply Supabase, storage, and notification credentials through local environment files or the
+deployment secret store. Never commit service-role keys, database passwords, or signing secrets.
+
+## WF-02 safety boundaries
+
+- A quick community vote or detailed Report never changes a published feature, WF-01 confidence,
+  or EXP.
+- Only the WF-01 publication service can append a published `LocationFeature` version.
+- Reports remain separate from vote consensus, and private notes/evidence are never exposed by
+  public endpoints.
+- Crowd auto-resolution, vote rewards/penalties, tier multipliers, and WF-01 confidence feedback
+  are disabled for the initial policy.
+- Schema changes are EF Core migrations; production applies them as a deployment step.
+
+## Verification
+
+```powershell
+npm run check:backend
+npm run check:mobile
+npm run check:web
+```
+
+The CI workflow also applies migrations to a clean PostgreSQL/PostGIS database and runs Expo
+Doctor against the pinned SDK 57 dependency set.

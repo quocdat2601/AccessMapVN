@@ -26,9 +26,37 @@ export function AccessibilityFeatureList({ features }: AccessibilityFeatureListP
               </Text>
             )}
           </View>
-          <View style={styles.verifiedBadge}>
-            <MaterialCommunityIcons name="check-circle" size={13} color="#059669" />
-            <Text style={styles.verifiedText}>{feature.status || 'Đạt chuẩn'}</Text>
+          <View
+            style={[
+              styles.verifiedBadge,
+              feature.publishedStatus === 'NotAvailable' && styles.unavailableBadge,
+              feature.publishedStatus === 'Limited' && styles.limitedBadge,
+              feature.publishedStatus === 'Unknown' && styles.unknownBadge,
+            ]}
+          >
+            <MaterialCommunityIcons
+              name={feature.publishedStatus === 'Available' ? 'check-circle' : 'information-outline'}
+              size={13}
+              color={
+                feature.publishedStatus === 'Available'
+                  ? '#059669'
+                  : feature.publishedStatus === 'Limited'
+                    ? '#B45309'
+                    : feature.publishedStatus === 'NotAvailable'
+                      ? '#B91C1C'
+                      : '#64748B'
+              }
+            />
+            <Text
+              style={[
+                styles.verifiedText,
+                feature.publishedStatus === 'NotAvailable' && styles.unavailableText,
+                feature.publishedStatus === 'Limited' && styles.limitedText,
+                feature.publishedStatus === 'Unknown' && styles.unknownText,
+              ]}
+            >
+              {feature.status || 'Chưa rõ'}
+            </Text>
           </View>
         </View>
       ))}
@@ -86,5 +114,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: '#059669',
+  },
+  unavailableBadge: {
+    backgroundColor: '#FEF2F2',
+  },
+  unavailableText: {
+    color: '#B91C1C',
+  },
+  limitedBadge: {
+    backgroundColor: '#FFFBEB',
+  },
+  limitedText: {
+    color: '#B45309',
+  },
+  unknownBadge: {
+    backgroundColor: '#F1F5F9',
+  },
+  unknownText: {
+    color: '#64748B',
   },
 });

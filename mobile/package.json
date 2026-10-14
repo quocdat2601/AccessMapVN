@@ -2,29 +2,33 @@
   "name": "accessmapvn",
   "main": "expo-router/entry",
   "version": "1.0.0",
+  "engines": {
+    "node": ">=22.13.0 <23"
+  },
   "dependencies": {
-    "@expo/ui": "~57.0.19",
+    "@expo/ui": "~57.0.23",
     "@expo/vector-icons": "^15.0.2",
     "@maplibre/maplibre-react-native": "^11.4.0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@supabase/supabase-js": "^2.117.1",
-    "expo": "~57.0.24",
+    "expo": "~57.0.28",
     "expo-camera": "~57.0.6",
     "expo-constants": "~57.0.19",
-    "expo-dev-client": "~57.0.19",
+    "expo-crypto": "~57.0.4",
+    "expo-dev-client": "~57.0.20",
     "expo-device": "~57.0.2",
     "expo-font": "~57.0.4",
-    "expo-glass-effect": "~57.0.3",
+    "expo-glass-effect": "~57.0.4",
     "expo-image": "~57.0.5",
     "expo-image-picker": "~57.0.20",
-    "expo-linking": "~57.0.10",
-    "expo-location": "~57.0.20",
-    "expo-router": "~57.0.22",
-    "expo-splash-screen": "~57.0.9",
+    "expo-linking": "~57.0.12",
+    "expo-location": "~57.0.21",
+    "expo-router": "~57.0.26",
+    "expo-splash-screen": "~57.0.10",
     "expo-status-bar": "~57.0.1",
     "expo-symbols": "~57.0.3",
     "expo-system-ui": "~57.0.4",
-    "expo-task-manager": "~57.0.20",
+    "expo-task-manager": "~57.0.21",
     "expo-web-browser": "~57.0.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -40,6 +44,8 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
+    "eslint": "^9.39.5",
+    "eslint-config-expo": "~57.0.2",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -48,7 +54,12 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "test": "node scripts/test-prescan.mjs && node --import ./scripts/register-loader.mjs scripts/run-all-workflow-tests.mjs"
+    "typecheck": "tsc --noEmit",
+    "doctor": "npx expo-doctor",
+    "test": "node scripts/test-prescan.mjs && node --import ./scripts/register-loader.mjs scripts/run-unit-tests.mjs",
+    "test:unit": "npm test",
+    "test:integration:ai": "node --import ./scripts/register-loader.mjs scripts/run-ai-integration-tests.mjs",
+    "test:all": "npm test && npm run test:integration:ai"
   },
   "private": true
 }

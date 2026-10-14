@@ -3,12 +3,26 @@
   "version": "1.0.0",
   "private": true,
   "description": "AccessMap VN Monorepo Orchestration",
+  "engines": {
+    "node": ">=22.13.0 <23"
+  },
   "scripts": {
-    "dev:backend": "dotnet run --project backend/src/WebApi/AccessMapVN.WebApi.csproj",
+    "dev:infra": "docker compose --env-file infra/.env -f infra/docker-compose.dev.yml up -d",
+    "dev:infra:down": "docker compose --env-file infra/.env -f infra/docker-compose.dev.yml down",
+    "db:migrate:local": "node scripts/local-db.mjs migrate",
+    "db:seed:wf02": "node scripts/local-db.mjs seed-wf02",
+    "db:tables": "node scripts/local-db.mjs tables",
+    "device:ports": "node scripts/android-reverse.mjs",
+    "check:backend": "dotnet test backend/AccessMapVN.sln --configuration Release",
+    "check:mobile": "npm --prefix mobile run typecheck && npm --prefix mobile run lint && npm --prefix mobile run test:unit && npm --prefix mobile run doctor",
+    "check:web": "npm --prefix web-admin run typecheck && npm --prefix web-admin run lint && npm --prefix web-admin run build",
+    "check": "npm run check:backend && npm run check:mobile && npm run check:web",
+    "dev:backend": "node scripts/dev-backend.mjs",
     "dev:ai": "cd ai-service && .venv\\Scripts\\python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
     "dev:mobile": "concurrently -k -n \"BACKEND,AI,MOBILE\" -c \"blue.bold,magenta.bold,cyan.bold\" \"npm run dev:backend\" \"npm run dev:ai\" \"npm --prefix mobile start\"",
     "dev:web": "concurrently -k -n \"BACKEND,WEB\" -c \"blue.bold,green.bold\" \"npm run dev:backend\" \"npm --prefix web-admin run dev\"",
-    "mobile": "npm run dev:mobile",
+    "mobile": "node scripts/android-reverse.mjs --optional && npm run dev:mobile",
+    "mobile:device": "node scripts/android-reverse.mjs && npm run dev:mobile",
     "web": "npm run dev:web",
     "android": "npm --prefix mobile run android",
     "test:mobile": "npm --prefix mobile test"

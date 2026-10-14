@@ -66,7 +66,7 @@ public class SubmitSurveyCommandTests
     }
 
     [Fact]
-    public async Task Handle_WhenGpsDistanceWithin50Meters_CreatesSubmissionAndAwardsPoints()
+    public async Task Handle_WhenGpsDistanceWithin50Meters_StoresDossierWithoutPublishingOrAwardingPoints()
     {
         var placeLat = 10.7720;
         var placeLng = 106.6980;
@@ -100,28 +100,27 @@ public class SubmitSurveyCommandTests
         result.Should().NotBeNull();
         result.SubmissionId.Should().StartWith("AMV-");
         result.Status.Should().Be("Submitted");
-        result.PointsAwarded.Should().Be(50);
+        result.PointsAwarded.Should().Be(0);
 
         _mockSubmissionRepo.Verify(r => r.AddAsync(It.Is<Submission>(s =>
             s.PlaceId == "ben-thanh" &&
-            s.PointsAwarded == 50 &&
+            s.PointsAwarded == 0 &&
             s.UserId == "user-123"), It.IsAny<CancellationToken>()), Times.Once);
 
-        _mockSubmissionRepo.Verify(r => r.AddPointTransactionAsync(It.Is<PointTransaction>(t =>
-            t.Points == 50 &&
-            t.UserId == "user-123"), It.IsAny<CancellationToken>()), Times.Once);
+        _mockSubmissionRepo.Verify(r => r.AddPointTransactionAsync(
+            It.IsAny<PointTransaction>(), It.IsAny<CancellationToken>()), Times.Never);
 
         _mockSubmissionRepo.Verify(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
 
         _mockPlaceRepo.Verify(r => r.UpdateAccessibilityFeaturesAsync(
-            targetPlace.Id.ToString(),
-            true,
-            null,
-            null,
-            null,
-            true,
-            0.55m,
-            It.Is<string>(note => note.Contains("Có ram dốc") && note.Contains("Cửa đạt chuẩn")),
-            It.IsAny<CancellationToken>()), Times.Once);
+            It.IsAny<string>(),
+            It.IsAny<bool?>(),
+            It.IsAny<bool?>(),
+            It.IsAny<bool?>(),
+            It.IsAny<bool?>(),
+            It.IsAny<bool?>(),
+            It.IsAny<decimal>(),
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Never);
     }
 }

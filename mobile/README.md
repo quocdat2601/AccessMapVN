@@ -1,8 +1,8 @@
 # AccessMapVN Mobile
 
 This directory contains the Expo React Native application for discovering and contributing
-accessibility information about places in Vietnam. It is currently a minimal foundation with one
-home screen and no backend, map, authentication, camera, or contribution flow yet.
+accessibility information about places in Vietnam. It integrates the ASP.NET API, Supabase Auth,
+the WF-01 contribution flow, and WF-02 feature voting/reporting flows.
 
 This guide explains where code belongs so multiple frontend developers can work consistently.
 
@@ -38,8 +38,16 @@ npm run android
 npm run ios
 npm run web
 npm run lint
-npx tsc --noEmit
+npm run typecheck
+npm run test:unit
+npm run doctor
 ```
+
+`npm run test:unit` is CI-safe and does not need a running service. Run
+`npm run test:integration:ai` only when the local AI service is available on port 8000.
+
+Copy `.env.example` to `.env` and provide the public Supabase URL/anon key. Values prefixed with
+`EXPO_PUBLIC_` are embedded in the client and must never contain service-role credentials.
 
 ## Project structure
 

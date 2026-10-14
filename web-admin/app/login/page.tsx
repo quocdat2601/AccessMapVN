@@ -1,8 +1,14 @@
 import Image from "next/image";
-import { DemoLoginForm } from "@/features/demo-login/ui/demo-login-form";
+import { LoginForm } from "@/features/auth/ui/login-form";
 import { Brand } from "@/shared/ui/brand";
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string; reason?: string }>;
+}) {
+  const { next, reason } = await searchParams;
+
   return (
     <main className="grid min-h-screen bg-white lg:grid-cols-[1.03fr_.97fr]">
       <section className="relative hidden min-h-screen overflow-hidden border-r border-teal-100/60 bg-[#f5fbfb] lg:flex lg:flex-col">
@@ -48,7 +54,7 @@ export default function LoginPage() {
           <p className="mt-2 text-sm leading-6 text-slate-500 sm:text-base">
             Truy cập hệ thống quản trị AccessMapVN
           </p>
-          <DemoLoginForm />
+          <LoginForm nextPath={next} configurationMissing={reason === "configuration"} />
         </div>
       </section>
     </main>

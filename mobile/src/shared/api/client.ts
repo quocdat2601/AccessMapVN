@@ -1,10 +1,57 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { NativeModules, Platform } from 'react-native';
 
+import { supabase } from '@/shared/lib/supabase';
+
+type AuthMode = 'none' | 'optional' | 'required';
+
+export interface RequestOptions extends RequestInit {
+  params?: Record<string, string | number | boolean | null | undefined>;
+  auth?: AuthMode;
+  idempotencyKey?: string;
+}
+
+export interface ApiErrorBody {
+  code?: string;
+  message?: string;
+  correlationId?: string;
+  details?: unknown;
+}
+
+export class ApiError extends Error {
+  readonly code?: string;
+  readonly correlationId?: string;
+  readonly details?: unknown;
+
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly data?: ApiErrorBody | string
+  ) {
+    super(message);
+    this.name = 'ApiError';
+    if (data && typeof data === 'object') {
+      this.code = data.code;
+      this.correlationId = data.correlationId;
+      this.details = data.details;
+    }
+  }
+}
+
+export class AuthenticationRequiredError extends ApiError {
+  constructor() {
+    super('Bạn cần đăng nhập để thực hiện thao tác này.', 401, {
+      code: 'AUTHENTICATION_REQUIRED',
+      message: 'Authentication is required.',
+    });
+    this.name = 'AuthenticationRequiredError';
+  }
+}
+
 /**
  * Automatically detects the host IP of the machine running Expo/Metro.
- * When developing on physical devices, this eliminates the need to change .env
- * whenever switching Wi-Fi networks.
+ * This allows a development build on a physical device to reach local services.
  */
 export function getDevHost(): string | null {
   try {
@@ -16,185 +63,264 @@ export function getDevHost(): string | null {
 
     if (rawHost && typeof rawHost === 'string') {
       const ip = rawHost.split(':')[0];
-      if (ip && ip !== 'localhost' && ip !== '127.0.0.1') {
-        return ip;
-      }
+      if (ip && ip !== 'localhost' && ip !== '127.0.0.1') return ip;
     }
 
     const expUrl = (Constants as any)?.experienceUrl ?? (Constants as any)?.linkingUri;
     if (expUrl && typeof expUrl === 'string') {
       const match = expUrl.match(/^[a-zA-Z]+:\/\/([^:/]+)/);
-      if (match && match[1] && match[1] !== 'localhost' && match[1] !== '127.0.0.1') {
+      if (match?.[1] && match[1] !== 'localhost' && match[1] !== '127.0.0.1') {
         return match[1];
       }
     }
   } catch {
-    // Ignore in non-Expo / Node test environments
+    // Expo constants are unavailable in Node-based unit tests.
   }
 
   try {
     const scriptURL = (NativeModules as any)?.SourceCode?.scriptURL;
     if (scriptURL && typeof scriptURL === 'string') {
       const match = scriptURL.match(/^https?:\/\/([^:/]+)/);
-      if (match && match[1] && match[1] !== 'localhost' && match[1] !== '127.0.0.1') {
+      if (match?.[1] && match[1] !== 'localhost' && match[1] !== '127.0.0.1') {
         return match[1];
       }
     }
   } catch {
-    // Ignore in non-RN / Node test environments
+    // React Native native modules are unavailable in Node-based unit tests.
   }
 
   return null;
 }
 
 export function resolveServiceUrl(port: number, envOverride?: string): string {
-  // 1. Explicit HTTPS remote / tunnel URLs take priority
-  if (envOverride?.startsWith('https://')) {
-    return envOverride;
-  }
+  if (envOverride?.startsWith('https://')) return envOverride.replace(/\/$/, '');
 
-  // 2. Auto-detect host IP from Metro dev server (works across any Wi-Fi on physical devices)
   const devHost = getDevHost();
-  if (devHost) {
-    const url = `http://${devHost}:${port}`;
-    console.log(`[resolveServiceUrl] Resolved port ${port} -> ${url} (devHost: ${devHost})`);
-    return url;
-  }
+  if (devHost) return `http://${devHost}:${port}`;
+  if (envOverride) return envOverride.replace(/\/$/, '');
 
-  // 3. Fallback to envOverride if provided
-  if (envOverride) {
-    return envOverride;
-  }
-
-  // 4. Default emulator / localhost fallback
-  const isAndroid = Platform?.OS === 'android';
-  const fallback = isAndroid ? `http://10.0.2.2:${port}` : `http://localhost:${port}`;
-  console.log(`[resolveServiceUrl] Fallback port ${port} -> ${fallback} (devHost is null)`);
-  return fallback;
+  return Platform?.OS === 'android'
+    ? `http://10.0.2.2:${port}`
+    : `http://localhost:${port}`;
 }
 
-interface RequestOptions extends RequestInit {
-  params?: Record<string, string | number | boolean | null | undefined>;
+function responseMessage(status: number, data: ApiErrorBody | string): string {
+  if (typeof data === 'object' && data.message) return data.message;
+  if (typeof data === 'string' && data.trim()) return data;
+  return `Request failed with status ${status}`;
 }
 
-export class ApiError extends Error {
-  constructor(
-    message: string,
-    public status: number,
-    public data?: any
-  ) {
-    super(message);
-    this.name = 'ApiError';
-  }
-}
+async function accessToken(auth: AuthMode): Promise<string | null> {
+  if (auth === 'none') return null;
 
-/**
- * Uploads multipart FormData containing native file URIs using React Native's XMLHttpRequest.
- * Bypasses Expo SDK 57's Winter fetch which throws 'Unsupported FormDataPart implementation'
- * when encountering { uri, name, type } entries.
- */
-export function postMultipart<T = any>(
-  url: string,
-  formData: FormData,
-  timeoutMs: number = 15000
-): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', url);
-    xhr.timeout = timeoutMs;
-    xhr.setRequestHeader('Accept', 'application/json');
+  const { data, error } = await supabase.auth.getSession();
+  if (error && auth === 'required') throw new AuthenticationRequiredError();
 
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          const parsed = JSON.parse(xhr.responseText);
-          resolve(parsed);
-        } catch {
-          resolve(xhr.responseText as unknown as T);
-        }
-      } else {
-        reject(new Error(`Server responded with status ${xhr.status}: ${xhr.responseText}`));
-      }
-    };
-
-    xhr.onerror = () => {
-      reject(new Error('Network request failed via XMLHttpRequest'));
-    };
-
-    xhr.ontimeout = () => {
-      reject(new Error(`Request timed out after ${timeoutMs}ms`));
-    };
-
-    xhr.send(formData as any);
-  });
+  const token = data.session?.access_token ?? null;
+  if (!token && auth === 'required') throw new AuthenticationRequiredError();
+  return token;
 }
 
 async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-  const { params, headers, ...rest } = options;
+  const {
+    params,
+    headers,
+    auth = 'optional',
+    idempotencyKey,
+    ...rest
+  } = options;
   const baseUrl = resolveServiceUrl(5256, process.env.EXPO_PUBLIC_API_URL);
   let url = `${baseUrl}${endpoint}`;
 
   if (params) {
     const query = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        query.append(key, String(value));
-      }
+      if (value !== undefined && value !== null) query.append(key, String(value));
     });
     const queryString = query.toString();
-    if (queryString) {
-      url += (url.includes('?') ? '&' : '?') + queryString;
-    }
+    if (queryString) url += `${url.includes('?') ? '&' : '?'}${queryString}`;
   }
 
-  const response = await fetch(url, {
-    ...rest,
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-      ...headers,
-    },
-  });
+  const token = await accessToken(auth);
+  const requestHeaders = new Headers(headers);
+  requestHeaders.set('Accept', 'application/json');
+  if (rest.body != null && !requestHeaders.has('Content-Type')) {
+    requestHeaders.set('Content-Type', 'application/json');
+  }
+  if (token) requestHeaders.set('Authorization', `Bearer ${token}`);
+  if (idempotencyKey) requestHeaders.set('Idempotency-Key', idempotencyKey);
 
-  if (!response.ok) {
-    let errorData: any;
-    try {
-      errorData = await response.json();
-    } catch {
-      errorData = await response.text();
-    }
+  let response: Response;
+  try {
+    response = await fetch(url, { ...rest, headers: requestHeaders });
+  } catch (error) {
     throw new ApiError(
-      `Request failed with status ${response.status}`,
-      response.status,
-      errorData
+      error instanceof Error ? error.message : 'Không thể kết nối máy chủ.',
+      0,
+      { code: 'NETWORK_ERROR', message: 'Không thể kết nối máy chủ.' }
     );
   }
 
-  if (response.status === 204) {
-    return {} as T;
+  if (!response.ok) {
+    let errorData: ApiErrorBody | string;
+    try {
+      errorData = (await response.json()) as ApiErrorBody;
+    } catch {
+      errorData = await response.text();
+    }
+    throw new ApiError(responseMessage(response.status, errorData), response.status, errorData);
   }
 
+  if (response.status === 204) return {} as T;
   return response.json() as Promise<T>;
+}
+
+const IDEMPOTENCY_PREFIX = 'wf02:idempotency:';
+const idempotencyLookups = new Map<string, Promise<PendingIdempotency>>();
+
+interface PendingIdempotency {
+  key: string;
+  fingerprint: string;
+}
+
+function stableValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (value && typeof value === 'object') {
+    return Object.keys(value as Record<string, unknown>)
+      .sort()
+      .reduce<Record<string, unknown>>((result, key) => {
+        result[key] = stableValue((value as Record<string, unknown>)[key]);
+        return result;
+      }, {});
+  }
+  return value;
+}
+
+function fingerprint(value: unknown): string {
+  const input = JSON.stringify(stableValue(value));
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16);
+}
+
+function createIdempotencyKey(): string {
+  if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random()
+    .toString(36)
+    .slice(2)}`;
+}
+
+async function pendingIdempotency(operationId: string, body: unknown): Promise<PendingIdempotency> {
+  const storageKey = `${IDEMPOTENCY_PREFIX}${operationId}`;
+  const bodyFingerprint = fingerprint(body);
+  const saved = await AsyncStorage.getItem(storageKey);
+
+  if (saved) {
+    try {
+      const pending = JSON.parse(saved) as PendingIdempotency;
+      if (pending.fingerprint === bodyFingerprint && pending.key) return pending;
+    } catch {
+      // Replace corrupt local state with a new operation key.
+    }
+  }
+
+  const pending = { key: createIdempotencyKey(), fingerprint: bodyFingerprint };
+  await AsyncStorage.setItem(storageKey, JSON.stringify(pending));
+  return pending;
+}
+
+function isFinalResponse(error: unknown): boolean {
+  return error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 429;
+}
+
+/**
+ * Reuses one Idempotency-Key for the same logical write and payload. The key is
+ * retained after network/5xx/429 failures and cleared only after a final response.
+ */
+async function postIdempotent<T>(
+  endpoint: string,
+  body: unknown,
+  operationId: string,
+  options: RequestOptions = {}
+): Promise<T> {
+  const storageKey = `${IDEMPOTENCY_PREFIX}${operationId}`;
+  let lookup = idempotencyLookups.get(operationId);
+  if (!lookup) {
+    lookup = pendingIdempotency(operationId, body);
+    idempotencyLookups.set(operationId, lookup);
+  }
+  const pending = await lookup;
+
+  try {
+    const result = await request<T>(endpoint, {
+      ...options,
+      method: 'POST',
+      body: JSON.stringify(body),
+      idempotencyKey: pending.key,
+    });
+    await AsyncStorage.removeItem(storageKey);
+    return result;
+  } catch (error) {
+    if (isFinalResponse(error)) await AsyncStorage.removeItem(storageKey);
+    throw error;
+  } finally {
+    idempotencyLookups.delete(operationId);
+  }
+}
+
+/** Multipart helper for the WF-01 AI service; it intentionally does not attach app auth. */
+export function postMultipart<T = unknown>(
+  url: string,
+  formData: FormData,
+  timeoutMs = 15_000
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    xhr.timeout = timeoutMs;
+    xhr.setRequestHeader('Accept', 'application/json');
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(JSON.parse(xhr.responseText));
+        } catch {
+          resolve(xhr.responseText as T);
+        }
+      } else {
+        reject(new Error(`Server responded with status ${xhr.status}: ${xhr.responseText}`));
+      }
+    };
+    xhr.onerror = () => reject(new Error('Network request failed via XMLHttpRequest'));
+    xhr.ontimeout = () => reject(new Error(`Request timed out after ${timeoutMs}ms`));
+    xhr.send(formData as any);
+  });
 }
 
 export const apiClient = {
   get: <T>(endpoint: string, options?: RequestOptions) =>
     request<T>(endpoint, { ...options, method: 'GET' }),
-
-  post: <T>(endpoint: string, body?: any, options?: RequestOptions) =>
+  post: <T>(endpoint: string, body?: unknown, options?: RequestOptions) =>
     request<T>(endpoint, {
       ...options,
       method: 'POST',
-      body: body ? JSON.stringify(body) : undefined,
+      body: body === undefined ? undefined : JSON.stringify(body),
     }),
-
-  put: <T>(endpoint: string, body?: any, options?: RequestOptions) =>
+  postIdempotent,
+  put: <T>(endpoint: string, body?: unknown, options?: RequestOptions) =>
     request<T>(endpoint, {
       ...options,
       method: 'PUT',
-      body: body ? JSON.stringify(body) : undefined,
+      body: body === undefined ? undefined : JSON.stringify(body),
     }),
-
+  patch: <T>(endpoint: string, body?: unknown, options?: RequestOptions) =>
+    request<T>(endpoint, {
+      ...options,
+      method: 'PATCH',
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }),
   delete: <T>(endpoint: string, options?: RequestOptions) =>
     request<T>(endpoint, { ...options, method: 'DELETE' }),
 };

@@ -938,4 +938,271 @@ public class SubmitSurveyCommandTests
         var submitResult = (SubmitSurveyResult)okResult.Value!;
         submitResult.SubmissionId.Should().StartWith("AMV-");
     }
+
+    [Fact]
+    public async Task Validator_WithDoorWidthBelow500mm_FailsValidation()
+    {
+        var policyProvider = new AccessMapVN.Infrastructure.Services.MeasurementPolicyProvider();
+        var validator = new SubmitSurveyCommandValidator(policyProvider);
+
+        var command = new SubmitSurveyCommand
+        {
+            ClientSubmissionId = "door-test-1",
+            LocationId = Guid.NewGuid().ToString(),
+            MediaUrls = new List<string> { "https://example.com/door.jpg" },
+            GpsLat = 10.772,
+            GpsLng = 106.698,
+            Measurements = new UserMeasurementsDto
+            {
+                DoorClearWidth = new MeasurementItemDto
+                {
+                    Status = "provided",
+                    ValueMm = 450.0 // Below 500mm
+                }
+            }
+        };
+
+        var result = await validator.ValidateAsync(command);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.PropertyName.Contains("ValueMm") && e.ErrorMessage.Contains("500mm"));
+    }
+
+    [Fact]
+    public async Task Validator_WithRampSlopeAbove50Percent_FailsValidation()
+    {
+        var policyProvider = new AccessMapVN.Infrastructure.Services.MeasurementPolicyProvider();
+        var validator = new SubmitSurveyCommandValidator(policyProvider);
+
+        var command = new SubmitSurveyCommand
+        {
+            ClientSubmissionId = "ramp-test-1",
+            LocationId = Guid.NewGuid().ToString(),
+            MediaUrls = new List<string> { "https://example.com/ramp.jpg" },
+            GpsLat = 10.772,
+            GpsLng = 106.698,
+            Measurements = new UserMeasurementsDto
+            {
+                RampSlope = new MeasurementItemDto
+                {
+                    Status = "provided",
+                    HeightCm = 80.0,
+                    LengthCm = 100.0 // 80% slope > 50%
+                }
+            }
+        };
+
+        var result = await validator.ValidateAsync(command);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.ErrorMessage.Contains("Độ dốc tính toán nằm ngoài dải hợp lệ"));
+    }
+
+    [Fact]
+    public async Task Validator_WithRampSlopeMissingLength_FailsValidationWithExplicitMessage()
+    {
+        var policyProvider = new AccessMapVN.Infrastructure.Services.MeasurementPolicyProvider();
+        var validator = new SubmitSurveyCommandValidator(policyProvider);
+
+        var command = new SubmitSurveyCommand
+        {
+            ClientSubmissionId = "ramp-missing-len-1",
+            LocationId = Guid.NewGuid().ToString(),
+            MediaUrls = new List<string> { "https://example.com/ramp.jpg" },
+            GpsLat = 10.772,
+            GpsLng = 106.698,
+            Measurements = new UserMeasurementsDto
+            {
+                RampSlope = new MeasurementItemDto
+                {
+                    Status = "provided",
+                    HeightCm = 30.0,
+                    LengthCm = null // Missing length
+                }
+            }
+        };
+
+        var result = await validator.ValidateAsync(command);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.ErrorMessage.Contains("Cần nhập cả chiều cao và chiều dài dốc"));
+    }
+
+    [Fact]
+    public async Task Validator_WithRampSlopeNotMeasured_PassesValidation()
+    {
+        var policyProvider = new AccessMapVN.Infrastructure.Services.MeasurementPolicyProvider();
+        var validator = new SubmitSurveyCommandValidator(policyProvider);
+
+        var command = new SubmitSurveyCommand
+        {
+            ClientSubmissionId = "ramp-unmeasured-1",
+            LocationId = Guid.NewGuid().ToString(),
+            MediaUrls = new List<string> { "https://example.com/ramp.jpg" },
+            GpsLat = 10.772,
+            GpsLng = 106.698,
+            Measurements = new UserMeasurementsDto
+            {
+                RampSlope = new MeasurementItemDto
+                {
+                    Status = "not_measured"
+                }
+            }
+        };
+
+        var result = await validator.ValidateAsync(command);
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Validator_WithRampSlope7Point5Percent_PassesValidation()
+    {
+        var policyProvider = new AccessMapVN.Infrastructure.Services.MeasurementPolicyProvider();
+        var validator = new SubmitSurveyCommandValidator(policyProvider);
+
+        var command = new SubmitSurveyCommand
+        {
+            ClientSubmissionId = "ramp-valid-7point5",
+            LocationId = Guid.NewGuid().ToString(),
+            MediaUrls = new List<string> { "https://example.com/ramp.jpg" },
+            GpsLat = 10.772,
+            GpsLng = 106.698,
+            Measurements = new UserMeasurementsDto
+            {
+                RampSlope = new MeasurementItemDto
+                {
+                    Status = "provided",
+                    HeightCm = 30.0,
+                    LengthCm = 400.0 // 7.5%
+                }
+            }
+        };
+
+        var result = await validator.ValidateAsync(command);
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Validator_WithRampSlope80Percent_FailsValidationWithPhysicalPolicyMessage()
+    {
+        var policyProvider = new AccessMapVN.Infrastructure.Services.MeasurementPolicyProvider();
+        var validator = new SubmitSurveyCommandValidator(policyProvider);
+
+        var command = new SubmitSurveyCommand
+        {
+            ClientSubmissionId = "ramp-invalid-80",
+            LocationId = Guid.NewGuid().ToString(),
+            MediaUrls = new List<string> { "https://example.com/ramp.jpg" },
+            GpsLat = 10.772,
+            GpsLng = 106.698,
+            Measurements = new UserMeasurementsDto
+            {
+                RampSlope = new MeasurementItemDto
+                {
+                    Status = "provided",
+                    HeightCm = 80.0,
+                    LengthCm = 100.0 // 80% slope > 50%
+                }
+            }
+        };
+
+        var result = await validator.ValidateAsync(command);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.ErrorMessage.Contains("Độ dốc tính toán nằm ngoài dải hợp lệ"));
+    }
+
+    [Fact]
+    public async Task Validator_WithDoorClearWidth450Mm_FailsValidation()
+    {
+        var policyProvider = new AccessMapVN.Infrastructure.Services.MeasurementPolicyProvider();
+        var validator = new SubmitSurveyCommandValidator(policyProvider);
+
+        var command = new SubmitSurveyCommand
+        {
+            ClientSubmissionId = "door-invalid-450",
+            LocationId = Guid.NewGuid().ToString(),
+            MediaUrls = new List<string> { "https://example.com/door.jpg" },
+            GpsLat = 10.772,
+            GpsLng = 106.698,
+            Measurements = new UserMeasurementsDto
+            {
+                DoorClearWidth = new MeasurementItemDto
+                {
+                    Status = "provided",
+                    ValueMm = 450.0 // < 500mm minimum
+                }
+            }
+        };
+
+        var result = await validator.ValidateAsync(command);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.ErrorMessage.Contains("Chiều rộng lọt lòng cửa (door_clear_width) không hợp lệ về mặt vật lý"));
+    }
+
+    [Fact]
+    public async Task Validator_WithDoorClearWidth850Mm_PassesValidation()
+    {
+        var policyProvider = new AccessMapVN.Infrastructure.Services.MeasurementPolicyProvider();
+        var validator = new SubmitSurveyCommandValidator(policyProvider);
+
+        var command = new SubmitSurveyCommand
+        {
+            ClientSubmissionId = "door-valid-850",
+            LocationId = Guid.NewGuid().ToString(),
+            MediaUrls = new List<string> { "https://example.com/door.jpg" },
+            GpsLat = 10.772,
+            GpsLng = 106.698,
+            Measurements = new UserMeasurementsDto
+            {
+                DoorClearWidth = new MeasurementItemDto
+                {
+                    Status = "provided",
+                    ValueMm = 850.0 // Valid (500mm - 3000mm)
+                }
+            }
+        };
+
+        var result = await validator.ValidateAsync(command);
+
+        result.IsValid.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Validator_WithValidMeasurements_PassesValidation()
+    {
+        var policyProvider = new AccessMapVN.Infrastructure.Services.MeasurementPolicyProvider();
+        var validator = new SubmitSurveyCommandValidator(policyProvider);
+
+        var command = new SubmitSurveyCommand
+        {
+            ClientSubmissionId = "valid-meas-1",
+            LocationId = Guid.NewGuid().ToString(),
+            MediaUrls = new List<string> { "https://example.com/door.jpg" },
+            GpsLat = 10.772,
+            GpsLng = 106.698,
+            Measurements = new UserMeasurementsDto
+            {
+                DoorClearWidth = new MeasurementItemDto
+                {
+                    Status = "provided",
+                    ValueMm = 850.0 // Valid (500mm - 3000mm)
+                },
+                RampSlope = new MeasurementItemDto
+                {
+                    Status = "provided",
+                    HeightCm = 30.0,
+                    LengthCm = 400.0 // 7.5% slope <= 50%
+                }
+            }
+        };
+
+        var result = await validator.ValidateAsync(command);
+
+        result.IsValid.Should().BeTrue();
+    }
 }
+

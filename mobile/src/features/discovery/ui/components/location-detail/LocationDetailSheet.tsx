@@ -106,7 +106,7 @@ export function LocationDetailSheet({
   const router = useRouter();
   const { user } = useAuth();
   const { height: windowHeight } = useWindowDimensions();
-  const sheetHeight = Math.min(Math.max(windowHeight * 0.7, 440), 560);
+  const sheetHeight = Math.min(Math.max(windowHeight * 0.78, 520), windowHeight * 0.9);
   const collapsedOffset = Math.round(sheetHeight * 0.38);
   const peekOffset = Math.max(sheetHeight - 88, collapsedOffset);
 
@@ -145,11 +145,11 @@ export function LocationDetailSheet({
       { id: 'tactile', featureType: 'TactilePaving', icon: 'dots-grid', label: 'Gạch dẫn hướng xúc giác', description: 'Dẫn hướng cho người khiếm thị', value: values.tactilePaving },
     ];
 
-    return definitions
-      .filter((definition) => definition.value !== null)
-      .map(({ value, ...definition }) => ({
+    // WF-02 reads its truth from published LocationFeature rows. Keeping this
+    // catalogue lets a published feature appear even if the old boolean is null.
+    return definitions.map(({ value, ...definition }) => ({
         ...definition,
-        publishedStatus: value ? 'Available' : 'NotAvailable',
+        publishedStatus: value == null ? 'Unknown' : value ? 'Available' : 'NotAvailable',
         status: value ? 'Có sẵn' : 'Không có',
       }));
   }, [place]);
@@ -310,6 +310,7 @@ export function LocationDetailSheet({
           category={localizedCategory}
           brand={place.brand}
           distanceStr={distanceStr}
+          standardLabel={!isUnrated ? 'Đạt QCVN 10:2014' : undefined}
           address={place.address}
           isAddressLoading={place.isAddressLoading}
           openingHours={place.opening_hours}
@@ -325,16 +326,18 @@ export function LocationDetailSheet({
           hasRamp={Boolean(place.has_ramp)}
           doorWidthOk={Boolean(place.door_width_ok)}
           hasTactile={Boolean(place.has_tactile_paving)}
+          lastVerifiedAt={place.last_verified_at}
         />
 
         <View style={styles.sectionInset}>
-          {!isUnrated && features.length > 0 ? (
-            <FeatureCommunitySection locationId={place.id} features={features} />
-          ) : null}
           {/* Photos & Evidence with +50 EXP camera tile */}
           <EvidenceGallerySection evidence={evidenceList} onAddEvidence={() => onContribute?.(place)} />
 
           <CommunityTimelineSection locationId={place.id} onSignIn={() => router.push('/login')} />
+
+          {!isUnrated && features.length > 0 ? (
+            <FeatureCommunitySection locationId={place.id} features={features} />
+          ) : null}
 
           {/* Action buttons */}
           {isUnrated ? (
@@ -359,6 +362,14 @@ export function LocationDetailSheet({
               onViewReports={() => router.push((user ? '/reports' : '/login') as never)}
             />
           )}
+
+          {!isUnrated ? (
+            <ContributionCTA
+              locationId={place.id}
+              locationName={place.name}
+              onPress={() => onContribute?.(place)}
+            />
+          ) : null}
         </View>
       </ScrollView>
       <ReportFormModal
@@ -383,8 +394,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     zIndex: 25,
     overflow: 'hidden',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
     backgroundColor: '#ffffff',
     shadowColor: '#0f172a',
     shadowOffset: { width: 0, height: -6 },
@@ -429,7 +440,7 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   sectionInset: {
-    paddingHorizontal: 18,
+    paddingHorizontal: 20,
   },
 });
 

@@ -13,6 +13,7 @@ interface AccessibilitySummaryProps {
   hasRamp?: boolean;
   doorWidthOk?: boolean;
   hasTactile?: boolean;
+  lastVerifiedAt?: string | null;
 }
 
 export function AccessibilitySummary({
@@ -23,6 +24,7 @@ export function AccessibilitySummary({
   hasRamp,
   doorWidthOk,
   hasTactile,
+  lastVerifiedAt,
 }: AccessibilitySummaryProps) {
   if (isUnrated) {
     return (
@@ -44,6 +46,10 @@ export function AccessibilitySummary({
   const isMediumTrust = trustPercent >= 50;
   const trustColor = isHighTrust ? Colors.statusGreen : isMediumTrust ? '#f59e0b' : '#ef4444';
   const trustBg = isHighTrust ? '#dcfce7' : isMediumTrust ? '#fef3c7' : '#fee2e2';
+  const verifiedDate = lastVerifiedAt ? new Date(lastVerifiedAt) : null;
+  const verifiedLabel = verifiedDate && !Number.isNaN(verifiedDate.getTime())
+    ? verifiedDate.toLocaleDateString('vi-VN')
+    : null;
   const trustLabel = isHighTrust ? 'Đáng tin cậy' : isMediumTrust ? 'Khả quan' : 'Cần cải thiện';
 
   let wheelchairType = 'Chưa khảo sát';
@@ -61,6 +67,17 @@ export function AccessibilitySummary({
 
   return (
     <View style={styles.container}>
+      <View style={styles.headingRow}>
+        <View style={styles.headingIcon}>
+          <MaterialCommunityIcons name="wheelchair-accessibility" size={18} color="#007D78" />
+        </View>
+        <View style={styles.headingCopy}>
+          <Text style={styles.headingTitle}>Tình trạng tiếp cận</Text>
+          <Text style={styles.headingHint}>
+            {verifiedLabel == null ? 'Đang chờ cộng đồng xác nhận' : `Lần xác nhận gần nhất: ${verifiedLabel}`}
+          </Text>
+        </View>
+      </View>
       {/* Top Meta Row: Trust Score + QCVN Standard */}
       <View style={styles.trustRow}>
         <View style={[styles.trustPill, { backgroundColor: trustBg }]}>
@@ -109,12 +126,17 @@ const styles = StyleSheet.create({
   container: {
     marginHorizontal: 18,
     marginBottom: 20,
-    padding: 12,
-    borderRadius: 18,
-    backgroundColor: '#f8fdfb',
+    padding: 14,
+    borderRadius: 20,
+    backgroundColor: '#FFFCF6',
     borderWidth: 1,
-    borderColor: 'rgba(0, 104, 116, 0.12)',
+    borderColor: '#F1DEB8',
   },
+  headingRow: { alignItems: 'center', flexDirection: 'row', gap: 9, marginBottom: 12 },
+  headingIcon: { alignItems: 'center', backgroundColor: '#E8FAF6', borderRadius: 18, height: 36, justifyContent: 'center', width: 36 },
+  headingCopy: { flex: 1 },
+  headingTitle: { color: '#18312F', fontSize: 15, fontWeight: '800' },
+  headingHint: { color: '#7C6546', fontSize: 11.5, marginTop: 2 },
   trustRow: {
     flexDirection: 'row',
     alignItems: 'center',

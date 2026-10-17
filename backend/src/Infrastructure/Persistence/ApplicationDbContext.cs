@@ -1,5 +1,6 @@
 using AccessMapVN.Application.Common.Interfaces;
 using AccessMapVN.Domain.Entities;
+using AccessMapVN.Infrastructure.Persistence.Configurations;
 using Microsoft.EntityFrameworkCore;
 
 namespace AccessMapVN.Infrastructure.Persistence;
@@ -26,10 +27,46 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
     public DbSet<MeasurementEvidence> MeasurementEvidences => Set<MeasurementEvidence>();
     public DbSet<PlaceMeasurement> PlaceMeasurements => Set<PlaceMeasurement>();
 
+    public DbSet<AppUser> AppUsers => Set<AppUser>();
+    public DbSet<AccessScope> AccessScopes => Set<AccessScope>();
+    public DbSet<SubmissionClaim> SubmissionClaims => Set<SubmissionClaim>();
+    public DbSet<OwnedMedia> OwnedMedia => Set<OwnedMedia>();
+    public DbSet<UploadIntent> UploadIntents => Set<UploadIntent>();
+    public DbSet<LocationFeature> LocationFeatures => Set<LocationFeature>();
+    public DbSet<LocationFeatureHistory> LocationFeatureHistories => Set<LocationFeatureHistory>();
+    public DbSet<CommunityVote> CommunityVotes => Set<CommunityVote>();
+    public DbSet<CommunityVoteStatusHistory> CommunityVoteStatusHistories => Set<CommunityVoteStatusHistory>();
+    public DbSet<FeatureCommunityState> FeatureCommunityStates => Set<FeatureCommunityState>();
+    public DbSet<CommunityAssessment> CommunityAssessments => Set<CommunityAssessment>();
+    public DbSet<FeatureAssessmentJob> FeatureAssessmentJobs => Set<FeatureAssessmentJob>();
+    public DbSet<DisputeCase> DisputeCases => Set<DisputeCase>();
+    public DbSet<DisputeCaseVote> DisputeCaseVotes => Set<DisputeCaseVote>();
+    public DbSet<DisputeDecision> DisputeDecisions => Set<DisputeDecision>();
+    public DbSet<TemporaryAccessAdvisory> TemporaryAccessAdvisories => Set<TemporaryAccessAdvisory>();
+    public DbSet<InaccurateInformationReport> InaccurateInformationReports => Set<InaccurateInformationReport>();
+    public DbSet<ReportStatusHistory> ReportStatusHistories => Set<ReportStatusHistory>();
+    public DbSet<ReportEvidence> ReportEvidence => Set<ReportEvidence>();
+    public DbSet<LocationMetadataHistory> LocationMetadataHistories => Set<LocationMetadataHistory>();
+    public DbSet<CommunityComment> CommunityComments => Set<CommunityComment>();
+    public DbSet<CommunityCommentStatusHistory> CommunityCommentStatusHistories => Set<CommunityCommentStatusHistory>();
+    public DbSet<IdempotencyRecord> IdempotencyRecords => Set<IdempotencyRecord>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(ApplicationDbContext).Assembly);
+
+        modelBuilder.Entity<Place>(entity =>
+        {
+            entity.ToTable("places");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Status)
+                .HasDefaultValue(AccessMapVN.Domain.Enums.LocationStatus.Active)
+                .HasSentinel((AccessMapVN.Domain.Enums.LocationStatus)0);
+            entity.Property(e => e.MetadataVersion).HasDefaultValue(1).IsConcurrencyToken();
+            entity.Property(e => e.RowVersion).IsRowVersion().HasColumnName("xmin");
+        });
 
         modelBuilder.Entity<Submission>(entity =>
         {
@@ -78,6 +115,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc");
             entity.Property(e => e.UpdatedAtUtc).HasColumnName("updated_at_utc");
+            entity.HasIndex(e => e.SubmissionId).IsUnique();
         });
 
         modelBuilder.Entity<AccessPointKind>(entity =>
@@ -208,5 +246,8 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
 
             entity.HasIndex(e => new { e.AccessPointId, e.FeatureName }).IsUnique();
         });
+
+        modelBuilder.ConfigureWf02();
+        modelBuilder.ApplySnakeCaseColumnNames();
     }
 }

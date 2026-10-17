@@ -2,7 +2,7 @@ import { Colors } from '@/shared/theme';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Keyboard, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { ContributionHistorySheet } from '@/entities/contribution';
 import { HeaderBar } from './components/HeaderBar';
 import { MapControls } from './components/MapControls';
@@ -27,6 +27,7 @@ const QUICK_SEARCH_SUGGESTIONS = [
 ];
 
 export function DiscoveryScreen({ onNavigateToContribute }: DiscoveryScreenProps = {}) {
+  const router = useRouter();
   const mapViewRef = useRef<MapViewHandle>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<GeocodeResult[]>([]);
@@ -153,7 +154,7 @@ export function DiscoveryScreen({ onNavigateToContribute }: DiscoveryScreenProps
 
       {/* UI Overlays */}
       <View style={styles.overlayTop}>
-        <HeaderBar />
+        <HeaderBar onProfilePress={() => router.push('/reports' as never)} />
         <SearchBar
           value={searchQuery}
           onChangeText={(text) => {

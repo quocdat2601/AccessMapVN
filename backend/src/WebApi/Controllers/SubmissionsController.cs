@@ -1,8 +1,8 @@
 using AccessMapVN.Application.Features.Submissions.Commands.SubmitSurvey;
+using AccessMapVN.WebApi.Authorization;
 using MediatR;
-using Microsoft.AspNetCore.Mvc;
-
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 
 namespace AccessMapVN.WebApi.Controllers;
 
@@ -19,6 +19,7 @@ public class SubmissionsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize]
     [ProducesResponseType(typeof(SubmitSurveyResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
@@ -29,6 +30,11 @@ public class SubmissionsController : ControllerBase
     {
         var authUserId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
                          ?? User.FindFirst("sub")?.Value;
+
+        if (string.IsNullOrWhiteSpace(authUserId) && User.TryGetUserId(out var userId))
+        {
+            authUserId = userId.ToString();
+        }
 
         if (string.IsNullOrWhiteSpace(authUserId))
         {
@@ -41,9 +47,14 @@ public class SubmissionsController : ControllerBase
             });
         }
 
-        command.AuthenticatedUserId = authUserId;
+        var authenticatedCommand = command with
+        {
+            AuthenticatedUserId = authUserId,
+            UserId = authUserId
+        };
 
-        var result = await _mediator.Send(command, cancellationToken);
+        var result = await _mediator.Send(authenticatedCommand, cancellationToken);
         return Ok(result);
     }
 }
+

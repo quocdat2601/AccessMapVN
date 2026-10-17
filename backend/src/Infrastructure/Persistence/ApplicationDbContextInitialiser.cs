@@ -20,6 +20,19 @@ public class ApplicationDbContextInitialiser
     {
         try
         {
+            if (_context.Database.IsRelational())
+            {
+                try
+                {
+                    await _context.Database.MigrateAsync(cancellationToken);
+                    _logger.LogInformation("Database migrations applied successfully.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "MigrateAsync failed or partially applied; proceeding with raw DDL verification.");
+                }
+            }
+
             var conn = _context.Database.GetDbConnection();
             if (conn.State != System.Data.ConnectionState.Open)
             {

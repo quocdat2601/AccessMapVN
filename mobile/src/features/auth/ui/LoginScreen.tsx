@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -15,19 +17,82 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { branding } from '@/shared/config/branding';
+import { useAuth } from '../model/AuthProvider';
 
-// UI prototype only. Authentication controls intentionally have no validation or network behavior.
+type AuthMode = 'signIn' | 'signUp';
+
 export default function LoginScreen() {
   const router = useRouter();
+  const { isConfigured, session, signIn, signUp, sendPasswordReset } = useAuth();
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const [mode, setMode] = useState<AuthMode>('signIn');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (session) router.replace('/map');
+  }, [router, session]);
 
   const continueToMap = () => {
-    // TODO(auth): Replace prototype navigation with real authentication state when backend auth is integrated.
+    // Auth state is supplied by Supabase; keep navigation local to this screen.
     router.replace('/map');
   };
 
-  const handleFutureAuthAction = () => {
-    // TODO(auth): Connect registration, password recovery, and Google OAuth in the real auth flow.
+  const handleSubmit = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || !password) {
+      setErrorMessage('Vui lòng nhập email và mật khẩu.');
+      return;
+    }
+    if (password.length < 6) {
+      setErrorMessage('Mật khẩu cần có ít nhất 6 ký tự.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    try {
+      if (mode === 'signIn') {
+        await signIn(normalizedEmail, password);
+        router.replace('/map');
+      } else {
+        const signedIn = await signUp(normalizedEmail, password);
+        if (signedIn) {
+          router.replace('/map');
+        } else {
+          setMode('signIn');
+          Alert.alert(
+            'Kiểm tra email',
+            'Tài khoản đã được tạo. Hãy xác nhận email rồi đăng nhập.'
+          );
+        }
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Không thể xác thực tài khoản.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      setErrorMessage('Nhập email để nhận hướng dẫn đặt lại mật khẩu.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    try {
+      await sendPasswordReset(normalizedEmail);
+      Alert.alert('Đã gửi email', 'Hãy kiểm tra hộp thư để đặt lại mật khẩu.');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Không thể gửi email đặt lại mật khẩu.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -70,16 +135,19 @@ export default function LoginScreen() {
 
             <View style={styles.formCard}>
               <View style={styles.fieldGroup}>
-                <Text style={styles.label}>Email hoặc số điện thoại</Text>
+                <Text style={styles.label}>Email</Text>
                 <View style={styles.inputShell}>
                   <Ionicons name="person-outline" size={20} color={branding.colors.mutedText} />
                   <TextInput
                     autoCapitalize="none"
+                    autoComplete="email"
                     keyboardType="email-address"
-                    placeholder="Nhập email hoặc số điện thoại"
+                    onChangeText={setEmail}
+                    placeholder="Nhập email"
                     placeholderTextColor="#8A9695"
                     selectionColor={branding.colors.primary}
                     style={styles.input}
+                    value={email}
                   />
                 </View>
               </View>
@@ -90,12 +158,15 @@ export default function LoginScreen() {
                   <Ionicons name="lock-closed-outline" size={20} color={branding.colors.mutedText} />
                   <TextInput
                     autoCapitalize="none"
+                    autoComplete={mode === 'signIn' ? 'current-password' : 'new-password'}
+                    onChangeText={setPassword}
                     placeholder="Nhập mật khẩu"
                     placeholderTextColor="#8A9695"
                     secureTextEntry={!isPasswordVisible}
                     selectionColor={branding.colors.primary}
                     style={styles.input}
                     textContentType="password"
+                    value={password}
                   />
                   <TouchableOpacity
                     accessibilityLabel={isPasswordVisible ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
@@ -117,46 +188,53 @@ export default function LoginScreen() {
               <TouchableOpacity
                 accessibilityRole="button"
                 activeOpacity={0.7}
-                onPress={handleFutureAuthAction}
+                disabled={isSubmitting}
+                onPress={() => void handlePasswordReset()}
                 style={styles.forgotButton}
               >
                 <Text style={styles.linkText}>Quên mật khẩu?</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                accessibilityHint="Mở bản đồ AccessMapVN trong bản mẫu"
+                accessibilityHint={mode === 'signIn' ? 'Đăng nhập vào AccessMapVN' : 'Tạo tài khoản AccessMapVN'}
                 accessibilityRole="button"
                 activeOpacity={0.84}
-                onPress={continueToMap}
-                style={styles.primaryButton}
+                disabled={isSubmitting || !isConfigured}
+                onPress={() => void handleSubmit()}
+                style={[styles.primaryButton, (isSubmitting || !isConfigured) && styles.disabledButton]}
               >
-                <Text style={styles.primaryButtonText}>Đăng nhập</Text>
+                {isSubmitting ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>
+                    {mode === 'signIn' ? 'Đăng nhập' : 'Tạo tài khoản'}
+                  </Text>
+                )}
               </TouchableOpacity>
 
-              <View style={styles.dividerRow}>
-                <View style={styles.divider} />
-                <Text style={styles.dividerText}>hoặc</Text>
-                <View style={styles.divider} />
-              </View>
-
-              <TouchableOpacity
-                accessibilityRole="button"
-                activeOpacity={0.76}
-                onPress={handleFutureAuthAction}
-                style={styles.googleButton}
-              >
-                <Ionicons name="logo-google" size={20} color={branding.colors.text} />
-                <Text style={styles.googleButtonText}>Tiếp tục với Google</Text>
-              </TouchableOpacity>
+              {!isConfigured ? (
+                <Text style={styles.errorText}>
+                  Chưa cấu hình Supabase. Vui lòng thêm EXPO_PUBLIC_SUPABASE_URL và
+                  EXPO_PUBLIC_SUPABASE_ANON_KEY vào .env.
+                </Text>
+              ) : null}
+              {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
 
               <TouchableOpacity
                 accessibilityRole="button"
                 activeOpacity={0.7}
-                onPress={handleFutureAuthAction}
+                disabled={isSubmitting}
+                onPress={() => {
+                  setMode((current) => (current === 'signIn' ? 'signUp' : 'signIn'));
+                  setErrorMessage(null);
+                }}
                 style={styles.registrationButton}
               >
                 <Text style={styles.registrationText}>
-                  Chưa có tài khoản? <Text style={styles.linkText}>Đăng ký</Text>
+                  {mode === 'signIn' ? 'Chưa có tài khoản? ' : 'Đã có tài khoản? '}
+                  <Text style={styles.linkText}>
+                    {mode === 'signIn' ? 'Đăng ký' : 'Đăng nhập'}
+                  </Text>
                 </Text>
               </TouchableOpacity>
             </View>
@@ -353,6 +431,16 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
+  },
+  disabledButton: {
+    opacity: 0.55,
+  },
+  errorText: {
+    color: '#B91C1C',
+    fontSize: 12.5,
+    lineHeight: 18,
+    marginTop: 12,
+    textAlign: 'center',
   },
   dividerRow: {
     alignItems: 'center',

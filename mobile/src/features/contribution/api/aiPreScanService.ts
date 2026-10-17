@@ -1,6 +1,5 @@
 let isAndroid = false;
 try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { Platform } = require('react-native');
   isAndroid = Platform?.OS === 'android';
 } catch {
@@ -24,6 +23,11 @@ export interface PreScanResult {
   features: PreScanFeatureTag[];
   summary: string;
   isMockFallback?: boolean;
+}
+
+interface AiPreScanPayload {
+  features?: Record<string, { value?: boolean; detected?: boolean; confidence?: number }>;
+  summary?: string;
 }
 
 const FEATURE_LABEL_MAP: Record<string, string> = {
@@ -70,7 +74,7 @@ export async function runAiPreScan(imageUri: string, textDescription?: string): 
 
     const aiBaseUrl = resolveServiceUrl(8000, process.env.EXPO_PUBLIC_AI_SERVICE_URL);
     console.log('[runAiPreScan] Calling:', `${aiBaseUrl}/api/v1/ai/pre-scan`, 'with imageUri:', imageUri);
-    const data = await postMultipart(`${aiBaseUrl}/api/v1/ai/pre-scan`, formData, 15000);
+    const data = await postMultipart<AiPreScanPayload>(`${aiBaseUrl}/api/v1/ai/pre-scan`, formData, 15000);
     clearTimeout(timeoutId);
 
     console.log('[runAiPreScan] SUCCESS data:', JSON.stringify(data));

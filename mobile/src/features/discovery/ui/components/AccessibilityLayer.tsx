@@ -111,8 +111,6 @@ export function AccessibilityLayer({
   onSelectPlace,
   selectedPlaceId,
 }: AccessibilityLayerProps) {
-  if (!MapLibreGL) return null;
-
   const geojson: any = useMemo(() => ({
     type: 'FeatureCollection',
     features: places.map((p) => {
@@ -141,6 +139,8 @@ export function AccessibilityLayer({
       };
     }),
   }), [places, selectedPlaceId]);
+
+  if (!MapLibreGL) return null;
 
   return (
     <MapLibreGL.GeoJSONSource

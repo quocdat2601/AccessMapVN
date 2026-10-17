@@ -43,9 +43,6 @@ public record SubmitSurveyCommand : IRequest<SubmitSurveyResult>
     [JsonPropertyName("location_id")]
     public string LocationId { get; init; } = string.Empty;
 
-    /// <summary>
-    /// Untrusted when sent from client. Backend resolves identity from authenticated JWT token.
-    /// </summary>
     [JsonPropertyName("user_id")]
     public string? UserId { get; init; }
 

@@ -1,5 +1,8 @@
 using System.Text.Json;
+using AccessMapVN.Application.Common.Exceptions;
+using AccessMapVN.Infrastructure.Services;
 using FluentValidation;
+using Microsoft.EntityFrameworkCore;
 
 namespace AccessMapVN.WebApi.Middlewares;
 
@@ -52,10 +55,27 @@ public class ExceptionHandlingMiddleware
 
             await context.Response.WriteAsync(JsonSerializer.Serialize(response));
         }
+        catch (Wf02Exception ex)
+        {
+            if (ex.Code == "IDEMPOTENCY_KEY_REUSED")
+            {
+                Wf02Metrics.IdempotencyConflicts.Add(1);
+            }
+            _logger.LogWarning("WF-02 request failed with {Code}: {Message}", ex.Code, ex.Message);
+            context.Response.StatusCode = ex.StatusCode;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsync(JsonSerializer.Serialize(new
+            {
+                code = ex.Code,
+                message = ex.Message,
+                correlationId = context.TraceIdentifier,
+                details = ex.Details,
+            }));
+        }
         catch (ValidationException ex)
         {
             _logger.LogWarning("Validation failure: {Message}", ex.Message);
-            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            context.Response.StatusCode = StatusCodes.Status422UnprocessableEntity;
             context.Response.ContentType = "application/json";
 
             var errors = ex.Errors
@@ -67,13 +87,26 @@ public class ExceptionHandlingMiddleware
 
             var response = new
             {
-                type = "https://tools.ietf.org/html/rfc7231#section-6.5.1",
-                title = "One or more validation errors occurred.",
-                status = StatusCodes.Status400BadRequest,
-                errors
+                code = "VALIDATION_FAILED",
+                message = "One or more validation errors occurred.",
+                correlationId = context.TraceIdentifier,
+                details = errors,
             };
 
             await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            _logger.LogWarning(ex, "Optimistic concurrency conflict for {Path}", context.Request.Path);
+            context.Response.StatusCode = StatusCodes.Status409Conflict;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsync(JsonSerializer.Serialize(new
+            {
+                code = "CONCURRENCY_CONFLICT",
+                message = "The resource changed; reload it before retrying.",
+                correlationId = context.TraceIdentifier,
+                details = (object?)null,
+            }));
         }
         catch (Exception ex)
         {
@@ -83,9 +116,9 @@ public class ExceptionHandlingMiddleware
 
             var response = new
             {
-                type = "https://tools.ietf.org/html/rfc7231#section-6.6.1",
-                title = "An internal server error occurred.",
-                status = StatusCodes.Status500InternalServerError
+                code = "INTERNAL_ERROR",
+                message = "An internal server error occurred.",
+                correlationId = context.TraceIdentifier,
             };
 
             await context.Response.WriteAsync(JsonSerializer.Serialize(response));

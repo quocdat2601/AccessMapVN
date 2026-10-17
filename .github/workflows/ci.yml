@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_DB: accessmapvn_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d accessmapvn_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      ConnectionStrings__SupabaseConnection: Host=localhost;Port=5432;Database=accessmapvn_ci;Username=postgres;Password=postgres
+      Supabase__Url: https://example.supabase.co
+      Supabase__Audience: authenticated
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Restore
+        run: dotnet restore backend/AccessMapVN.sln
+      - name: Build
+        run: dotnet build backend/AccessMapVN.sln --configuration Release --no-restore
+      - name: Apply migrations to a clean PostgreSQL database
+        run: |
+          dotnet tool install --tool-path .tools dotnet-ef --version 8.0.11
+          .tools/dotnet-ef database update --project backend/src/Infrastructure/AccessMapVN.Infrastructure.csproj --startup-project backend/src/WebApi/AccessMapVN.WebApi.csproj --configuration Release --no-build
+          .tools/dotnet-ef database update --project backend/src/Infrastructure/AccessMapVN.Infrastructure.csproj --startup-project backend/src/WebApi/AccessMapVN.WebApi.csproj --configuration Release --no-build
+          .tools/dotnet-ef migrations has-pending-model-changes --project backend/src/Infrastructure/AccessMapVN.Infrastructure.csproj --startup-project backend/src/WebApi/AccessMapVN.WebApi.csproj --configuration Release --no-build
+      - name: Test
+        run: dotnet test backend/AccessMapVN.sln --configuration Release --no-build
+
+  mobile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci --prefix mobile
+      - run: npm --prefix mobile run typecheck
+      - run: npm --prefix mobile run lint
+      - run: npm --prefix mobile run test:unit
+      - name: Expo Doctor
+        working-directory: mobile
+        run: npx expo-doctor
+
+  web-admin:
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:5000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: web-admin/package-lock.json
+      - run: npm ci --prefix web-admin
+      - run: npm --prefix web-admin run typecheck
+      - run: npm --prefix web-admin run lint
+      - run: npm --prefix web-admin run build

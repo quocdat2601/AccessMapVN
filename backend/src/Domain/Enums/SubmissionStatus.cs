@@ -5,5 +5,6 @@ public enum SubmissionStatus
     Submitted,
     AutoVerified,
     PendingModeration,
-    Rejected
+    Rejected,
+    Published
 }

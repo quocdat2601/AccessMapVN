@@ -27,6 +27,7 @@ public class Submission : BaseEntity
     public SubmissionStatus Status { get; set; } = SubmissionStatus.PendingModeration;
     public string ExpStatus { get; set; } = "pending_review";
     public double ConfidenceScore { get; set; } = 0.88;
+    // Points are awarded only when an authorized WF-01 publication succeeds.
     public int PointsAwarded { get; set; } = 0;
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

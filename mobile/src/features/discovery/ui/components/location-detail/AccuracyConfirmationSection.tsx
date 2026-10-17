@@ -1,110 +1,44 @@
-import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Colors } from '@/shared/theme';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface AccuracyConfirmationSectionProps {
-  onConfirmAccurate?: () => void;
-  onReportIssue?: () => void;
+  onReportIssue(): void;
+  onViewReports(): void;
 }
 
+/** Place-level actions. Feature confirmation is intentionally handled per version above. */
 export function AccuracyConfirmationSection({
-  onConfirmAccurate,
   onReportIssue,
+  onViewReports,
 }: AccuracyConfirmationSectionProps) {
-  const [isConfirmed, setIsConfirmed] = useState(false);
-
-  const handleConfirm = () => {
-    setIsConfirmed(true);
-    onConfirmAccurate?.();
-    Alert.alert('Cảm ơn bạn!', 'Đã ghi nhận xác nhận tiếp cận. Bạn nhận được +15 EXP cộng đồng!');
-  };
-
-  const handleReport = () => {
-    onReportIssue?.();
-    Alert.alert('Báo lỗi tiếp cận', 'Cảm ơn bạn đã phản hồi. Nhóm kiểm duyệt sẽ xác minh lại thông tin địa điểm này.');
-  };
-
   return (
     <View style={styles.container}>
       <TouchableOpacity
-        style={[styles.confirmBtn, isConfirmed && styles.confirmedBtn]}
-        onPress={handleConfirm}
-        disabled={isConfirmed}
         accessibilityRole="button"
-        accessibilityLabel="Vẫn dùng tốt nhận 15 EXP"
-        activeOpacity={0.85}
+        activeOpacity={0.82}
+        onPress={onReportIssue}
+        style={styles.reportButton}
       >
-        <MaterialCommunityIcons
-          name={isConfirmed ? 'check-circle' : 'check-circle-outline'}
-          size={20}
-          color="#ffffff"
-        />
-        <Text style={styles.confirmBtnText}>
-          {isConfirmed ? 'Đã xác nhận (+15 EXP)' : 'Vẫn dùng tốt (+15 EXP)'}
-        </Text>
+        <MaterialCommunityIcons name="alert-circle-outline" size={19} color="#B91C1C" />
+        <Text style={styles.reportText}>Báo thông tin sai</Text>
       </TouchableOpacity>
-
       <TouchableOpacity
-        style={styles.reportBtn}
-        onPress={handleReport}
         accessibilityRole="button"
-        accessibilityLabel="Báo lỗi thông tin"
-        activeOpacity={0.8}
+        activeOpacity={0.82}
+        onPress={onViewReports}
+        style={styles.historyButton}
       >
-        <MaterialCommunityIcons name="alert-circle-outline" size={19} color="#dc2626" />
-        <Text style={styles.reportBtnText}>Báo lỗi</Text>
+        <MaterialCommunityIcons name="clipboard-text-clock-outline" size={19} color="#006874" />
+        <Text style={styles.historyText}>Báo cáo của tôi</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    marginTop: 8,
-    marginBottom: 24,
-    flexDirection: 'row',
-    gap: 10,
-    alignItems: 'center',
-  },
-  confirmBtn: {
-    flex: 2,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: '#006874',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    shadowColor: '#006874',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  confirmedBtn: {
-    backgroundColor: '#059669',
-  },
-  confirmBtnText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  reportBtn: {
-    flex: 1,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: '#fee2e2',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    borderWidth: 1,
-    borderColor: '#fecaca',
-  },
-  reportBtnText: {
-    color: '#dc2626',
-    fontSize: 13.5,
-    fontWeight: '700',
-  },
+  container: { alignItems: 'center', flexDirection: 'row', gap: 9, marginBottom: 24, marginTop: 8 },
+  reportButton: { alignItems: 'center', backgroundColor: '#FEF2F2', borderColor: '#FECACA', borderRadius: 13, borderWidth: 1, flex: 1, flexDirection: 'row', gap: 6, justifyContent: 'center', minHeight: 47, paddingHorizontal: 8 },
+  reportText: { color: '#B91C1C', fontSize: 12.5, fontWeight: '700' },
+  historyButton: { alignItems: 'center', backgroundColor: '#ECFEFF', borderColor: '#A5F3FC', borderRadius: 13, borderWidth: 1, flex: 1, flexDirection: 'row', gap: 6, justifyContent: 'center', minHeight: 47, paddingHorizontal: 8 },
+  historyText: { color: '#006874', fontSize: 12.5, fontWeight: '700' },
 });

@@ -6,7 +6,7 @@ import { adaptPickerImageToMediaResult } from '../adapters/testImageAdapter';
 
 function getNativeImagePicker(): typeof import('expo-image-picker') | null {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const picker = require('expo-image-picker');
     if (picker?.launchImageLibraryAsync) {
       return picker;
@@ -33,12 +33,12 @@ export function TestGalleryPickerButton({
   locationName,
   onMediaPicked,
 }: TestGalleryPickerButtonProps) {
+  const [picking, setPicking] = useState(false);
+
   // Production safeguard: do not render anything in release builds
   if (!__DEV__) {
     return null;
   }
-
-  const [picking, setPicking] = useState(false);
 
   const handlePickImage = async () => {
     if (picking) return;
@@ -83,7 +83,7 @@ export function TestGalleryPickerButton({
         );
         onMediaPicked(adaptedMedia);
       }
-    } catch (error) {
+    } catch {
       Alert.alert('Lỗi chọn ảnh', 'Không thể chọn ảnh từ thư viện thiết bị.');
     } finally {
       setPicking(false);

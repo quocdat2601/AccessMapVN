@@ -186,6 +186,7 @@ public class SubmitSurveyCommandHandler : IRequestHandler<SubmitSurveyCommand, S
 
         // 5. Tạo hồ sơ khảo sát ở trạng thái Chờ duyệt (PendingModeration)
         var code = $"AMV-{DateTimeOffset.UtcNow.Year}-{Random.Shared.Next(10000, 99999)}";
+
         var submission = new Submission
         {
             SubmissionCode = code,

@@ -6,7 +6,8 @@ using Microsoft.AspNetCore.Mvc;
 namespace AccessMapVN.WebApi.Controllers;
 
 [ApiController]
-[Route("api/v1/[controller]")]
+[Route("api/v1/places")]
+[Route("api/v1/locations")]
 public class PlacesController : ControllerBase
 {
     private readonly IMediator _mediator;

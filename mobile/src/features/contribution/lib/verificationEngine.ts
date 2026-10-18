@@ -360,7 +360,6 @@ export function evaluateVerificationMatrix(
 
 let isAndroid = false;
 try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { Platform } = require('react-native');
   isAndroid = Platform?.OS === 'android';
 } catch {
@@ -370,7 +369,6 @@ try {
 let resolveServiceUrlFn: ((port: number, envOverride?: string) => string) | null = null;
 let postMultipartFn: ((url: string, formData: FormData, timeoutMs?: number) => Promise<any>) | null = null;
 try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const clientModule = require('@/shared/api/client');
   resolveServiceUrlFn = clientModule.resolveServiceUrl;
   postMultipartFn = clientModule.postMultipart;

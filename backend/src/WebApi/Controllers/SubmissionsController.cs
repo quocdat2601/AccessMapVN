@@ -1,5 +1,7 @@
 using AccessMapVN.Application.Features.Submissions.Commands.SubmitSurvey;
+using AccessMapVN.WebApi.Authorization;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AccessMapVN.WebApi.Controllers;
@@ -16,13 +18,21 @@ public class SubmissionsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize]
     [ProducesResponseType(typeof(SubmitSurveyResult), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Submit(
         [FromBody] SubmitSurveyCommand command,
         CancellationToken cancellationToken = default)
     {
-        var result = await _mediator.Send(command, cancellationToken);
+        if (!User.TryGetUserId(out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var authenticatedCommand = command with { UserId = userId.ToString() };
+        var result = await _mediator.Send(authenticatedCommand, cancellationToken);
         return Ok(result);
     }
 }

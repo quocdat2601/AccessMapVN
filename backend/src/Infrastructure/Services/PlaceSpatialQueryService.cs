@@ -46,6 +46,8 @@ public class PlaceSpatialQueryService : IPlaceSpatialQueryService
                 building_id,
                 has_ramp,
                 has_accessible_elevator,
+                has_tactile_paving,
+                has_accessible_restroom,
                 door_width_ok,
                 accessibility_score,
                 accessibility_note,
@@ -94,7 +96,7 @@ public class PlaceSpatialQueryService : IPlaceSpatialQueryService
         {
             results.Add(new PlaceDto
             {
-                Id = reader.IsDBNull(0) ? string.Empty : reader.GetString(0),
+                Id = reader.IsDBNull(0) ? string.Empty : reader.GetGuid(0).ToString(),
                 Name = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
                 Category = reader.IsDBNull(2) ? "other" : reader.GetString(2),
                 Address = reader.IsDBNull(3) ? null : reader.GetString(3),
@@ -107,10 +109,12 @@ public class PlaceSpatialQueryService : IPlaceSpatialQueryService
                 BuildingId = reader.IsDBNull(10) ? null : reader.GetString(10),
                 HasRamp = reader.IsDBNull(11) ? null : reader.GetBoolean(11),
                 HasAccessibleElevator = reader.IsDBNull(12) ? null : reader.GetBoolean(12),
-                DoorWidthOk = reader.IsDBNull(13) ? null : reader.GetBoolean(13),
-                AccessibilityScore = reader.IsDBNull(14) ? null : reader.GetDecimal(14),
-                AccessibilityNote = reader.IsDBNull(15) ? null : reader.GetString(15),
-                LastVerifiedAt = reader.IsDBNull(16) ? null : reader.GetDateTime(16),
+                HasTactilePaving = reader.IsDBNull(13) ? null : reader.GetBoolean(13),
+                HasAccessibleRestroom = reader.IsDBNull(14) ? null : reader.GetBoolean(14),
+                DoorWidthOk = reader.IsDBNull(15) ? null : reader.GetBoolean(15),
+                AccessibilityScore = reader.IsDBNull(16) ? null : reader.GetDecimal(16),
+                AccessibilityNote = reader.IsDBNull(17) ? null : reader.GetString(17),
+                LastVerifiedAt = reader.IsDBNull(18) ? null : reader.GetDateTime(18),
             });
         }
 

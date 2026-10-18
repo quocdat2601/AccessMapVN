@@ -1,8 +1,17 @@
 import { Colors } from '@/shared/theme';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Keyboard, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import {
+  ActivityIndicator,
+  BackHandler,
+  Keyboard,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { ContributionHistorySheet } from '@/entities/contribution';
 import { HeaderBar } from './components/HeaderBar';
 import { MapControls } from './components/MapControls';
@@ -12,13 +21,14 @@ import { SearchBar } from './components/SearchBar';
 import { useMapRegion } from '../model/hooks/useMapRegion';
 import { useNearbyPlaces } from '../model/hooks/useNearbyPlaces';
 import { useUserLocation } from '../model/hooks/useUserLocation';
-import { forwardGeocode, type GeocodeResult, type PlaceDto } from '@/entities/place';
+import { unifiedSearch, type GeocodeResult, type PlaceDto } from '@/entities/place';
 
 interface DiscoveryScreenProps {
   onNavigateToContribute?: (place: { id: string; name: string; latitude?: number; longitude?: number }) => void;
 }
 
 const QUICK_SEARCH_SUGGESTIONS = [
+  { id: 'wf02-demo', icon: 'shield-checkmark', label: '[WF-02 DEMO] Trung tâm Phục vụ (Q.1)', query: 'WF-02 DEMO' },
   { id: 'hosp', icon: 'medical', label: 'Bệnh viện & Cơ sở y tế', query: 'Bệnh viện' },
   { id: 'cafe', icon: 'cafe', label: 'Quán Cà phê tiếp cận', query: 'Cà phê' },
   { id: 'mall', icon: 'cart', label: 'TTTM & Siêu thị', query: 'Siêu thị' },
@@ -27,6 +37,7 @@ const QUICK_SEARCH_SUGGESTIONS = [
 ];
 
 export function DiscoveryScreen({ onNavigateToContribute }: DiscoveryScreenProps = {}) {
+  const router = useRouter();
   const mapViewRef = useRef<MapViewHandle>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<GeocodeResult[]>([]);
@@ -55,6 +66,31 @@ export function DiscoveryScreen({ onNavigateToContribute }: DiscoveryScreenProps
   const activePlace = osmPlace ?? selectedPlace;
   const hasCenteredUser = useRef(false);
 
+  // Android Back Handler / Return Gesture
+  useEffect(() => {
+    const onBackPress = () => {
+      // 1. If search dropdown / suggestions are showing, close search
+      if (showResults || isSearchFocused || searchQuery.length > 0) {
+        setShowResults(false);
+        setIsSearchFocused(false);
+        setSearchQuery('');
+        Keyboard.dismiss();
+        return true;
+      }
+      // 2. If location detail sheet is open, close sheet and return to map
+      if (activePlace || selectedId) {
+        selectPlace(null);
+        setOsmPlace(null);
+        return true;
+      }
+      // 3. Otherwise let OS perform default back
+      return false;
+    };
+
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [activePlace, selectedId, showResults, isSearchFocused, searchQuery, selectPlace]);
+
   useEffect(() => {
     if (location && !hasCenteredUser.current) {
       hasCenteredUser.current = true;
@@ -74,10 +110,10 @@ export function DiscoveryScreen({ onNavigateToContribute }: DiscoveryScreenProps
     setIsSearching(true);
     const timer = setTimeout(async () => {
       try {
-        const results = await forwardGeocode(q, {
+        const results = await unifiedSearch(q, {
           lat: location?.latitude,
           lng: location?.longitude,
-          limit: 5,
+          limit: 6,
         });
         setSearchResults(results);
         setShowResults(true);
@@ -86,7 +122,7 @@ export function DiscoveryScreen({ onNavigateToContribute }: DiscoveryScreenProps
       } finally {
         setIsSearching(false);
       }
-    }, 450);
+    }, 400);
 
     return () => clearTimeout(timer);
   }, [searchQuery, location?.latitude, location?.longitude]);
@@ -98,6 +134,14 @@ export function DiscoveryScreen({ onNavigateToContribute }: DiscoveryScreenProps
     setSearchQuery(result.name);
     mapViewRef.current?.flyTo(result.lng, result.lat, 16);
     selectPlace(null);
+
+    // If result is already an AccessMap place, preserve its ID and feature data
+    if (result.placeDto) {
+      setOsmPlace(result.placeDto);
+      selectPlace(result.placeDto.id);
+      return;
+    }
+
     setOsmPlace({
       id: `search-${result.id}`,
       name: result.name,
@@ -153,95 +197,112 @@ export function DiscoveryScreen({ onNavigateToContribute }: DiscoveryScreenProps
 
       {/* UI Overlays */}
       <View style={styles.overlayTop}>
-        <HeaderBar />
-        <SearchBar
-          value={searchQuery}
-          onChangeText={(text) => {
-            setSearchQuery(text);
-            if (text.length >= 2) {
-              setShowResults(true);
-            }
-          }}
-          onFocus={() => {
-            setIsSearchFocused(true);
-            if (activePlace) {
-              selectPlace(null);
-              setOsmPlace(null);
-            }
-          }}
-          onClear={() => {
-            setSearchQuery('');
-            setSearchResults([]);
-            setShowResults(false);
-            setIsSearchFocused(false);
-            Keyboard.dismiss();
-          }}
-          isSearching={isSearching}
-        />
+        <HeaderBar onProfilePress={() => router.push('/reports' as never)} />
+        <View style={styles.searchWrapper}>
+          <SearchBar
+            value={searchQuery}
+            onChangeText={(text) => {
+              setSearchQuery(text);
+              if (text.length >= 2) {
+                setShowResults(true);
+              }
+            }}
+            onFocus={() => {
+              setIsSearchFocused(true);
+              if (activePlace) {
+                selectPlace(null);
+                setOsmPlace(null);
+              }
+            }}
+            onClear={() => {
+              setSearchQuery('');
+              setSearchResults([]);
+              setShowResults(false);
+              setIsSearchFocused(false);
+              Keyboard.dismiss();
+            }}
+            isSearching={isSearching}
+          />
 
-        {/* Quick suggestions when search is focused and query is empty */}
-        {isSearchFocused && searchQuery.trim().length === 0 && (
-          <View style={styles.resultsDropdown}>
-            <View style={styles.suggestionsHeader}>
-              <Text style={styles.suggestionsHeaderText}>GỢI Ý TÌM KIẾM NHANH</Text>
-              <TouchableOpacity
-                onPress={() => {
-                  setIsSearchFocused(false);
-                  Keyboard.dismiss();
-                }}
-                hitSlop={10}
-              >
-                <Text style={styles.suggestionsCloseText}>Đóng</Text>
-              </TouchableOpacity>
+          {/* Quick suggestions when search is focused and query is empty */}
+          {isSearchFocused && searchQuery.trim().length === 0 && (
+            <View style={styles.resultsDropdown}>
+              <View style={styles.suggestionsHeader}>
+                <Text style={styles.suggestionsHeaderText}>GỢI Ý TÌM KIẾM NHANH</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setIsSearchFocused(false);
+                    Keyboard.dismiss();
+                  }}
+                  hitSlop={10}
+                >
+                  <Text style={styles.suggestionsCloseText}>Đóng</Text>
+                </TouchableOpacity>
+              </View>
+              {QUICK_SEARCH_SUGGESTIONS.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={styles.resultItem}
+                  onPress={() => {
+                    setSearchQuery(item.query);
+                    setIsSearchFocused(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name={item.icon as any} size={18} color={Colors.primary} style={styles.resultIcon} />
+                  <View style={styles.resultTextContainer}>
+                    <Text style={styles.resultName}>{item.label}</Text>
+                    <Text style={styles.resultAddress}>Khảo sát tiêu chuẩn tiếp cận</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
             </View>
-            {QUICK_SEARCH_SUGGESTIONS.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={styles.resultItem}
-                onPress={() => {
-                  setSearchQuery(item.query);
-                  setIsSearchFocused(false);
-                }}
-                activeOpacity={0.7}
-              >
-                <Ionicons name={item.icon as any} size={18} color={Colors.primary} style={styles.resultIcon} />
-                <View style={styles.resultTextContainer}>
-                  <Text style={styles.resultName}>{item.label}</Text>
-                  <Text style={styles.resultAddress}>Khảo sát tiêu chuẩn tiếp cận</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
+          )}
 
-        {showResults && searchResults.length > 0 && (
-          <ScrollView
-            style={styles.resultsDropdown}
-            contentContainerStyle={styles.resultsDropdownContent}
-            keyboardShouldPersistTaps="handled"
-            nestedScrollEnabled
-            showsVerticalScrollIndicator={true}
-          >
-            {searchResults.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={styles.resultItem}
-                onPress={() => handleSelectSearchResult(item)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="location-sharp" size={18} color={Colors.primary} style={styles.resultIcon} />
-                <View style={styles.resultTextContainer}>
-                  <Text style={styles.resultName} numberOfLines={1}>{item.name}</Text>
-                  <Text style={styles.resultAddress} numberOfLines={1}>{item.displayName}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        )}
+          {showResults && searchResults.length > 0 && (
+            <ScrollView
+              style={styles.resultsDropdown}
+              contentContainerStyle={styles.resultsDropdownContent}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+              showsVerticalScrollIndicator={true}
+            >
+              {searchResults.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[styles.resultItem, item.source === 'accessmap' && styles.resultItemAccessMap]}
+                  onPress={() => handleSelectSearchResult(item)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name={item.source === 'accessmap' ? 'shield-checkmark' : 'location-sharp'}
+                    size={18}
+                    color={Colors.primary}
+                    style={styles.resultIcon}
+                  />
+                  <View style={styles.resultTextContainer}>
+                    <View style={styles.resultTitleRow}>
+                      <Text style={styles.resultName} numberOfLines={1}>{item.name}</Text>
+                      {item.source === 'accessmap' && (
+                        <View style={styles.accessMapTag}>
+                          <Text style={styles.accessMapTagText}>AccessMap</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.resultAddress} numberOfLines={1}>{item.displayName}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+        </View>
       </View>
 
       <MapControls
         onMyLocation={() => mapViewRef.current?.recenter()}
+        onResetNorth={() => mapViewRef.current?.resetNorth()}
+        onZoomIn={() => mapViewRef.current?.zoomIn()}
+        onZoomOut={() => mapViewRef.current?.zoomOut()}
         onToggleLayer={() => setShowAccessibilityLayer((prev) => !prev)}
         isLayerActive={showAccessibilityLayer}
       />
@@ -331,6 +392,11 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 10,
   },
+  searchWrapper: {
+    maxWidth: 680,
+    width: '100%',
+    alignSelf: 'center',
+  },
   zoomHintBanner: {
     position: 'absolute',
     bottom: 96,
@@ -365,6 +431,9 @@ const styles = StyleSheet.create({
     borderColor: '#f1f5f9',
     maxHeight: 320,
     overflow: 'hidden',
+    maxWidth: 680,
+    width: '100%',
+    alignSelf: 'center',
   },
   resultsDropdownContent: {
     paddingVertical: 4,
@@ -382,6 +451,28 @@ const styles = StyleSheet.create({
   },
   resultTextContainer: {
     flex: 1,
+  },
+  resultTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
+  accessMapTag: {
+    backgroundColor: '#E8FAF6',
+    borderColor: '#99F6E4',
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+  },
+  accessMapTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#006874',
+  },
+  resultItemAccessMap: {
+    backgroundColor: '#FAFDFD',
   },
   resultName: {
     fontSize: 14,

@@ -1,110 +1,137 @@
-import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Colors } from '@/shared/theme';
+import React from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface AccuracyConfirmationSectionProps {
-  onConfirmAccurate?: () => void;
-  onReportIssue?: () => void;
+  onStillAccurate?: () => void;
+  onReportIssue: () => void;
+  isSubmitting?: boolean;
 }
 
 export function AccuracyConfirmationSection({
-  onConfirmAccurate,
+  onStillAccurate,
   onReportIssue,
+  isSubmitting,
 }: AccuracyConfirmationSectionProps) {
-  const [isConfirmed, setIsConfirmed] = useState(false);
-
-  const handleConfirm = () => {
-    setIsConfirmed(true);
-    onConfirmAccurate?.();
-    Alert.alert('Cảm ơn bạn!', 'Đã ghi nhận xác nhận tiếp cận. Bạn nhận được +15 EXP cộng đồng!');
-  };
-
-  const handleReport = () => {
-    onReportIssue?.();
-    Alert.alert('Báo lỗi tiếp cận', 'Cảm ơn bạn đã phản hồi. Nhóm kiểm duyệt sẽ xác minh lại thông tin địa điểm này.');
-  };
-
   return (
-    <View style={styles.container}>
-      <TouchableOpacity
-        style={[styles.confirmBtn, isConfirmed && styles.confirmedBtn]}
-        onPress={handleConfirm}
-        disabled={isConfirmed}
-        accessibilityRole="button"
-        accessibilityLabel="Vẫn dùng tốt nhận 15 EXP"
-        activeOpacity={0.85}
-      >
-        <MaterialCommunityIcons
-          name={isConfirmed ? 'check-circle' : 'check-circle-outline'}
-          size={20}
-          color="#ffffff"
-        />
-        <Text style={styles.confirmBtnText}>
-          {isConfirmed ? 'Đã xác nhận (+15 EXP)' : 'Vẫn dùng tốt (+15 EXP)'}
-        </Text>
-      </TouchableOpacity>
+    <View style={styles.card}>
+      <View style={styles.headerRow}>
+        <View style={styles.questionIconBox}>
+          <MaterialCommunityIcons name="help-circle-outline" size={19} color="#006874" />
+        </View>
+        <Text style={styles.title}>Thông tin này còn chính xác không?</Text>
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>Cần 1 xác nhận</Text>
+        </View>
+      </View>
 
-      <TouchableOpacity
-        style={styles.reportBtn}
-        onPress={handleReport}
-        accessibilityRole="button"
-        accessibilityLabel="Báo lỗi thông tin"
-        activeOpacity={0.8}
-      >
-        <MaterialCommunityIcons name="alert-circle-outline" size={19} color="#dc2626" />
-        <Text style={styles.reportBtnText}>Báo lỗi</Text>
-      </TouchableOpacity>
+      <Text style={styles.desc}>
+        Xác nhận của bạn sẽ giúp cập nhật độ mới của thông tin.
+      </Text>
+
+      <View style={styles.btnRow}>
+        <TouchableOpacity
+          style={styles.accurateBtn}
+          onPress={onStillAccurate}
+          activeOpacity={0.82}
+          disabled={isSubmitting}
+        >
+          <MaterialCommunityIcons name="check-circle-outline" size={16} color="#FFFFFF" />
+          <Text style={styles.accurateText}>Vẫn chính xác</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.changeBtn}
+          onPress={onReportIssue}
+          activeOpacity={0.82}
+          disabled={isSubmitting}
+        >
+          <MaterialCommunityIcons name="alert-outline" size={16} color="#B45309" />
+          <Text style={styles.changeText}>Báo thay đổi</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    marginTop: 8,
-    marginBottom: 24,
-    flexDirection: 'row',
-    gap: 10,
-    alignItems: 'center',
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 14,
   },
-  confirmBtn: {
-    flex: 2,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: '#006874',
+  headerRow: {
     flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  questionIconBox: {
+    width: 22,
+    height: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    shadowColor: '#006874',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 3,
   },
-  confirmedBtn: {
-    backgroundColor: '#059669',
-  },
-  confirmBtnText: {
-    color: '#ffffff',
-    fontSize: 14,
+  title: {
+    fontSize: 13.5,
     fontWeight: '800',
-  },
-  reportBtn: {
+    color: '#0F172A',
     flex: 1,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: '#fee2e2',
+  },
+  badge: {
+    backgroundColor: '#CCFBF1',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  badgeText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#0F766E',
+  },
+  desc: {
+    fontSize: 11.5,
+    color: '#64748B',
+    lineHeight: 16,
+    marginTop: 6,
+    marginBottom: 12,
+  },
+  btnRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  accurateBtn: {
+    flex: 1,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#004E58',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    borderWidth: 1,
-    borderColor: '#fecaca',
   },
-  reportBtnText: {
-    color: '#dc2626',
-    fontSize: 13.5,
-    fontWeight: '700',
+  accurateText: {
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontWeight: '800',
+  },
+  changeBtn: {
+    flex: 1,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  changeText: {
+    color: '#B45309',
+    fontSize: 12.5,
+    fontWeight: '800',
   },
 });

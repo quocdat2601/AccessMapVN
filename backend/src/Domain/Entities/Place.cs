@@ -1,4 +1,5 @@
 using AccessMapVN.Domain.Common;
+using AccessMapVN.Domain.Enums;
 
 namespace AccessMapVN.Domain.Entities;
 
@@ -22,4 +23,8 @@ public class Place : BaseEntity
     public decimal? AccessibilityScore { get; set; }
     public string? AccessibilityNote { get; set; }
     public DateTimeOffset? LastVerifiedAt { get; set; }
+    public LocationStatus Status { get; set; } = LocationStatus.Active;
+    public Guid? MergedIntoLocationId { get; set; }
+    public int MetadataVersion { get; set; } = 1;
+    public uint RowVersion { get; set; }
 }

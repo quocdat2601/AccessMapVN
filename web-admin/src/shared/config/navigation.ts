@@ -1,5 +1,17 @@
 import type { LucideIcon } from "lucide-react";
-import { BellRing, ChartNoAxesCombined, CircleGauge, FileCheck2, Gavel, Settings2, ShieldCheck, TicketPercent, UsersRound } from "lucide-react";
+import {
+  BellRing,
+  ChartNoAxesCombined,
+  CircleGauge,
+  FileCheck2,
+  FileWarning,
+  Gavel,
+  MessageSquareWarning,
+  Settings2,
+  ShieldCheck,
+  TicketPercent,
+  UsersRound,
+} from "lucide-react";
 
 export interface NavigationItem {
   label: string;
@@ -18,8 +30,10 @@ export const navigationGroups: NavigationGroup[] = [
   {
     label: "Kiểm duyệt",
     items: [
-      { label: "Hồ sơ đóng góp", href: "/admin/ho-so-dong-gop", icon: FileCheck2, badge: "16" },
-      { label: "Tranh chấp tiếp cận", href: "/admin/tranh-chap-tiep-can", icon: Gavel, badge: "8" },
+      { label: "Hồ sơ đóng góp", href: "/admin/ho-so-dong-gop", icon: FileCheck2 },
+      { label: "Tranh chấp tiếp cận", href: "/admin/tranh-chap-tiep-can", icon: Gavel },
+      { label: "Báo cáo sai lệch", href: "/admin/bao-cao-sai-lech", icon: FileWarning },
+      { label: "Bình luận cộng đồng", href: "/admin/binh-luan-cong-dong", icon: MessageSquareWarning },
     ],
   },
   {
@@ -33,14 +47,18 @@ export const navigationGroups: NavigationGroup[] = [
   {
     label: "Hệ thống",
     items: [
-      { label: "Cảnh báo & Sự cố", href: "/admin/canh-bao-su-co", icon: BellRing, badge: "3" },
+      { label: "Cảnh báo & Sự cố", href: "/admin/canh-bao-su-co", icon: BellRing },
       { label: "Cài đặt hệ thống", href: "/admin/cai-dat-he-thong", icon: Settings2 },
     ],
   },
 ];
 
 export const placeholderPageMeta = Object.fromEntries(
-  navigationGroups.flatMap((group) => group.items.filter((item) => item.href !== "/admin").map((item) => [item.href.split("/").at(-1)!, { title: item.label, icon: item.icon }])),
+  navigationGroups.flatMap((group) =>
+    group.items
+      .filter((item) => item.href !== "/admin")
+      .map((item) => [item.href.split("/").at(-1)!, { title: item.label, icon: item.icon }]),
+  ),
 ) as Record<string, { title: string; icon: LucideIcon }>;
 
 export const platformName = "AccessMapVN";

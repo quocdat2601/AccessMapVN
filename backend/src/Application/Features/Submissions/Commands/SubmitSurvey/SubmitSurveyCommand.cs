@@ -8,7 +8,8 @@ public record SubmitSurveyCommand : IRequest<SubmitSurveyResult>
     [JsonPropertyName("location_id")]
     public string LocationId { get; init; } = string.Empty;
 
-    [JsonPropertyName("user_id")]
+    // Server-populated from the validated JWT subject; never accepted from JSON.
+    [JsonIgnore]
     public string? UserId { get; init; }
 
     [JsonPropertyName("media_urls")]

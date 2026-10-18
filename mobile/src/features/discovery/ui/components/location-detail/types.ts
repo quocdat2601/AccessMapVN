@@ -1,3 +1,8 @@
+import type {
+  AccessibilityFeatureType,
+  PublishedFeatureStatus,
+} from '@/features/community';
+
 export type AccessibilityIconName =
   | 'wheelchair-accessibility'
   | 'elevator-passenger'
@@ -12,6 +17,8 @@ export interface AccessibilityDetailFeature {
   id: string;
   icon: AccessibilityIconName;
   label: string;
+  featureType: AccessibilityFeatureType;
+  publishedStatus: PublishedFeatureStatus;
   confirmations?: number;
   status?: string;
   description?: string;

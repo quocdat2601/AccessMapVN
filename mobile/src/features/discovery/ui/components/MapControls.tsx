@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '@/shared/theme';
 
 interface MapControlsProps {
@@ -20,8 +21,10 @@ export function MapControls({
   onZoomOut,
   onMyLocation,
 }: MapControlsProps) {
+  const insets = useSafeAreaInsets();
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { top: insets.top + 130 }]}>
       {/* 1. Compass Button */}
       <TouchableOpacity
         style={styles.circleButton}
@@ -91,7 +94,6 @@ const styles = StyleSheet.create({
   container: {
     position: 'absolute',
     right: 14,
-    top: 72,
     alignItems: 'center',
     gap: 10,
     zIndex: 8,

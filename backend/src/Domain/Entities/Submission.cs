@@ -16,6 +16,7 @@ public class Submission : BaseEntity
     public string? TextDescription { get; set; }
     public SubmissionStatus Status { get; set; } = SubmissionStatus.Submitted;
     public double ConfidenceScore { get; set; } = 0.88;
-    public int PointsAwarded { get; set; } = 50;
+    // Points are awarded only when an authorized WF-01 publication succeeds.
+    public int PointsAwarded { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

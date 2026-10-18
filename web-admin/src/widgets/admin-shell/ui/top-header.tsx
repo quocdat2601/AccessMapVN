@@ -2,16 +2,32 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Bell, Check, ChevronDown, Menu, Search, Settings, UserRound, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Bell, ChevronDown, LogOut, Menu, Search, Settings, UserRound, X } from "lucide-react";
 import * as Avatar from "@radix-ui/react-avatar";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { useAdminIdentity } from "@/features/auth/model/use-admin-identity";
 import { Button } from "@/shared/ui/button";
 import { cn } from "@/shared/lib/cn";
 
 const menuItemClass = "flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-sm text-slate-700 outline-none transition-colors hover:bg-slate-100 focus:bg-slate-100";
 
 export function TopHeader({ onMenuOpen }: { onMenuOpen: () => void }) {
+  const router = useRouter();
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const { identity, signOut } = useAdminIdentity();
+
+  async function handleSignOut() {
+    setIsSigningOut(true);
+    try {
+      await signOut();
+      router.replace("/login");
+      router.refresh();
+    } finally {
+      setIsSigningOut(false);
+    }
+  }
 
   return (
     <header className="sticky top-0 z-30 flex h-[73px] items-center gap-3 border-b border-slate-200 bg-white/95 px-4 backdrop-blur-md sm:px-6">
@@ -69,18 +85,18 @@ export function TopHeader({ onMenuOpen }: { onMenuOpen: () => void }) {
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
           <button className="flex items-center gap-2 rounded-lg p-1 outline-none transition hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-teal-600" aria-label="Mở menu quản trị viên">
-            <Avatar.Root className="grid size-9 place-items-center overflow-hidden rounded-full bg-teal-700 text-xs font-bold text-white"><Avatar.Fallback>MT</Avatar.Fallback></Avatar.Root>
-            <div className="hidden text-left xl:block"><p className="text-xs font-semibold text-slate-900">Minh Trần</p><p className="text-[10px] text-slate-500">Quản trị viên</p></div>
+            <Avatar.Root className="grid size-9 place-items-center overflow-hidden rounded-full bg-teal-700 text-xs font-bold text-white"><Avatar.Fallback>{identity.initials}</Avatar.Fallback></Avatar.Root>
+            <div className="hidden text-left xl:block"><p className="max-w-36 truncate text-xs font-semibold text-slate-900">{identity.displayName}</p><p className="text-[10px] text-slate-500">{identity.role}</p></div>
             <ChevronDown className="hidden size-3.5 text-slate-400 xl:block" />
           </button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
           <DropdownMenu.Content align="end" sideOffset={8} className="z-50 w-52 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
-            <DropdownMenu.Label className="px-2 py-2 text-xs font-semibold text-slate-500">Tài khoản quản trị</DropdownMenu.Label>
+            <DropdownMenu.Label className="px-2 py-2"><span className="block text-xs font-semibold text-slate-700">{identity.displayName}</span><span className="mt-0.5 block truncate text-[10px] font-normal text-slate-400">{identity.email}</span></DropdownMenu.Label>
             <DropdownMenu.Item asChild><Link href="/admin/nguoi-dung-uy-tin" className={menuItemClass}><UserRound className="size-4" />Hồ sơ của tôi</Link></DropdownMenu.Item>
             <DropdownMenu.Item asChild><Link href="/admin/cai-dat-he-thong" className={menuItemClass}><Settings className="size-4" />Thiết lập cá nhân</Link></DropdownMenu.Item>
             <DropdownMenu.Separator className="my-1 h-px bg-slate-100" />
-            <DropdownMenu.Item asChild><Link href="/login" className={menuItemClass}><Check className="size-4" />Kết thúc phiên demo</Link></DropdownMenu.Item>
+            <DropdownMenu.Item asChild><button type="button" disabled={isSigningOut} onClick={() => void handleSignOut()} className={cn(menuItemClass, "w-full disabled:opacity-50")}><LogOut className="size-4" />{isSigningOut ? "Đang đăng xuất..." : "Đăng xuất"}</button></DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>

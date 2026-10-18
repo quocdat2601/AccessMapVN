@@ -140,11 +140,12 @@ export function LocationDetailSheet({
     ? 0
     : Math.round(rawScore > 1 ? Math.min(rawScore, 100) : Math.max(rawScore * 100, 0));
 
+  const [currentTimestamp] = useState(() => Date.now());
   const isRecentVerified = useMemo(() => {
     if (!place.last_verified_at) return false;
-    const diffDays = (Date.now() - new Date(place.last_verified_at).getTime()) / (1000 * 60 * 60 * 24);
+    const diffDays = (currentTimestamp - new Date(place.last_verified_at).getTime()) / (1000 * 60 * 60 * 24);
     return diffDays >= 0 && diffDays <= 90;
-  }, [place.last_verified_at]);
+  }, [place.last_verified_at, currentTimestamp]);
 
   const isDemo2 = place.id === '70000000-0000-0000-0000-000000000002';
   const isDemo1 = place.id === '70000000-0000-0000-0000-000000000001';
@@ -250,7 +251,7 @@ export function LocationDetailSheet({
       setVerificationRefreshKey((k) => k + 1);
       setShowVerificationModal(true);
     },
-    [place.id, user?.id]
+    [place.id, user]
   );
 
   const [evidenceList, setEvidenceList] = useState<EvidenceItem[]>([]);

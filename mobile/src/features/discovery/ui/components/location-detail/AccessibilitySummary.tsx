@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { AccessibilityDetailFeature } from './types';
@@ -34,6 +34,8 @@ export function AccessibilitySummary({
   onHelpConfirmPress,
   isFullyVerified,
 }: AccessibilitySummaryProps) {
+  const [currentTimestamp] = useState(() => Date.now());
+
   if (isUnrated) {
     return (
       <View style={styles.outerContainer}>
@@ -57,7 +59,7 @@ export function AccessibilitySummary({
     : null;
 
   const isStale = lastVerifiedAt
-    ? (Date.now() - new Date(lastVerifiedAt).getTime()) > 90 * 24 * 60 * 60 * 1000
+    ? (currentTimestamp - new Date(lastVerifiedAt).getTime()) > 90 * 24 * 60 * 60 * 1000
     : true;
   const verified = isFullyVerified ?? (!isStale && trustPercent >= 75);
 

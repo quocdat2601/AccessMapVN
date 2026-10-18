@@ -60,7 +60,7 @@ export async function fetchPlacesInBBox(
         tactilePaving: nullableBoolean(p.hasTactilePaving, p.has_tactile_paving),
       },
     }));
-  } catch (error) {
+  } catch {
     // Graceful fallback to empty array on transient failure
     return [];
   }

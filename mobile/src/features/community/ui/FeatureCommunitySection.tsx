@@ -100,11 +100,21 @@ function FeatureCard({ locationId, feature, onRequestReport, refreshTrigger }: F
     };
   }, [storageKey, refreshTrigger]);
 
+  const [currentTimestamp, setCurrentTimestamp] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!submittedObservation) return;
+    const timer = setInterval(() => {
+      setCurrentTimestamp(Date.now());
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [submittedObservation]);
+
   const isFinalized = submittedObservation
-    ? Date.now() - submittedObservation.submittedAt > GRACE_PERIOD_MS
+    ? currentTimestamp - submittedObservation.submittedAt > GRACE_PERIOD_MS
     : false;
   const remainingMinutes = submittedObservation
-    ? Math.max(1, Math.round((GRACE_PERIOD_MS - (Date.now() - submittedObservation.submittedAt)) / (60 * 1000)))
+    ? Math.max(1, Math.round((GRACE_PERIOD_MS - (currentTimestamp - submittedObservation.submittedAt)) / (60 * 1000)))
     : 0;
 
   const load = useCallback(async () => {

@@ -57,6 +57,23 @@ public sealed class CommunityValidationController : ControllerBase
     }
 
     [Authorize]
+    [HttpDelete("votes/mine")]
+    [ProducesResponseType(typeof(FeatureCommunityDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<FeatureCommunityDto>> WithdrawVote(
+        Guid locationId,
+        AccessibilityFeatureType featureType,
+        CancellationToken cancellationToken)
+    {
+        if (!User.TryGetUserId(out var actorId))
+        {
+            throw new Wf02Exception("INVALID_SUBJECT", "The authenticated subject is not a UUID.", 401);
+        }
+
+        var response = await _service.WithdrawVoteAsync(actorId, locationId, featureType, cancellationToken);
+        return Ok(response);
+    }
+
+    [Authorize]
     [HttpPost("~/api/v1/community-votes/{voteId:guid}/link-submission")]
     [EnableRateLimiting("wf02-evidence")]
     [ProducesResponseType(typeof(LinkVoteSubmissionResponse), StatusCodes.Status200OK)]

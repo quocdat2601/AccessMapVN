@@ -477,6 +477,85 @@ public sealed class Wf02CommunityService : IWf02CommunityService
         return response;
     }
 
+    public async Task<FeatureCommunityDto> WithdrawVoteAsync(
+        Guid actorId,
+        Guid locationId,
+        AccessibilityFeatureType featureType,
+        CancellationToken cancellationToken = default)
+    {
+        var place = await _db.Places.SingleOrDefaultAsync(item => item.Id == locationId, cancellationToken);
+        if (place is null || place.Status != LocationStatus.Active || place.MergedIntoLocationId is not null)
+        {
+            throw new Wf02Exception("LOCATION_NOT_ACTIVE", "The location is not active or no longer canonical.", 409);
+        }
+
+        var feature = await _db.LocationFeatures.SingleOrDefaultAsync(
+            item => item.LocationId == locationId &&
+                    item.ScopeId == null &&
+                    item.FeatureType == featureType &&
+                    item.IsPublished,
+            cancellationToken);
+        if (feature is null)
+        {
+            throw new Wf02Exception("FEATURE_NOT_PUBLISHED", "The feature is not published.", 404);
+        }
+
+        var now = _clock.GetUtcNow();
+        var activeVote = await _db.CommunityVotes
+            .Where(item => item.LocationFeatureId == feature.Id &&
+                           item.ObservedFeatureVersion == feature.Version &&
+                           item.VoterId == actorId &&
+                           (item.Status == CommunityVoteStatus.Recorded ||
+                            item.Status == CommunityVoteStatus.PendingValidation ||
+                            item.Status == CommunityVoteStatus.Eligible))
+            .OrderByDescending(item => item.CreatedAtUtc)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (activeVote is not null)
+        {
+            var previousStatus = activeVote.Status;
+            activeVote.Status = CommunityVoteStatus.Archived;
+            activeVote.UpdatedAtUtc = now.UtcDateTime;
+            _db.CommunityVoteStatusHistories.Add(new CommunityVoteStatusHistory
+            {
+                CommunityVoteId = activeVote.Id,
+                FromStatus = previousStatus,
+                ToStatus = CommunityVoteStatus.Archived,
+                ActorId = actorId,
+                Reason = "Withdrawn by voter during grace period.",
+                OccurredAt = now,
+            });
+
+            var job = await _db.FeatureAssessmentJobs.SingleOrDefaultAsync(
+                item => item.LocationFeatureId == feature.Id &&
+                        item.FeatureVersion == feature.Version &&
+                        (item.Status == AssessmentJobStatus.Queued ||
+                         item.Status == AssessmentJobStatus.Processing ||
+                         item.Status == AssessmentJobStatus.RetryScheduled),
+                cancellationToken);
+            if (job is null)
+            {
+                job = new FeatureAssessmentJob
+                {
+                    LocationFeatureId = feature.Id,
+                    FeatureVersion = feature.Version,
+                    Status = AssessmentJobStatus.Queued,
+                };
+                _db.FeatureAssessmentJobs.Add(job);
+            }
+            else
+            {
+                job.Revision += 1;
+                if (job.Status != AssessmentJobStatus.Processing) job.Status = AssessmentJobStatus.Queued;
+            }
+
+            await _db.SaveChangesAsync(cancellationToken);
+            await EvaluateAsync(job.Id, cancellationToken);
+        }
+
+        return await GetCommunityAsync(locationId, featureType, cancellationToken);
+    }
+
     public async Task EvaluateAsync(Guid assessmentJobId, CancellationToken cancellationToken = default)
     {
         var now = _clock.GetUtcNow();

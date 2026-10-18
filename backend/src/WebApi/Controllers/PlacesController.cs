@@ -28,6 +28,18 @@ public class PlacesController : ControllerBase
         return Ok(places);
     }
 
+    [HttpGet("search")]
+    [ProducesResponseType(typeof(List<PlaceDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> Search(
+        [FromQuery] string? q,
+        [FromQuery] double? lat,
+        [FromQuery] double? lng,
+        [FromQuery] int limit = 10,
+        CancellationToken cancellationToken = default)
+    {
+        var places = await _mediator.Send(new AccessMapVN.Application.Features.Places.Queries.SearchPlaces.SearchPlacesQuery(q, lat, lng, limit), cancellationToken);
+        return Ok(places);
+    }
     [HttpGet("{id}")]
     [ProducesResponseType(typeof(PlaceDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

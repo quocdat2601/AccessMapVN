@@ -1,44 +1,137 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface AccuracyConfirmationSectionProps {
-  onReportIssue(): void;
-  onViewReports(): void;
+  onStillAccurate?: () => void;
+  onReportIssue: () => void;
+  isSubmitting?: boolean;
 }
 
-/** Place-level actions. Feature confirmation is intentionally handled per version above. */
 export function AccuracyConfirmationSection({
+  onStillAccurate,
   onReportIssue,
-  onViewReports,
+  isSubmitting,
 }: AccuracyConfirmationSectionProps) {
   return (
-    <View style={styles.container}>
-      <TouchableOpacity
-        accessibilityRole="button"
-        activeOpacity={0.82}
-        onPress={onReportIssue}
-        style={styles.reportButton}
-      >
-        <MaterialCommunityIcons name="alert-circle-outline" size={19} color="#B91C1C" />
-        <Text style={styles.reportText}>Báo thông tin sai</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        accessibilityRole="button"
-        activeOpacity={0.82}
-        onPress={onViewReports}
-        style={styles.historyButton}
-      >
-        <MaterialCommunityIcons name="clipboard-text-clock-outline" size={19} color="#006874" />
-        <Text style={styles.historyText}>Báo cáo của tôi</Text>
-      </TouchableOpacity>
+    <View style={styles.card}>
+      <View style={styles.headerRow}>
+        <View style={styles.questionIconBox}>
+          <MaterialCommunityIcons name="help-circle-outline" size={19} color="#006874" />
+        </View>
+        <Text style={styles.title}>Thông tin này còn chính xác không?</Text>
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>Cần 1 xác nhận</Text>
+        </View>
+      </View>
+
+      <Text style={styles.desc}>
+        Xác nhận của bạn sẽ giúp cập nhật độ mới của thông tin.
+      </Text>
+
+      <View style={styles.btnRow}>
+        <TouchableOpacity
+          style={styles.accurateBtn}
+          onPress={onStillAccurate}
+          activeOpacity={0.82}
+          disabled={isSubmitting}
+        >
+          <MaterialCommunityIcons name="check-circle-outline" size={16} color="#FFFFFF" />
+          <Text style={styles.accurateText}>Vẫn chính xác</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.changeBtn}
+          onPress={onReportIssue}
+          activeOpacity={0.82}
+          disabled={isSubmitting}
+        >
+          <MaterialCommunityIcons name="alert-outline" size={16} color="#B45309" />
+          <Text style={styles.changeText}>Báo thay đổi</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { alignItems: 'center', flexDirection: 'row', gap: 9, marginBottom: 24, marginTop: 8 },
-  reportButton: { alignItems: 'center', backgroundColor: '#FEF2F2', borderColor: '#FECACA', borderRadius: 13, borderWidth: 1, flex: 1, flexDirection: 'row', gap: 6, justifyContent: 'center', minHeight: 47, paddingHorizontal: 8 },
-  reportText: { color: '#B91C1C', fontSize: 12.5, fontWeight: '700' },
-  historyButton: { alignItems: 'center', backgroundColor: '#ECFEFF', borderColor: '#A5F3FC', borderRadius: 13, borderWidth: 1, flex: 1, flexDirection: 'row', gap: 6, justifyContent: 'center', minHeight: 47, paddingHorizontal: 8 },
-  historyText: { color: '#006874', fontSize: 12.5, fontWeight: '700' },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    borderRadius: 18,
+    padding: 14,
+    marginBottom: 14,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  questionIconBox: {
+    width: 22,
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#0F172A',
+    flex: 1,
+  },
+  badge: {
+    backgroundColor: '#CCFBF1',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  badgeText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#0F766E',
+  },
+  desc: {
+    fontSize: 11.5,
+    color: '#64748B',
+    lineHeight: 16,
+    marginTop: 6,
+    marginBottom: 12,
+  },
+  btnRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  accurateBtn: {
+    flex: 1,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#004E58',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  accurateText: {
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontWeight: '800',
+  },
+  changeBtn: {
+    flex: 1,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  changeText: {
+    color: '#B45309',
+    fontSize: 12.5,
+    fontWeight: '800',
+  },
 });

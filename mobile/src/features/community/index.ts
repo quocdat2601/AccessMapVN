@@ -1,6 +1,14 @@
-export { FeatureCommunitySection } from './ui/FeatureCommunitySection';
-export { CommunityTimelineSection } from './ui/CommunityTimelineSection';
-export { fetchCommunityState, castCommunityVote, linkVoteSubmission, fetchLocationTimeline, fetchCommunityComments, submitCommunityComment } from './api/communityApi';
+export { FeatureCommunitySection, type SubmittedObservation } from './ui/FeatureCommunitySection';
+export { FeatureVerificationModal } from './ui/FeatureVerificationModal';
+export {
+  fetchCommunityState,
+  castCommunityVote,
+  withdrawCommunityVote,
+  linkVoteSubmission,
+  fetchLocationTimeline,
+  fetchCommunityComments,
+  submitCommunityComment,
+} from './api/communityApi';
 export type {
   AccessibilityFeatureType,
   CastCommunityVoteInput,

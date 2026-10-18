@@ -1,13 +1,15 @@
 import React from 'react';
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Colors } from '@/shared/theme';
 import { EvidenceItem } from './types';
 
 interface EvidenceGallerySectionProps {
   evidence: EvidenceItem[];
   onAddEvidence?: () => void;
+  onViewAll?: () => void;
+  showDemoContent?: boolean;
+  isVerified?: boolean;
 }
 
 function EvidenceIllustration() {
@@ -24,80 +26,128 @@ function EvidenceIllustration() {
         <Path d="M 24 136 L 209 114" stroke="#006874" strokeWidth="4" />
         <Path d="M 24 126 L 24 141 M 64 121 L 64 136 M 104 116 L 104 132 M 144 112 L 144 127 M 184 107 L 184 122" stroke="#006874" strokeWidth="2" />
       </Svg>
-      <View style={styles.photoShade} />
     </View>
   );
 }
 
-function EvidenceThumbItem({ item }: { item: EvidenceItem }) {
-  const [loadError, setLoadError] = React.useState(false);
-
-  return (
-    <View style={styles.thumbCard}>
-      <View style={styles.thumbIllustration}>
-        {item.imageUrl && !loadError ? (
-          <Image
-            source={{ uri: item.imageUrl }}
-            style={styles.thumbImage}
-            resizeMode="cover"
-            onError={() => setLoadError(true)}
-          />
-        ) : (
-          <EvidenceIllustration />
-        )}
-        <View style={styles.thumbLabelOverlay}>
-          <Text style={styles.thumbLabelText} numberOfLines={1}>{item.title}</Text>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-export function EvidenceGallerySection({ evidence, onAddEvidence }: EvidenceGallerySectionProps) {
-  const photoCount = evidence.length;
+export function EvidenceGallerySection({
+  evidence = [],
+  onAddEvidence,
+  onViewAll,
+  showDemoContent = false,
+  isVerified = false,
+}: EvidenceGallerySectionProps) {
+  const hasItems = evidence.length > 0 || showDemoContent;
+  const firstItem = evidence[0];
 
   return (
     <View style={styles.section}>
       <View style={styles.headingRow}>
         <View style={styles.headingLeft}>
-          <MaterialCommunityIcons name="camera-outline" size={18} color={Colors.primary} />
-          <Text style={styles.headingTitle}>Hình ảnh tiếp cận</Text>
+          <MaterialCommunityIcons name="camera-outline" size={17} color="#006874" />
+          <Text style={styles.headingTitle} numberOfLines={1}>Ảnh & bằng chứng</Text>
+          {showDemoContent ? (
+            <Text style={[styles.newBadgeText, isVerified && styles.newBadgeVerified]}>
+              {isVerified ? '3 ảnh thẩm định' : '3 ảnh mới'}
+            </Text>
+          ) : (
+            <Text style={styles.newBadgeText}>{evidence.length}</Text>
+          )}
         </View>
-        <Text style={styles.headingCount}>
-          {photoCount > 0 ? `${photoCount} ảnh` : 'Chưa có ảnh'}
-        </Text>
+
+        {hasItems ? (
+          <TouchableOpacity
+            onPress={onViewAll ?? onAddEvidence}
+            hitSlop={8}
+            style={styles.viewAllBtn}
+          >
+            <Text style={styles.viewAllText}>
+              {showDemoContent ? 'Xem tất cả (28)' : `Xem tất cả (${evidence.length})`}
+            </Text>
+            <MaterialCommunityIcons name="chevron-right" size={14} color="#006874" />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            onPress={onAddEvidence}
+            hitSlop={8}
+            style={styles.viewAllBtn}
+          >
+            <Text style={styles.viewAllText}>Đóng góp ảnh</Text>
+            <MaterialCommunityIcons name="plus" size={14} color="#006874" />
+          </TouchableOpacity>
+        )}
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.cards}
-      >
-        {evidence.map((item) => (
-          <EvidenceThumbItem key={item.id} item={item} />
-        ))}
-
-        {/* Dashed Camera +50 EXP Tile */}
-        <TouchableOpacity
-          style={styles.addCard}
-          onPress={onAddEvidence}
-          accessibilityRole="button"
-          accessibilityLabel="Chụp ảnh đóng góp nhận 50 EXP"
-          activeOpacity={0.78}
-        >
-          <View style={styles.addCardContent}>
-            <MaterialCommunityIcons name="camera-plus-outline" size={26} color={Colors.primary} />
-            <Text style={styles.addCardExp}>+50 EXP</Text>
+      {!hasItems ? (
+        <View style={styles.emptyState}>
+          <MaterialCommunityIcons name="camera-plus-outline" size={22} color="#007D78" />
+          <View style={styles.emptyCopy}>
+            <Text style={styles.emptyTitle}>Chưa có ảnh hoặc bằng chứng</Text>
+            <Text style={styles.emptyText}>Hãy đóng góp ảnh hoặc bằng chứng tiếp cận cho địa điểm này.</Text>
           </View>
-        </TouchableOpacity>
-      </ScrollView>
+        </View>
+      ) : (
+        /* Featured Big Photo Banner */
+        <View style={styles.featuredCard}>
+          <View style={styles.imageWrapper}>
+            {firstItem?.imageUrl ? (
+              <Image
+                source={{ uri: firstItem.imageUrl }}
+                style={styles.bannerImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <EvidenceIllustration />
+            )}
+
+            {/* Badges on the image */}
+            <View style={styles.blurTag}>
+              <MaterialCommunityIcons name="eye-off-outline" size={11} color="#FFFFFF" />
+              <Text style={styles.blurTagText}>Mặt đã làm mờ</Text>
+            </View>
+
+            <View style={styles.specTag}>
+              <MaterialCommunityIcons name="slope-uphill" size={11} color="#FFFFFF" />
+              <Text style={styles.specTagText}>
+                {isVerified ? 'Độ dốc 1:12 đạt chuẩn QCVN 10' : 'Độ dốc 1:12 đạt chuẩn'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Info below image */}
+          <View style={styles.infoRow}>
+            <View style={styles.infoTextContainer}>
+              <Text style={styles.photoTitle}>
+                {firstItem?.title ?? (isVerified ? 'Ram dốc & Lối vào tiếp cận chuẩn' : 'Ram dốc lối Pasteur')}
+              </Text>
+              <Text style={styles.photoSub}>
+                {firstItem
+                  ? `Bằng chứng gần nhất • ${firstItem.subtitle}`
+                  : isVerified
+                  ? 'Bằng chứng gần nhất • Vừa xác thực • Bởi Chuyên viên Thẩm định'
+                  : 'Bằng chứng gần nhất • 96 ngày trước • Bởi Mai Anh'}
+              </Text>
+            </View>
+            <View style={[styles.ageBadge, isVerified && styles.ageBadgeVerified]}>
+              <MaterialCommunityIcons
+                name={isVerified ? 'check-decagram-outline' : 'history'}
+                size={12}
+                color={isVerified ? '#007D78' : '#B45309'}
+              />
+              <Text style={[styles.ageBadgeText, isVerified && styles.ageBadgeTextVerified]}>
+                {firstItem?.subtitle ?? (isVerified ? 'Đã xác thực' : '96 ngày trước')}
+              </Text>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   section: {
-    marginBottom: 18,
+    marginBottom: 16,
   },
   headingRow: {
     flexDirection: 'row',
@@ -109,86 +159,156 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    flex: 1,
+    flexShrink: 1,
   },
   headingTitle: {
-    fontSize: 15,
+    fontSize: 13.5,
     fontWeight: '800',
-    color: Colors.textPrimary,
+    color: '#0F172A',
   },
-  headingCount: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textMuted,
-  },
-  cards: {
-    gap: 10,
-    paddingRight: 10,
-  },
-  thumbCard: {
-    width: 108,
-    height: 84,
-    borderRadius: 14,
+  newBadgeText: {
+    fontSize: 10.5,
+    color: '#006874',
+    backgroundColor: '#E8FAF6',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+    fontWeight: '700',
     overflow: 'hidden',
-    backgroundColor: '#dce9e7',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
   },
-  thumbIllustration: {
+  newBadgeVerified: {
+    backgroundColor: '#E6F8F5',
+    color: '#007D78',
+    fontWeight: '800',
+  },
+  viewAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 1,
+    flexShrink: 0,
+  },
+  viewAllText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#006874',
+  },
+  emptyState: {
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+    borderRadius: 14,
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    padding: 14,
+  },
+  emptyCopy: {
     flex: 1,
+  },
+  emptyTitle: {
+    color: '#334155',
+    fontSize: 12.5,
+    fontWeight: '800',
+  },
+  emptyText: {
+    color: '#64748B',
+    fontSize: 11.5,
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  featuredCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  imageWrapper: {
+    width: '100%',
+    height: 140,
+    backgroundColor: '#DCE9E7',
     position: 'relative',
   },
-  thumbImage: {
+  bannerImage: {
     width: '100%',
     height: '100%',
   },
-  thumbLabelOverlay: {
+  illustration: {
+    ...StyleSheet.absoluteFill,
+  },
+  blurTag: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingVertical: 3,
-    paddingHorizontal: 6,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
-    alignItems: 'center',
-  },
-  thumbLabelText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  addCard: {
-    width: 96,
-    height: 84,
-    borderRadius: 14,
-    borderWidth: 1.8,
-    borderStyle: 'dashed',
-    borderColor: Colors.primary,
-    backgroundColor: '#f0fdfa',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addCardContent: {
+    top: 8,
+    left: 8,
+    flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+    paddingHorizontal: 7,
+    paddingVertical: 3.5,
+    borderRadius: 6,
   },
-  addCardExp: {
-    fontSize: 12,
+  blurTagText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  specTag: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0, 78, 88, 0.85)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  specTagText: {
+    color: '#FFFFFF',
+    fontSize: 10.5,
+    fontWeight: '700',
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 11,
+    gap: 8,
+  },
+  infoTextContainer: {
+    flex: 1,
+  },
+  photoTitle: {
+    fontSize: 13.5,
     fontWeight: '800',
-    color: Colors.primary,
+    color: '#0F172A',
+    marginBottom: 2,
   },
-  illustration: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
+  photoSub: {
+    fontSize: 11,
+    color: '#64748B',
   },
-  photoShade: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    backgroundColor: 'rgba(0, 55, 63, 0.08)',
+  ageBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 7,
+  },
+  ageBadgeVerified: {
+    backgroundColor: '#E6F8F5',
+  },
+  ageBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#B45309',
+  },
+  ageBadgeTextVerified: {
+    color: '#007D78',
   },
 });

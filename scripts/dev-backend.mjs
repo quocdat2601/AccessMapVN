@@ -47,7 +47,18 @@ const authEnvironment =
     ? { Supabase__Url: supabaseUrl }
     : {};
 
-console.log(`[backend] Dùng PostgreSQL local: 127.0.0.1:${port}/${database}`);
+const useLocalDb = process.env.USE_LOCAL_DB === 'true' || process.argv.includes('--local-db');
+
+const connectionEnv = useLocalDb
+  ? { ConnectionStrings__SupabaseConnection: connectionString }
+  : {};
+
+if (useLocalDb) {
+  console.log(`[backend] Dùng PostgreSQL local: 127.0.0.1:${port}/${database}`);
+} else {
+  console.log('[backend] Dùng PostgreSQL Supabase Cloud (theo dotnet user-secrets / appsettings).');
+}
+
 console.log(
   authEnvironment.Supabase__Url
     ? '[backend] Xác thực JWT dùng Supabase URL từ mobile/.env.'
@@ -56,7 +67,7 @@ console.log(
 const child = spawn('dotnet', ['run', '--project', 'backend/src/WebApi/AccessMapVN.WebApi.csproj'], {
   cwd: repositoryRoot,
   stdio: 'inherit',
-  env: { ...process.env, ConnectionStrings__SupabaseConnection: connectionString, ...authEnvironment },
+  env: { ...process.env, ...connectionEnv, ...authEnvironment },
   windowsHide: false,
 });
 

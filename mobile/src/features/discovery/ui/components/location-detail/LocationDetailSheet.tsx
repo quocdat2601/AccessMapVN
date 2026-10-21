@@ -33,7 +33,13 @@ import {
   type CommunityFeatureInput,
   type SubmittedObservation,
 } from '@/features/community';
-import { ReportFormModal, type ReportFormData, type ReportSummary } from '@/features/reports';
+import {
+  ReportFormModal,
+  type ReportFormData,
+  type ReportSummary,
+  getReportDraft,
+  subscribeReportDraft,
+} from '@/features/reports';
 import type { PlaceDto } from '../../../model';
 import { AccessibilitySummary } from './AccessibilitySummary';
 import { CommunityReviewsSection } from './CommunityReviewsSection';
@@ -148,6 +154,15 @@ export function LocationDetailSheet({
   const [reportInitialData, setReportInitialData] = useState<ReportFormData | undefined>(undefined);
   const [verificationRefreshKey, setVerificationRefreshKey] = useState(0);
 
+  useEffect(() => {
+    return subscribeReportDraft(() => {
+      const draft = getReportDraft();
+      if (draft && draft.isOpen && (draft.locationId === place.id || !draft.locationId)) {
+        setShowReportForm(true);
+      }
+    });
+  }, [place.id]);
+
   const isUnrated =
     place.accessibility_score == null ||
     Number(place.accessibility_score) < 0 ||
@@ -236,8 +251,6 @@ export function LocationDetailSheet({
       primaryFeatureType?: AccessibilityFeatureType,
       formData?: ReportFormData
     ) => {
-      Alert.alert('Đã gửi báo cáo', 'Báo cáo mâu thuẫn đã được ghi nhận. Bạn có thể chỉnh sửa trong vòng 30 phút.');
-
       if (primaryFeatureType && formData) {
         try {
           await castCommunityVote(

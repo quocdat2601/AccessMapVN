@@ -66,9 +66,11 @@ function ActiveCameraContributionScreen() {
     locationName?: string | string[];
     latitude?: string | string[];
     longitude?: string | string[];
+    flow?: string | string[];
   }>();
   const locationId = firstParam(params.locationId, 'saigon-centre');
   const locationName = firstParam(params.locationName, 'Địa điểm mới gần bạn');
+  const flow = firstParam(params.flow, 'contribute');
   const paramLat = parseFloat(firstParam(params.latitude, ''));
   const paramLng = parseFloat(firstParam(params.longitude, ''));
   const cameraRef = useRef<any>(null);
@@ -338,7 +340,7 @@ function ActiveCameraContributionScreen() {
     setIsCapturing(true);
     setMessage(null);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.7, skipProcessing: true, base64: true });
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.55, skipProcessing: true, base64: true });
       if (!mounted.current) return;
       const media: CapturedContributionMedia = {
         id: createMediaId(),
@@ -537,6 +539,7 @@ function ActiveCameraContributionScreen() {
           onChangeLocation={() => setShowLocationModal(true)}
           onRetakeOrReset={handleRetake}
           onEditTags={() => setWorkflowStep('tag_review')}
+          flow={flow}
           onFinish={() => router.back()}
         />
         <LocationSelectionModal

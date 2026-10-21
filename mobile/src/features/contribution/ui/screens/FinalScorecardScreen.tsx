@@ -7,6 +7,7 @@ import { addContributionRecord, type CapturedContributionMedia } from '@/entitie
 import { apiClient } from '@/shared/api/client';
 import { uploadMediaToBackend } from '../../api/mediaUploadService';
 import type { VerificationMatrixResult } from '../../lib/verificationEngine';
+import { getReportDraft, setActiveUploadPromise, setReportEvidence } from '@/features/reports';
 import { ScoreMatrixBreakdown } from '../components/review/ScoreMatrixBreakdown';
 import { ScoreMeterRing } from '../components/review/ScoreMeterRing';
 import { ScoreCriteriaExplainer } from '../components/review/ScoreCriteriaExplainer';
@@ -16,6 +17,7 @@ interface FinalScorecardScreenProps {
   matrixResult: VerificationMatrixResult;
   selectedTagKeys: string[];
   notes: string;
+  flow?: string;
   locationName?: string;
   locationAddress?: string | null;
   onChangeLocation?: () => void;
@@ -29,6 +31,7 @@ export function FinalScorecardScreen({
   matrixResult,
   selectedTagKeys,
   notes,
+  flow,
   locationName,
   locationAddress,
   onChangeLocation,
@@ -162,6 +165,52 @@ export function FinalScorecardScreen({
     statusColor = '#f43f5e';
   }
 
+  const handleAttachToReport = () => {
+    // Start background upload immediately so it's ready before user finishes typing
+    let uploadPromise: Promise<string> | null = null;
+    if (media.uri && !media.uri.startsWith('http')) {
+      uploadPromise = uploadMediaToBackend(media.uri, media.base64);
+      setActiveUploadPromise(uploadPromise);
+      uploadPromise
+        .then((url) => {
+          const draft = getReportDraft();
+          if (draft?.evidence) {
+            setReportEvidence({
+              ...draft.evidence,
+              uploadedUrl: url,
+              isUploading: false,
+            });
+          }
+        })
+        .catch((err) => {
+          console.warn('[Background upload error]', err);
+          const draft = getReportDraft();
+          if (draft?.evidence) {
+            setReportEvidence({
+              ...draft.evidence,
+              isUploading: false,
+            });
+          }
+        });
+    }
+
+    setReportEvidence({
+      uri: media.uri,
+      base64: media.base64,
+      aiScore: overallScore,
+      confidenceScore: overallScore / 100,
+      featureTags: selectedTagKeys,
+      aiSummary:
+        `Điểm tin cậy AI: ${overallScore}/100 (${statusLabel})\n` +
+        `Đánh giá: ${statusDescription}\n` +
+        `Đặc tính nhận diện: ${selectedTagKeys.length > 0 ? selectedTagKeys.join(', ') : 'Chung'}` +
+        (notes ? `\nGhi chú: ${notes}` : ''),
+      matrixResult,
+      isUploading: uploadPromise !== null,
+    });
+    onFinish?.();
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar style="dark" />
@@ -177,9 +226,11 @@ export function FinalScorecardScreen({
           <MaterialCommunityIcons name="arrow-left" size={22} color="#0f172a" />
         </Pressable>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerStep}>BƯỚC 3 / 3</Text>
+          <Text style={styles.headerStep}>
+            {flow === 'report' ? 'MINH CHỨNG BÁO CÁO' : 'BƯỚC 3 / 3'}
+          </Text>
           <Text style={styles.headerTitle} numberOfLines={1}>
-            Kết quả đánh giá tiếp cận
+            {flow === 'report' ? 'Đánh giá AI minh chứng' : 'Kết quả đánh giá tiếp cận'}
           </Text>
         </View>
         <Pressable
@@ -330,7 +381,7 @@ export function FinalScorecardScreen({
             <Text style={styles.detailLabel}>Điểm thưởng dự kiến:</Text>
             <View style={styles.expPill}>
               <MaterialCommunityIcons name="star-circle" size={14} color="#d97706" />
-              <Text style={styles.expPillText}>+50 EXP</Text>
+              <Text style={styles.expPillText}>{flow === 'report' ? '+30 EXP' : '+50 EXP'}</Text>
             </View>
           </View>
         </View>
@@ -339,7 +390,27 @@ export function FinalScorecardScreen({
 
       {/* Bottom Actions */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 14) + 6 }]}>
-        {submittedResult ? (
+        {flow === 'report' ? (
+          <>
+            <Pressable
+              style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
+              onPress={onEditTags}
+              accessibilityRole="button"
+            >
+              <MaterialCommunityIcons name="tag-outline" size={16} color="#334155" />
+              <Text style={styles.secondaryBtnText}>Sửa đặc tính</Text>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
+              onPress={handleAttachToReport}
+              accessibilityRole="button"
+            >
+              <MaterialCommunityIcons name="clipboard-check-outline" size={18} color="#ffffff" />
+              <Text style={styles.primaryBtnText}>Đính kèm vào báo cáo</Text>
+            </Pressable>
+          </>
+        ) : submittedResult ? (
           <>
             <Pressable
               style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}

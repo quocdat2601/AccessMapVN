@@ -111,7 +111,7 @@ public sealed class Wf02ReportService : IWf02ReportService
         var staleBaseline = false;
         if (request.FeatureType is AccessibilityFeatureType featureType)
         {
-            var feature = await _db.LocationFeatures.AsNoTracking()
+            var feature = await _db.LocationFeatures
                 .SingleOrDefaultAsync(
                     item => item.LocationId == canonicalLocation.Id &&
                             item.ScopeId == request.ScopeId &&
@@ -121,15 +121,27 @@ public sealed class Wf02ReportService : IWf02ReportService
 
             if (feature is null && request.Reason != InaccurateReportReason.MissingFeature)
             {
-                throw new Wf02Exception("FEATURE_NOT_PUBLISHED", "The referenced feature has not been published.", 422);
-            }
+                var initialStatus = featureType switch
+                {
+                    AccessibilityFeatureType.Ramp => canonicalLocation.HasRamp == true ? PublishedFeatureStatus.Available : PublishedFeatureStatus.NotAvailable,
+                    AccessibilityFeatureType.Elevator => canonicalLocation.HasAccessibleElevator == true ? PublishedFeatureStatus.Available : PublishedFeatureStatus.NotAvailable,
+                    AccessibilityFeatureType.EntranceDoor => canonicalLocation.DoorWidthOk == true ? PublishedFeatureStatus.Available : PublishedFeatureStatus.NotAvailable,
+                    AccessibilityFeatureType.AccessibleRestroom => canonicalLocation.HasAccessibleRestroom == true ? PublishedFeatureStatus.Available : PublishedFeatureStatus.NotAvailable,
+                    AccessibilityFeatureType.TactilePaving => canonicalLocation.HasTactilePaving == true ? PublishedFeatureStatus.Available : PublishedFeatureStatus.NotAvailable,
+                    _ => PublishedFeatureStatus.Available
+                };
 
-            if (feature is null && request.ObservedFeatureVersion is not null)
-            {
-                throw new Wf02Exception(
-                    "INVALID_REPORT_CONTEXT",
-                    "A missing feature cannot reference a published feature version.",
-                    422);
+                feature = new LocationFeature
+                {
+                    LocationId = canonicalLocation.Id,
+                    ScopeId = request.ScopeId,
+                    FeatureType = featureType,
+                    CurrentStatus = initialStatus,
+                    VerifiedAt = now,
+                    IsPublished = true,
+                    Version = 1,
+                };
+                _db.LocationFeatures.Add(feature);
             }
 
             staleBaseline = feature is not null &&
@@ -155,6 +167,37 @@ public sealed class Wf02ReportService : IWf02ReportService
             Version = 1,
         };
         _db.InaccurateInformationReports.Add(report);
+
+        if (!string.IsNullOrWhiteSpace(request.EvidenceMediaUrl))
+        {
+            var media = new OwnedMedia
+            {
+                LocationId = canonicalLocation.Id,
+                OwnerId = reporterId,
+                StorageKey = request.EvidenceMediaUrl,
+                MimeType = "image/jpeg",
+                SizeBytes = 1024,
+                Sha256 = Guid.NewGuid().ToString("N"),
+                Status = OwnedMediaStatus.Ready,
+                ExpiresAt = now.AddYears(1),
+            };
+            _db.OwnedMedia.Add(media);
+
+            var aiDesc = !string.IsNullOrWhiteSpace(request.AiAnalysisJson)
+                ? request.AiAnalysisJson
+                : "Ảnh minh chứng chụp từ Camera AI";
+
+            _db.ReportEvidence.Add(new ReportEvidence
+            {
+                ReportId = report.Id,
+                AddedByReporterId = reporterId,
+                Description = aiDesc,
+                OwnedMediaId = media.Id,
+                IdempotencyKey = $"evidence-{report.Id}-{Guid.NewGuid():N}",
+                RequestHash = Guid.NewGuid().ToString("N"),
+                SourceVersion = 1,
+            });
+        }
         _db.ReportStatusHistories.Add(new ReportStatusHistory
         {
             ReportId = report.Id,
@@ -545,15 +588,36 @@ public sealed class Wf02ReportService : IWf02ReportService
             .Select(item => item.OwnedMediaId!.Value)
             .Distinct()
             .ToArray();
-        var mediaTypes = await _db.OwnedMedia.AsNoTracking()
+        var mediaInfo = await _db.OwnedMedia.AsNoTracking()
             .Where(item => mediaIds.Contains(item.Id))
-            .ToDictionaryAsync(item => item.Id, item => item.MimeType, cancellationToken);
-        var evidence = evidenceRows.Select(item => new AdminReportEvidenceDto(
-            item.Id,
-            item.Description,
-            null, // Private URLs are minted only by the storage authorization adapter.
-            item.OwnedMediaId is Guid mediaId ? mediaTypes.GetValueOrDefault(mediaId) : null,
-            ToOffset(item.CreatedAtUtc))).ToArray();
+            .ToDictionaryAsync(item => item.Id, item => new { item.MimeType, item.StorageKey }, cancellationToken);
+        var evidence = evidenceRows.Select(item =>
+        {
+            string? mediaUrl = null;
+            if (item.OwnedMediaId is Guid mId && mediaInfo.TryGetValue(mId, out var info) && !string.IsNullOrWhiteSpace(info.StorageKey))
+            {
+                if (info.StorageKey.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                    info.StorageKey.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                {
+                    mediaUrl = info.StorageKey;
+                }
+                else if (info.StorageKey.StartsWith('/'))
+                {
+                    mediaUrl = $"http://localhost:5256{info.StorageKey}";
+                }
+                else
+                {
+                    mediaUrl = $"http://localhost:5256/uploads/{info.StorageKey}";
+                }
+            }
+
+            return new AdminReportEvidenceDto(
+                item.Id,
+                item.Description,
+                mediaUrl,
+                item.OwnedMediaId is Guid mediaId && mediaInfo.TryGetValue(mediaId, out var m) ? m.MimeType : "image/jpeg",
+                ToOffset(item.CreatedAtUtc));
+        }).ToArray();
 
         var historyRows = await _db.ReportStatusHistories.AsNoTracking()
             .Where(item => item.ReportId == report.Id)

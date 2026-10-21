@@ -12,7 +12,9 @@ public sealed record CreateInaccurateReportRequest(
     int? ObservedFeatureVersion = null,
     string? ProposedAddress = null,
     ProposedPositionRequest? ProposedPosition = null,
-    Guid? LinkedSubmissionId = null);
+    Guid? LinkedSubmissionId = null,
+    string? EvidenceMediaUrl = null,
+    string? AiAnalysisJson = null);
 
 public sealed record CreateInaccurateReportResponse(
     Guid ReportId,

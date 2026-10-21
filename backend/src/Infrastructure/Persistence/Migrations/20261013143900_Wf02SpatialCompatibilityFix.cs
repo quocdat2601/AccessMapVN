@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -20,15 +20,30 @@ namespace AccessMapVN.Infrastructure.Persistence.Migrations
                           AND table_name = 'places'
                           AND column_name = 'geom'
                     ) THEN
-                        UPDATE places
-                        SET geom = ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography
-                        WHERE lat BETWEEN -90 AND 90
-                          AND lng BETWEEN -180 AND 180
-                          AND (
-                              geom IS NULL OR
-                              ST_X(geom::geometry) IS DISTINCT FROM lng OR
-                              ST_Y(geom::geometry) IS DISTINCT FROM lat
-                          );
+                        IF EXISTS (
+                            SELECT 1
+                            FROM information_schema.columns
+                            WHERE table_schema = current_schema()
+                              AND table_name = 'places'
+                              AND column_name = 'geom'
+                              AND udt_name = 'geometry'
+                        ) THEN
+                            EXECUTE 'DROP INDEX IF EXISTS idx_places_geom';
+                            EXECUTE 'DROP INDEX IF EXISTS "IX_places_geom"';
+                            EXECUTE 'ALTER TABLE places ALTER COLUMN geom TYPE geography(Point, 4326) USING ST_SetSRID(geom, 4326)::geography';
+                        END IF;
+
+                        EXECUTE $dyn$
+                            UPDATE places
+                            SET geom = ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography
+                            WHERE lat BETWEEN -90 AND 90
+                              AND lng BETWEEN -180 AND 180
+                              AND (
+                                  geom IS NULL OR
+                                  ST_X(geom::geometry) IS DISTINCT FROM lng OR
+                                  ST_Y(geom::geometry) IS DISTINCT FROM lat
+                              )
+                        $dyn$;
                     END IF;
                 END $wf02$;
 

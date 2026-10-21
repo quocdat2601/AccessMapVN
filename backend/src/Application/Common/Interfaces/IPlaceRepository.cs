@@ -16,4 +16,11 @@ public interface IPlaceRepository
         decimal? accessibilityScore,
         string? accessibilityNote,
         CancellationToken cancellationToken = default);
+
+    Task<List<Place>> SearchPlacesAsync(
+        string? query,
+        double? latitude = null,
+        double? longitude = null,
+        int limit = 10,
+        CancellationToken cancellationToken = default);
 }

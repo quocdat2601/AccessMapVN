@@ -61,5 +61,16 @@
     "test:integration:ai": "node --import ./scripts/register-loader.mjs scripts/run-ai-integration-tests.mjs",
     "test:all": "npm test && npm run test:integration:ai"
   },
+  "expo": {
+    "install": {
+      "exclude": [
+        "@expo/ui",
+        "expo",
+        "expo-constants",
+        "expo-linking",
+        "expo-router"
+      ]
+    }
+  },
   "private": true
 }

@@ -25,6 +25,14 @@ public class ApplicationDbContextInitialiser
                 try
                 {
                     await _context.Database.MigrateAsync(cancellationToken);
+                    try
+                    {
+                        await _context.Database.ExecuteSqlRawAsync("CREATE EXTENSION IF NOT EXISTS unaccent;", cancellationToken);
+                    }
+                    catch
+                    {
+                        // Non-fatal if extension cannot be created
+                    }
                     _logger.LogInformation("Database migrations applied successfully.");
                 }
                 catch (Exception ex)
@@ -282,6 +290,7 @@ public class ApplicationDbContextInitialiser
 
             await cmd.ExecuteNonQueryAsync(cancellationToken);
             _logger.LogInformation("Database tables verified/initialized successfully.");
+
         }
         catch (Exception ex)
         {

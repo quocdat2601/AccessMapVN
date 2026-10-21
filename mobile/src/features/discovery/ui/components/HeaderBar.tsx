@@ -1,6 +1,7 @@
 import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { branding } from '@/shared/config/branding';
 import { Colors } from '@/shared/theme';
 
@@ -10,49 +11,53 @@ interface HeaderBarProps {
 }
 
 export function HeaderBar({ onNotificationPress, onProfilePress }: HeaderBarProps) {
+  const insets = useSafeAreaInsets();
+
   return (
-    <View style={styles.container}>
-      <View style={styles.leftSection}>
-        {/* Reuse the same replaceable brand asset shown on Intro and Login. */}
-        <View style={styles.logoBadge}>
-          <Image
-            accessibilityIgnoresInvertColors
-            source={branding.logo}
-            style={styles.logoImage}
-          />
-        </View>
-
-        {/* Brand Titles */}
-        <View style={styles.titleContainer}>
-          <Text style={styles.brandSubtitle}>{branding.appName}</Text>
-          <Text style={styles.brandTitle}>Location Gallery</Text>
-        </View>
-      </View>
-
-      {/* Right Actions: Notification & Profile */}
-      <View style={styles.rightSection}>
-        <TouchableOpacity
-          style={styles.iconButton}
-          onPress={onNotificationPress}
-          accessibilityRole="button"
-          accessibilityLabel="Thông báo"
-          activeOpacity={0.7}
-        >
-          <Ionicons name="notifications-outline" size={22} color={Colors.textPrimary} />
-          <View style={styles.notificationDot} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.avatarButton}
-          onPress={onProfilePress}
-          accessibilityRole="button"
-          accessibilityLabel="Hồ sơ cá nhân"
-          activeOpacity={0.7}
-        >
-          <View style={styles.avatarInner}>
-            <Ionicons name="person" size={18} color={Colors.primary} />
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <View style={styles.contentRow}>
+        <View style={styles.leftSection}>
+          {/* Reuse the same replaceable brand asset shown on Intro and Login. */}
+          <View style={styles.logoBadge}>
+            <Image
+              accessibilityIgnoresInvertColors
+              source={branding.logo}
+              style={styles.logoImage}
+            />
           </View>
-        </TouchableOpacity>
+
+          {/* Brand Titles */}
+          <View style={styles.titleContainer}>
+            <Text style={styles.brandSubtitle}>{branding.appName}</Text>
+            <Text style={styles.brandTitle}>Location Gallery</Text>
+          </View>
+        </View>
+
+        {/* Right Actions: Notification & Profile */}
+        <View style={styles.rightSection}>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={onNotificationPress}
+            accessibilityRole="button"
+            accessibilityLabel="Thông báo"
+            activeOpacity={0.7}
+          >
+            <Ionicons name="notifications-outline" size={22} color={Colors.textPrimary} />
+            <View style={styles.notificationDot} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.avatarButton}
+            onPress={onProfilePress}
+            accessibilityRole="button"
+            accessibilityLabel="Hồ sơ cá nhân"
+            activeOpacity={0.7}
+          >
+            <View style={styles.avatarInner}>
+              <Ionicons name="person" size={18} color={Colors.primary} />
+            </View>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -60,15 +65,21 @@ export function HeaderBar({ onNotificationPress, onProfilePress }: HeaderBarProp
 
 const styles = StyleSheet.create({
   container: {
-    height: 60,
     backgroundColor: Colors.overlayBlur,
+    zIndex: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0, 0, 0, 0.04)',
+    width: '100%',
+  },
+  contentRow: {
+    height: 58,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    zIndex: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0, 0, 0, 0.04)',
+    maxWidth: 720,
+    width: '100%',
+    alignSelf: 'center',
   },
   leftSection: {
     flexDirection: 'row',

@@ -1,7 +1,11 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -24,21 +28,100 @@ import { ApiError } from '@/shared/api/client';
 import { createReport } from '../api/reportsApi';
 import type { ReportReason, ReportSummary } from '../model/types';
 
-const REASONS: { value: ReportReason; label: string }[] = [
-  { value: 'IncorrectFeature', label: 'Tiện ích không đúng' },
-  { value: 'MissingFeature', label: 'Thiếu tiện ích' },
-  { value: 'OutdatedInformation', label: 'Thông tin đã cũ' },
-  { value: 'WrongAddressOrPin', label: 'Sai địa chỉ hoặc ghim' },
-  { value: 'Other', label: 'Vấn đề khác' },
+type FormReasonType = 'Changed' | 'Blocked' | 'Incorrect' | 'Other';
+
+interface ReasonOption {
+  type: FormReasonType;
+  title: string;
+  sub: string;
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  apiReason: ReportReason;
+}
+
+const REASON_OPTIONS: ReasonOption[] = [
+  {
+    type: 'Changed',
+    title: 'Đã thay đổi',
+    sub: 'Khác biệt so với hiện tại',
+    icon: 'refresh',
+    apiReason: 'OutdatedInformation',
+  },
+  {
+    type: 'Blocked',
+    title: 'Bị cản trở',
+    sub: 'Rào chắn, thi công',
+    icon: 'cancel',
+    apiReason: 'IncorrectFeature',
+  },
+  {
+    type: 'Incorrect',
+    title: 'Sai lệch',
+    sub: 'Thông tin không đúng',
+    icon: 'alert-outline',
+    apiReason: 'IncorrectFeature',
+  },
+  {
+    type: 'Other',
+    title: 'Khác',
+    sub: 'Góp ý bổ sung khác',
+    icon: 'dots-horizontal',
+    apiReason: 'Other',
+  },
 ];
+
+interface FeatureItemOption {
+  id: string;
+  label: string;
+  backendFeatureType?: AccessibilityFeatureType;
+}
+
+const FEATURE_OPTIONS: FeatureItemOption[] = [
+  { id: 'ramp', label: 'Ram dốc', backendFeatureType: 'Ramp' },
+  { id: 'elevator', label: 'Thang máy', backendFeatureType: 'Elevator' },
+  { id: 'auto_door', label: 'Cửa ra vào', backendFeatureType: 'EntranceDoor' },
+  { id: 'flat_entrance', label: 'Lối vào phẳng', backendFeatureType: 'EntranceDoor' },
+  { id: 'accessible_toilet', label: 'WC tiếp cận', backendFeatureType: 'AccessibleRestroom' },
+  { id: 'tactile_paving', label: 'Gạch dẫn hướng', backendFeatureType: 'TactilePaving' },
+  { id: 'priority_parking', label: 'Bãi đỗ xe ưu tiên' },
+];
+
+export interface ReportFormData {
+  reason: FormReasonType;
+  description: string;
+  featureIds: string[];
+  imageUri?: string;
+}
 
 interface ReportFormModalProps {
   visible: boolean;
   locationId: string;
   locationName: string;
   features: CommunityFeatureInput[];
+  initialFeatureType?: AccessibilityFeatureType;
+  initialFormData?: Partial<ReportFormData>;
   onClose(): void;
-  onCreated?(report: ReportSummary): void;
+  onCreated?(
+    report: ReportSummary,
+    primaryFeatureType?: AccessibilityFeatureType,
+    formData?: ReportFormData
+  ): void;
+}
+
+function resolveFeatureIds(type?: AccessibilityFeatureType): string[] {
+  switch (type) {
+    case 'Ramp':
+      return ['ramp'];
+    case 'Elevator':
+      return ['elevator'];
+    case 'EntranceDoor':
+      return ['auto_door'];
+    case 'AccessibleRestroom':
+      return ['accessible_toilet'];
+    case 'TactilePaving':
+      return ['tactile_paving'];
+    default:
+      return ['ramp'];
+  }
 }
 
 export function ReportFormModal({
@@ -46,21 +129,40 @@ export function ReportFormModal({
   locationId,
   locationName,
   features,
+  initialFeatureType,
+  initialFormData,
   onClose,
   onCreated,
 }: ReportFormModalProps) {
+  const router = useRouter();
   const { user } = useAuth();
-  const [reason, setReason] = useState<ReportReason>('IncorrectFeature');
-  const [featureType, setFeatureType] = useState<AccessibilityFeatureType | null>(null);
-  const [featureStates, setFeatureStates] = useState<Partial<Record<AccessibilityFeatureType, CommunityFeatureState>>>({});
+  const [selectedReason, setSelectedReason] = useState<FormReasonType>('Changed');
+  const [selectedFeatureIds, setSelectedFeatureIds] = useState<string[]>(['ramp']);
   const [description, setDescription] = useState('');
-  const [proposedAddress, setProposedAddress] = useState('');
-  const [proposedLatitude, setProposedLatitude] = useState('');
-  const [proposedLongitude, setProposedLongitude] = useState('');
+  const [featureStates, setFeatureStates] = useState<Partial<Record<AccessibilityFeatureType, CommunityFeatureState>>>({});
+  const [pickedAsset, setPickedAsset] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const isFeatureReason = reason !== 'WrongAddressOrPin' && reason !== 'Other';
+  useEffect(() => {
+    if (!visible) return;
+
+    if (initialFormData?.reason) {
+      setSelectedReason(initialFormData.reason);
+    } else {
+      setSelectedReason('Changed');
+    }
+
+    if (initialFormData?.featureIds && initialFormData.featureIds.length > 0) {
+      setSelectedFeatureIds(initialFormData.featureIds);
+    } else {
+      setSelectedFeatureIds(resolveFeatureIds(initialFeatureType));
+    }
+
+    setDescription(initialFormData?.description ?? '');
+    setPickedAsset(initialFormData?.imageUri ? ({ uri: initialFormData.imageUri } as ImagePicker.ImagePickerAsset) : null);
+    setErrorMessage(null);
+  }, [visible, initialFeatureType, initialFormData]);
 
   useEffect(() => {
     if (!visible) return;
@@ -86,21 +188,52 @@ export function ReportFormModal({
     };
   }, [features, locationId, visible]);
 
-  const resetAndClose = () => {
-    setReason('IncorrectFeature');
-    setFeatureType(null);
-    setDescription('');
-    setProposedAddress('');
-    setProposedLatitude('');
-    setProposedLongitude('');
-    setErrorMessage(null);
-    onClose();
+  const toggleFeature = (id: string) => {
+    setSelectedFeatureIds((prev) =>
+      prev.includes(id) ? (prev.length > 1 ? prev.filter((item) => item !== id) : prev) : [...prev, id]
+    );
   };
 
-  const parseCoordinate = (value: string): number | undefined => {
-    if (!value.trim()) return undefined;
-    const parsed = Number(value.replace(',', '.'));
-    return Number.isFinite(parsed) ? parsed : undefined;
+  const handlePickImage = async () => {
+    setErrorMessage(null);
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setErrorMessage('Cần cấp quyền truy cập thư viện ảnh.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images', 'videos'],
+      allowsEditing: false,
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      setPickedAsset(result.assets[0]);
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    setErrorMessage(null);
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      setErrorMessage('Cần cấp quyền máy ảnh.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: false,
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      setPickedAsset(result.assets[0]);
+    }
+  };
+
+  const resetAndClose = () => {
+    setSelectedReason('Changed');
+    setSelectedFeatureIds(['ramp']);
+    setDescription('');
+    setPickedAsset(null);
+    setErrorMessage(null);
+    onClose();
   };
 
   const submit = async () => {
@@ -108,45 +241,70 @@ export function ReportFormModal({
       setErrorMessage('Bạn cần đăng nhập để gửi báo cáo.');
       return;
     }
-    if (description.trim().length < 10) {
-      setErrorMessage('Mô tả cần ít nhất 10 ký tự để nhóm kiểm duyệt có đủ thông tin.');
-      return;
-    }
-    if (isFeatureReason && !featureType) {
-      setErrorMessage('Chọn tiện ích liên quan đến báo cáo.');
-      return;
-    }
-    if (reason === 'WrongAddressOrPin' && !proposedAddress.trim() && (!proposedLatitude || !proposedLongitude)) {
-      setErrorMessage('Nhập địa chỉ đúng hoặc tọa độ ghim đề xuất.');
+    if (description.trim().length < 5) {
+      setErrorMessage('Vui lòng nhập mô tả chi tiết quan sát (tối thiểu 5 ký tự).');
       return;
     }
 
     setSubmitting(true);
     setErrorMessage(null);
+
+    const activeReasonOpt = REASON_OPTIONS.find((r) => r.type === selectedReason)!;
+    const selectedLabels = FEATURE_OPTIONS.filter((f) => selectedFeatureIds.includes(f.id)).map(
+      (f) => f.label
+    );
+    const primaryFeatureOpt = FEATURE_OPTIONS.find(
+      (f) => selectedFeatureIds.includes(f.id) && f.backendFeatureType
+    );
+    const primaryFeatureType = primaryFeatureOpt?.backendFeatureType;
+
+    const fullDescription =
+      selectedLabels.length > 0
+        ? `[Hạng mục: ${selectedLabels.join(', ')}]\n${description.trim()}`
+        : description.trim();
+
     try {
-      const state = featureType ? featureStates[featureType] : undefined;
+      const state = primaryFeatureType ? featureStates[primaryFeatureType] : undefined;
       const report = await createReport(
         locationId,
         {
-          reason,
-          description: description.trim(),
-          featureType: isFeatureReason ? featureType ?? undefined : undefined,
-          observedFeatureVersion: isFeatureReason ? state?.featureVersion : undefined,
-          proposedAddress: reason === 'WrongAddressOrPin' ? proposedAddress.trim() || undefined : undefined,
-          proposedPosition:
-            reason === 'WrongAddressOrPin' &&
-            parseCoordinate(proposedLatitude) !== undefined &&
-            parseCoordinate(proposedLongitude) !== undefined
-              ? {
-                  latitude: parseCoordinate(proposedLatitude)!,
-                  longitude: parseCoordinate(proposedLongitude)!,
-                }
-              : undefined,
+          reason: activeReasonOpt.apiReason,
+          description: fullDescription,
+          featureType: primaryFeatureType,
+          observedFeatureVersion: state?.featureVersion,
         },
         user.id
       );
-      onCreated?.(report);
+
+      onCreated?.(report, primaryFeatureType, {
+        reason: selectedReason,
+        description: description.trim(),
+        featureIds: selectedFeatureIds,
+        imageUri: pickedAsset?.uri,
+      });
       resetAndClose();
+
+      if (pickedAsset) {
+        Alert.alert(
+          'Đã gửi báo cáo',
+          'Báo cáo đã được ghi nhận. Bạn có muốn nộp ảnh minh chứng vừa chụp vào luồng đóng góp tiếp cận (+50 EXP) cho địa điểm này không?',
+          [
+            { text: 'Để sau', style: 'cancel' },
+            {
+              text: 'Đóng góp ngay',
+              onPress: () => {
+                router.push({
+                  pathname: '/contribute/camera',
+                  params: {
+                    locationId,
+                    locationName,
+                  },
+                } as never);
+              },
+            },
+          ]
+        );
+      }
     } catch (error) {
       if (error instanceof ApiError && error.status === 429) {
         setErrorMessage('Bạn đã đạt giới hạn báo cáo cho địa điểm này hôm nay.');
@@ -162,77 +320,179 @@ export function ReportFormModal({
     <Modal animationType="slide" onRequestClose={resetAndClose} transparent visible={visible}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.backdrop}>
         <View style={styles.sheet}>
-          <View style={styles.header}>
-            <View style={styles.headerText}>
-              <Text style={styles.title}>Báo thông tin chưa chính xác</Text>
-              <Text numberOfLines={1} style={styles.locationName}>{locationName}</Text>
+          {/* Sheet Handle */}
+          <View style={styles.handleContainer}>
+            <View style={styles.handle} />
+          </View>
+
+          {/* Location pill + Close button */}
+          <View style={styles.topRow}>
+            <View style={styles.locationPill}>
+              <MaterialCommunityIcons name="map-marker-outline" size={14} color="#006874" />
+              <Text numberOfLines={1} style={styles.locationPillText}>
+                {locationName}
+              </Text>
             </View>
-            <TouchableOpacity accessibilityLabel="Đóng báo cáo" onPress={resetAndClose} style={styles.closeButton}>
-              <MaterialCommunityIcons name="close" size={20} color="#475569" />
+            <TouchableOpacity onPress={resetAndClose} style={styles.closeButton} hitSlop={8}>
+              <MaterialCommunityIcons name="close" size={18} color="#64748B" />
             </TouchableOpacity>
           </View>
 
-          <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-            <Text style={styles.label}>Loại vấn đề</Text>
-            <View style={styles.chips}>
-              {REASONS.map((item) => (
-                <TouchableOpacity
-                  key={item.value}
-                  onPress={() => {
-                    setReason(item.value);
-                    setErrorMessage(null);
-                  }}
-                  style={[styles.chip, reason === item.value && styles.chipSelected]}
-                >
-                  <Text style={[styles.chipText, reason === item.value && styles.chipTextSelected]}>{item.label}</Text>
-                </TouchableOpacity>
-              ))}
+          {/* Main Title */}
+          <Text style={styles.mainTitle}>Báo thay đổi thông tin tiếp cận</Text>
+          <Text style={styles.mainSub}>Cho biết điều gì tại địa điểm này không còn chính xác.</Text>
+
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+          >
+            {/* 1. Bạn muốn báo cáo điều gì? */}
+            <View style={styles.stepHeaderRow}>
+              <Text style={styles.stepTitle}>1. Bạn muốn báo cáo điều gì?</Text>
+              <Text style={styles.stepHint}>Chọn 1 lý do</Text>
+            </View>
+            <View style={styles.reasonGrid}>
+              {REASON_OPTIONS.map((item) => {
+                const isSelected = selectedReason === item.type;
+                return (
+                  <TouchableOpacity
+                    key={item.type}
+                    style={[styles.reasonCard, isSelected && styles.reasonCardSelected]}
+                    onPress={() => setSelectedReason(item.type)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.reasonCardTop}>
+                      <Text style={[styles.reasonCardTitle, isSelected && styles.reasonCardTitleSelected]}>
+                        {item.title}
+                      </Text>
+                      <MaterialCommunityIcons
+                        name={item.icon}
+                        size={17}
+                        color={isSelected ? '#006874' : item.type === 'Blocked' ? '#DC2626' : item.type === 'Incorrect' ? '#F59E0B' : '#64748B'}
+                      />
+                    </View>
+                    <Text style={styles.reasonCardSub}>{item.sub}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
-            {isFeatureReason ? (
-              <>
-                <Text style={styles.label}>Tiện ích liên quan</Text>
-                <View style={styles.chips}>
-                  {features.map((feature) => (
-                    <TouchableOpacity
-                      key={feature.featureType}
-                      onPress={() => setFeatureType(feature.featureType)}
-                      style={[styles.chip, featureType === feature.featureType && styles.chipSelected]}
-                    >
-                      <Text style={[styles.chipText, featureType === feature.featureType && styles.chipTextSelected]}>{feature.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </>
-            ) : null}
+            {/* 2. Hạng mục bị ảnh hưởng? */}
+            <View style={styles.stepHeaderRow}>
+              <Text style={styles.stepTitle}>2. Hạng mục bị ảnh hưởng?</Text>
+              <Text style={styles.stepHint}>Chọn nhiều mục</Text>
+            </View>
+            <View style={styles.featureChipsRow}>
+              {FEATURE_OPTIONS.map((f) => {
+                const isSelected = selectedFeatureIds.includes(f.id);
+                return (
+                  <TouchableOpacity
+                    key={f.id}
+                    style={[styles.featureChip, isSelected && styles.featureChipSelected]}
+                    onPress={() => toggleFeature(f.id)}
+                    activeOpacity={0.8}
+                  >
+                    {isSelected && (
+                      <MaterialCommunityIcons name="check" size={13} color="#FFFFFF" style={{ marginRight: 3 }} />
+                    )}
+                    <Text style={[styles.featureChipText, isSelected && styles.featureChipTextSelected]}>
+                      {f.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
 
-            {reason === 'WrongAddressOrPin' ? (
-              <View>
-                <Text style={styles.label}>Địa chỉ đúng đề xuất</Text>
-                <TextInput onChangeText={setProposedAddress} placeholder="Số nhà, đường, phường/xã..." style={styles.input} value={proposedAddress} />
-                <View style={styles.coordinateRow}>
-                  <TextInput keyboardType="decimal-pad" onChangeText={setProposedLatitude} placeholder="Vĩ độ" style={[styles.input, styles.coordinate]} value={proposedLatitude} />
-                  <TextInput keyboardType="decimal-pad" onChangeText={setProposedLongitude} placeholder="Kinh độ" style={[styles.input, styles.coordinate]} value={proposedLongitude} />
+            {/* 3. Mô tả chi tiết quan sát */}
+            <Text style={styles.stepTitle}>3. Mô tả chi tiết quan sát</Text>
+            <TextInput
+              multiline
+              onChangeText={setDescription}
+              placeholder="Nhập mô tả điều bạn quan sát thấy..."
+              placeholderTextColor="#94A3B8"
+              style={styles.descInput}
+              textAlignVertical="top"
+              value={description}
+            />
+
+            {/* 4. Thêm bằng chứng */}
+            <View style={styles.stepHeaderRow}>
+              <Text style={styles.stepTitle}>4. Thêm bằng chứng</Text>
+              <View style={styles.rewardBadge}>
+                <MaterialCommunityIcons name="star-circle" size={13} color="#007D78" />
+                <Text style={styles.rewardBadgeText}>+30 điểm thưởng</Text>
+              </View>
+            </View>
+            <View style={styles.evidenceBtnRow}>
+              <TouchableOpacity style={styles.evidenceActionBtn} onPress={handleTakePhoto} activeOpacity={0.8}>
+                <MaterialCommunityIcons name="camera-outline" size={16} color="#1E293B" />
+                <Text style={styles.evidenceActionText}>Chụp ảnh</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.evidenceActionBtn} onPress={handleTakePhoto} activeOpacity={0.8}>
+                <MaterialCommunityIcons name="video-outline" size={16} color="#1E293B" />
+                <Text style={styles.evidenceActionText}>Quay video</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.evidenceActionBtn} onPress={handlePickImage} activeOpacity={0.8}>
+                <MaterialCommunityIcons name="image-outline" size={16} color="#1E293B" />
+                <Text style={styles.evidenceActionText}>Thư viện</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Attached Image Preview */}
+            {pickedAsset ? (
+              <View style={styles.attachmentBox}>
+                <View style={styles.attachmentThumbWrapper}>
+                  <Image source={{ uri: pickedAsset.uri }} style={styles.attachmentThumb} resizeMode="cover" />
+                  <TouchableOpacity
+                    style={styles.removeAttachBtn}
+                    onPress={() => setPickedAsset(null)}
+                    hitSlop={8}
+                  >
+                    <MaterialCommunityIcons name="close" size={12} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.attachmentCopy}>
+                  <View style={styles.attachPill}>
+                    <Text style={styles.attachPillText}>1 ảnh đã đính kèm</Text>
+                  </View>
+                  <Text style={styles.attachHint}>Ảnh thực tế giúp cộng đồng kiểm chứng nhanh hơn.</Text>
                 </View>
               </View>
             ) : null}
 
-            <Text style={styles.label}>Mô tả quan sát</Text>
-            <TextInput
-              multiline
-              onChangeText={setDescription}
-              placeholder="Mô tả điều bạn thấy; báo cáo này không tự thay đổi dữ liệu công bố."
-              style={[styles.input, styles.descriptionInput]}
-              textAlignVertical="top"
-              value={description}
-            />
-            <Text style={styles.privacyNote}>Nội dung báo cáo và bằng chứng chỉ dành cho người báo cáo và nhóm kiểm duyệt.</Text>
+            {/* Moderator verification note card */}
+            <View style={styles.moderatorNoteCard}>
+              <MaterialCommunityIcons name="shield-check-outline" size={17} color="#006874" />
+              <Text style={styles.moderatorNoteText}>
+                Báo cáo sẽ được điều phối viên xác minh trước khi cập nhật bản đồ tiếp cận chung.
+              </Text>
+            </View>
+
             {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
           </ScrollView>
 
-          <TouchableOpacity disabled={submitting} onPress={() => void submit()} style={[styles.submitButton, submitting && styles.disabled]}>
-            {submitting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.submitText}>Gửi báo cáo</Text>}
-          </TouchableOpacity>
+          {/* Bottom Actions: Hủy + Gửi báo cáo */}
+          <View style={styles.bottomRow}>
+            <TouchableOpacity onPress={resetAndClose} style={styles.cancelBtn} activeOpacity={0.8}>
+              <Text style={styles.cancelBtnText}>Hủy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              disabled={submitting}
+              onPress={() => void submit()}
+              style={[styles.submitBtn, submitting && styles.disabled]}
+              activeOpacity={0.88}
+            >
+              {submitting ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <>
+                  <Text style={styles.submitBtnText}>Gửi báo cáo</Text>
+                  <MaterialCommunityIcons name="send-outline" size={16} color="#FFFFFF" />
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -240,26 +500,312 @@ export function ReportFormModal({
 }
 
 const styles = StyleSheet.create({
-  backdrop: { backgroundColor: 'rgba(15, 23, 42, 0.45)', flex: 1, justifyContent: 'flex-end' },
-  sheet: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '91%', padding: 18, paddingBottom: 28 },
-  header: { alignItems: 'center', flexDirection: 'row', marginBottom: 14 },
-  headerText: { flex: 1 },
-  title: { color: '#0F172A', fontSize: 18, fontWeight: '800' },
-  locationName: { color: '#64748B', fontSize: 12.5, marginTop: 3 },
-  closeButton: { alignItems: 'center', backgroundColor: '#F1F5F9', borderRadius: 18, height: 36, justifyContent: 'center', width: 36 },
-  label: { color: '#334155', fontSize: 13, fontWeight: '700', marginBottom: 7, marginTop: 12 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
-  chip: { backgroundColor: '#F8FAFC', borderColor: '#CBD5E1', borderRadius: 999, borderWidth: 1, paddingHorizontal: 11, paddingVertical: 7 },
-  chipSelected: { backgroundColor: '#ECFEFF', borderColor: '#0891B2' },
-  chipText: { color: '#475569', fontSize: 12 },
-  chipTextSelected: { color: '#0E7490', fontWeight: '700' },
-  input: { backgroundColor: '#F8FAFC', borderColor: '#CBD5E1', borderRadius: 11, borderWidth: 1, color: '#0F172A', minHeight: 46, paddingHorizontal: 12, paddingVertical: 10 },
-  descriptionInput: { minHeight: 105 },
-  coordinateRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
-  coordinate: { flex: 1 },
-  privacyNote: { color: '#64748B', fontSize: 11.5, lineHeight: 17, marginTop: 8 },
-  errorText: { color: '#B91C1C', fontSize: 12, lineHeight: 17, marginTop: 9 },
-  submitButton: { alignItems: 'center', backgroundColor: '#006874', borderRadius: 13, justifyContent: 'center', marginTop: 14, minHeight: 50 },
-  submitText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
-  disabled: { opacity: 0.55 },
+  backdrop: {
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    maxHeight: '92%',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 24,
+  },
+  handleContainer: {
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#CBD5E1',
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  locationPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#E8FAF6',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    maxWidth: '85%',
+  },
+  locationPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#006874',
+  },
+  closeButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mainTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 2,
+  },
+  mainSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 14,
+  },
+  scrollContent: {
+    paddingBottom: 16,
+  },
+  stepHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 8,
+  },
+  stepTitle: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#1E293B',
+    marginTop: 6,
+    marginBottom: 6,
+  },
+  stepHint: {
+    fontSize: 11.5,
+    color: '#94A3B8',
+  },
+  reasonGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 10,
+  },
+  reasonCard: {
+    width: '48.5%',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 14,
+    padding: 10,
+  },
+  reasonCardSelected: {
+    borderColor: '#006874',
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1.5,
+  },
+  reasonCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  reasonCardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  reasonCardTitleSelected: {
+    color: '#006874',
+    fontWeight: '800',
+  },
+  reasonCardSub: {
+    fontSize: 10.5,
+    color: '#94A3B8',
+  },
+  featureChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 10,
+  },
+  featureChip: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  featureChipSelected: {
+    backgroundColor: '#006874',
+  },
+  featureChipText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  featureChipTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  descInput: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
+    borderWidth: 1,
+    borderRadius: 14,
+    minHeight: 70,
+    padding: 10,
+    fontSize: 12.5,
+    color: '#1E293B',
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+  rewardBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  rewardBadgeText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#006874',
+  },
+  evidenceBtnRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
+  },
+  evidenceActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    height: 38,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+  },
+  evidenceActionText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  attachmentBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    borderRadius: 14,
+    padding: 10,
+    gap: 10,
+    marginBottom: 10,
+  },
+  attachmentThumbWrapper: {
+    width: 46,
+    height: 46,
+    borderRadius: 8,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  attachmentThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  removeAttachBtn: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  attachmentCopy: {
+    flex: 1,
+  },
+  attachPill: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#CCFBF1',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginBottom: 3,
+  },
+  attachPillText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#0F766E',
+  },
+  attachHint: {
+    fontSize: 10.5,
+    color: '#64748B',
+    lineHeight: 14,
+  },
+  moderatorNoteCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 10,
+  },
+  moderatorNoteText: {
+    flex: 1,
+    fontSize: 11,
+    color: '#475569',
+    lineHeight: 15,
+  },
+  errorText: {
+    color: '#DC2626',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  bottomRow: {
+    flexDirection: 'row',
+    gap: 10,
+    paddingTop: 10,
+  },
+  cancelBtn: {
+    width: 72,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  submitBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#006874',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  submitBtnText: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  disabled: {
+    opacity: 0.55,
+  },
 });

@@ -53,4 +53,6 @@ export interface GeocodeResult {
   lat: number;
   lng: number;
   type?: string;
+  source?: 'accessmap' | 'osm';
+  placeDto?: PlaceDto;
 }

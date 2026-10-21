@@ -26,7 +26,7 @@ export interface PreScanResult {
 }
 
 interface AiPreScanPayload {
-  features?: Record<string, { value?: boolean; detected?: boolean; confidence?: number }>;
+  features?: Record<string, { value?: boolean | string; detected?: boolean; confidence?: number; reason?: string }>;
   summary?: string;
 }
 

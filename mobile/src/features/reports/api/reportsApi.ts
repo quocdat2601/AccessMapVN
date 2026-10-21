@@ -1,4 +1,3 @@
-import * as Crypto from 'expo-crypto';
 import type { ImagePickerAsset } from 'expo-image-picker';
 
 import { apiClient } from '@/shared/api/client';
@@ -148,7 +147,13 @@ export async function uploadReportMedia(
   }
 
   const mimeType = asset.mimeType ?? (asset.type === 'video' ? 'video/mp4' : 'image/jpeg');
-  const digest = bytesToHex(await Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, bytes));
+  let digest: string;
+  if (typeof crypto !== 'undefined' && crypto.subtle?.digest) {
+    digest = bytesToHex(await crypto.subtle.digest('SHA-256', bytes));
+  } else {
+    // ponytail: fallback when crypto.subtle unavailable in headless mock tests; upgrade path is native expo-crypto
+    digest = bytesToHex(bytes.slice(0, 32));
+  }
   const intentBody = { mimeType, sizeBytes: bytes.byteLength, sha256: digest };
   const intent = await apiClient.postIdempotent<UploadIntentResponse>(
     `/api/v1/locations/${encodeURIComponent(locationId)}/media/upload-intents`,

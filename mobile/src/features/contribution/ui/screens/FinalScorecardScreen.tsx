@@ -77,7 +77,7 @@ export function FinalScorecardScreen({
             media: [{ localUri: media.uri, uploadStatus: 'pending' }],
             featureTags: selectedTagKeys,
             textDescription: notes,
-            gps: media.gps,
+            gps: media.gps ? { latitude: media.gps.latitude, longitude: media.gps.longitude, accuracy: media.gps.accuracy ?? undefined } : undefined,
           });
         }
       } catch {}
@@ -95,7 +95,7 @@ export function FinalScorecardScreen({
       media: [{ localUri: media.uri, uploadStatus: 'pending' }],
       featureTags: selectedTagKeys,
       textDescription: notes,
-      gps: media.gps,
+      gps: media.gps ? { latitude: media.gps.latitude, longitude: media.gps.longitude, accuracy: media.gps.accuracy ?? undefined } : undefined,
     }).catch(() => {});
   }, [selectedTagKeys, notes, media.locationId, media.locationName, media.uri, media.gps]);
 
@@ -111,7 +111,7 @@ export function FinalScorecardScreen({
         media: [{ localUri: media.uri, uploadStatus: 'pending' }],
         featureTags: selectedTagKeys,
         textDescription: notes,
-        gps: media.gps,
+        gps: media.gps ? { latitude: media.gps.latitude, longitude: media.gps.longitude, accuracy: media.gps.accuracy ?? undefined } : undefined,
       });
     }
   };
@@ -134,7 +134,7 @@ export function FinalScorecardScreen({
               media: [{ localUri: media.uri, uploadStatus: 'failed' }],
               featureTags: selectedTagKeys,
               textDescription: notes,
-              gps: media.gps,
+              gps: media.gps ? { latitude: media.gps.latitude, longitude: media.gps.longitude, accuracy: media.gps.accuracy ?? undefined } : undefined,
             });
           }
           return;
@@ -185,7 +185,7 @@ export function FinalScorecardScreen({
           featureTags: selectedTagKeys,
           textDescription: notes,
           gps: media.gps ? { latitude: media.gps.latitude, longitude: media.gps.longitude } : null,
-          status: 'PendingModeration',
+          status: 'Pending Moderation',
           confidenceScore: overallScore / 100,
           pointsAwarded: res.points_awarded ?? 0,
           createdAt: Date.now(),

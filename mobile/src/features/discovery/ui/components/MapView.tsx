@@ -53,6 +53,9 @@ interface MapViewProps {
 export interface MapViewHandle {
   recenter: () => void;
   flyTo: (lng: number, lat: number, zoom?: number) => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  resetNorth: () => void;
 }
 
 function isFullAddress(addr?: string | null): boolean {
@@ -147,6 +150,27 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     },
     flyTo: (lng: number, lat: number, zoom: number = 16) => {
       flyToPlace(lng, lat, zoom);
+    },
+    zoomIn: async () => {
+      try {
+        const zoom = await mapRef.current?.getZoom();
+        if (typeof zoom === 'number') {
+          cameraRef.current?.zoomTo(Math.min(zoom + 1, 20), 300);
+        }
+      } catch {}
+    },
+    zoomOut: async () => {
+      try {
+        const zoom = await mapRef.current?.getZoom();
+        if (typeof zoom === 'number') {
+          cameraRef.current?.zoomTo(Math.max(zoom - 1, 3), 300);
+        }
+      } catch {}
+    },
+    resetNorth: () => {
+      try {
+        cameraRef.current?.setCamera({ heading: 0, animationDuration: 400 });
+      } catch {}
     },
   }), [userLatitude, userLongitude]);
 

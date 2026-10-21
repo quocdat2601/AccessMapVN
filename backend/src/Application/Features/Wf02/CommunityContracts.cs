@@ -69,6 +69,12 @@ public interface IWf02CommunityService
         LinkVoteSubmissionRequest request,
         CancellationToken cancellationToken = default);
 
+    Task<FeatureCommunityDto> WithdrawVoteAsync(
+        Guid actorId,
+        Guid locationId,
+        AccessibilityFeatureType featureType,
+        CancellationToken cancellationToken = default);
+
     Task EvaluateAsync(Guid assessmentJobId, CancellationToken cancellationToken = default);
     Task ScanFreshnessAsync(CancellationToken cancellationToken = default);
     Task ReconcileJobsAsync(CancellationToken cancellationToken = default);

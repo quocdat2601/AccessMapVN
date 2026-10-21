@@ -91,6 +91,16 @@ export async function linkVoteSubmission(voteId: string, submissionId: string): 
   );
 }
 
+export async function withdrawCommunityVote(
+  locationId: string,
+  featureType: AccessibilityFeatureType
+): Promise<void> {
+  await apiClient.delete(
+    `/api/v1/locations/${encodeURIComponent(locationId)}/features/${featureType}/votes/mine`,
+    { auth: 'required' }
+  );
+}
+
 export async function fetchLocationTimeline(locationId: string): Promise<PublicTimelineItem[]> {
   const response = await apiClient.get<{ items: PublicTimelineItem[] }>(
     `/api/v1/locations/${encodeURIComponent(locationId)}/timeline?pageSize=10`,

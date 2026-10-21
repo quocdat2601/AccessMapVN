@@ -5,15 +5,20 @@ import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { addContributionRecord, type CapturedContributionMedia } from '@/entities/contribution';
 import { apiClient } from '@/shared/api/client';
+import { uploadMediaToBackend } from '../../api/mediaUploadService';
 import type { VerificationMatrixResult } from '../../lib/verificationEngine';
 import { ScoreMatrixBreakdown } from '../components/review/ScoreMatrixBreakdown';
 import { ScoreMeterRing } from '../components/review/ScoreMeterRing';
+import { ScoreCriteriaExplainer } from '../components/review/ScoreCriteriaExplainer';
 
 interface FinalScorecardScreenProps {
   media: CapturedContributionMedia;
   matrixResult: VerificationMatrixResult;
   selectedTagKeys: string[];
   notes: string;
+  locationName?: string;
+  locationAddress?: string | null;
+  onChangeLocation?: () => void;
   onRetakeOrReset: () => void;
   onEditTags: () => void;
   onFinish?: () => void;
@@ -24,6 +29,9 @@ export function FinalScorecardScreen({
   matrixResult,
   selectedTagKeys,
   notes,
+  locationName,
+  locationAddress,
+  onChangeLocation,
   onRetakeOrReset,
   onEditTags,
   onFinish,
@@ -49,10 +57,20 @@ export function FinalScorecardScreen({
     setIsSubmitting(true);
     setSubmitError(null);
     try {
+      // 1. Upload the authentic photo to backend so Web Admin can display it
+      let uploadedUrl = media.uri;
+      if (media.uri.startsWith('file:') || media.uri.startsWith('content:')) {
+        try {
+          uploadedUrl = await uploadMediaToBackend(media.uri, media.base64);
+        } catch (uploadErr) {
+          console.warn('Could not upload media to server, using local uri fallback', uploadErr);
+        }
+      }
+
       const payload = {
         location_id: media.locationId || 'custom-location',
         user_id: 'mobile-contributor',
-        media_urls: [media.uri],
+        media_urls: [uploadedUrl],
         feature_tags: selectedTagKeys,
         gps_lat: media.gps ? media.gps.latitude : 10.8454,
         gps_lng: media.gps ? media.gps.longitude : 106.8373,
@@ -68,7 +86,7 @@ export function FinalScorecardScreen({
           id: res.submission_id,
           locationId: media.locationId,
           locationName: media.locationName,
-          mediaUri: media.uri,
+          mediaUri: uploadedUrl,
           mediaType: media.type,
           featureTags: selectedTagKeys,
           textDescription: notes,
@@ -260,15 +278,42 @@ export function FinalScorecardScreen({
             selectedTagKeys={selectedTagKeys}
           />
 
+          <ScoreCriteriaExplainer
+            overallScore={overallScore}
+            status={status}
+            hasNoFeatures={selectedTagKeys.length === 0}
+            cvScore={pillars.computerVision.score}
+            spatialDistanceMeters={spatialDistanceMeters}
+          />
+
         {/* POI & Submission Details Card */}
         <View style={styles.detailsCard}>
-          <Text style={styles.detailsTitle}>Thông tin ghi nhận</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <Text style={styles.detailsTitle}>Thông tin ghi nhận</Text>
+            {onChangeLocation ? (
+              <Pressable
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: '#f0fdfa' }}
+                onPress={onChangeLocation}
+              >
+                <MaterialCommunityIcons name="pencil-outline" size={13} color="#006874" />
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#006874' }}>Đổi vị trí</Text>
+              </Pressable>
+            ) : null}
+          </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Địa điểm:</Text>
             <Text style={styles.detailValue} numberOfLines={1}>
-              {media.locationName}
+              {locationName || media.locationName}
             </Text>
           </View>
+          {locationAddress ? (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Địa chỉ:</Text>
+              <Text style={styles.detailValue} numberOfLines={1}>
+                {locationAddress}
+              </Text>
+            </View>
+          ) : null}
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Đặc tính đã chọn:</Text>
             <Text style={styles.detailValue}>{selectedTagKeys.length} đặc tính</Text>

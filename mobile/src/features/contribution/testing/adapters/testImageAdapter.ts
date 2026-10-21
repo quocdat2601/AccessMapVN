@@ -7,6 +7,7 @@ export interface PickerImageInput {
   height?: number;
   fileName?: string;
   fileSize?: number;
+  base64?: string;
 }
 
 /**
@@ -38,6 +39,7 @@ export function adaptPickerImageToMediaResult(
     uri: input.uri,
     width: input.width ?? 1280,
     height: input.height ?? 720,
+    base64: input.base64,
     capturedAt: now,
     locationId: targetPoiId,
     locationName: targetPoiName,

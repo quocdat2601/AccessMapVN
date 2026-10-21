@@ -1,4 +1,4 @@
-export { contributionRepository } from "./api/mock-contribution-repository";
+export { backendContributionRepository as contributionRepository } from "./api/backend-contribution-repository";
 export type { ContributionRepository } from "./api/contribution-repository";
 export type {
   AccessibilityCategory,

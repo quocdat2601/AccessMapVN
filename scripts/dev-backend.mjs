@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import net from 'node:net';
 
 const repositoryRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const environmentPath = join(repositoryRoot, 'infra', '.env');
@@ -64,15 +65,46 @@ console.log(
     ? '[backend] Xác thực JWT dùng Supabase URL từ mobile/.env.'
     : '[backend] Chưa có Supabase URL hợp lệ; các thao tác cần đăng nhập sẽ bị từ chối.'
 );
-const child = spawn('dotnet', ['run', '--project', 'backend/src/WebApi/AccessMapVN.WebApi.csproj'], {
-  cwd: repositoryRoot,
-  stdio: 'inherit',
-  env: { ...process.env, ...connectionEnv, ...authEnvironment },
-  windowsHide: false,
-});
-
-for (const signal of ['SIGINT', 'SIGTERM']) {
-  process.on(signal, () => child.kill(signal));
+function isPortListening(targetPort) {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    socket.setTimeout(600);
+    socket.once('connect', () => {
+      socket.destroy();
+      resolve(true);
+    });
+    socket.once('timeout', () => {
+      socket.destroy();
+      resolve(false);
+    });
+    socket.once('error', () => {
+      resolve(false);
+    });
+    socket.connect(targetPort, '127.0.0.1');
+  });
 }
 
-child.on('exit', (code) => process.exit(code ?? 1));
+const alreadyListening = await isPortListening(5256);
+if (alreadyListening) {
+  console.log('[backend] Cổng 5256 đã có tiến trình Backend đang chạy sẵn. Tái sử dụng tiến trình hiện tại.');
+  const keepAlive = setInterval(() => {}, 60000);
+  for (const signal of ['SIGINT', 'SIGTERM']) {
+    process.on(signal, () => {
+      clearInterval(keepAlive);
+      process.exit(0);
+    });
+  }
+} else {
+  const child = spawn('dotnet', ['run', '--project', 'backend/src/WebApi/AccessMapVN.WebApi.csproj'], {
+    cwd: repositoryRoot,
+    stdio: 'inherit',
+    env: { ...process.env, ...connectionEnv, ...authEnvironment },
+    windowsHide: false,
+  });
+
+  for (const signal of ['SIGINT', 'SIGTERM']) {
+    process.on(signal, () => child.kill(signal));
+  }
+
+  child.on('exit', (code) => process.exit(code ?? 1));
+}

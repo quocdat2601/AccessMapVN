@@ -147,6 +147,53 @@ public sealed class AdminSubmissionsController : ControllerBase
         if (submission == null) return NotFound(new { message = $"Không tìm thấy hồ sơ '{id}'." });
 
         var place = await FindPlaceAsync(submission.PlaceId, cancellationToken);
+        if (place == null && submission.Status == SubmissionStatus.Published)
+        {
+            var placeName = !string.IsNullOrWhiteSpace(submission.TextDescription) && !submission.TextDescription.Contains("file:")
+                ? submission.TextDescription.Split(new[] { '\r', '\n', '.' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim() ?? "Địa điểm đóng góp thực địa"
+                : "Địa điểm đóng góp thực địa";
+
+            place = new Place
+            {
+                Name = placeName,
+                Category = "other",
+                Address = "Vị trí khảo sát thực địa",
+                Lat = submission.GpsLat,
+                Lng = submission.GpsLng,
+                Status = LocationStatus.Active,
+                MetadataVersion = 1,
+            };
+            _db.Places.Add(place);
+            await _db.SaveChangesAsync(cancellationToken);
+
+            submission.PlaceId = place.Id.ToString();
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+
+        if (place != null && submission.Status == SubmissionStatus.Published && place.AccessibilityScore == null)
+        {
+            foreach (var tag in submission.FeatureTags)
+            {
+                var lower = tag.ToLowerInvariant();
+                if (lower.Contains("ramp") && place.HasRamp != true) place.HasRamp = true;
+                if ((lower.Contains("door") || lower.Contains("entrance")) && place.DoorWidthOk != true) place.DoorWidthOk = true;
+                if (lower.Contains("elevator") && place.HasAccessibleElevator != true) place.HasAccessibleElevator = true;
+                if (lower.Contains("restroom") && place.HasAccessibleRestroom != true) place.HasAccessibleRestroom = true;
+                if (lower.Contains("tactile") && place.HasTactilePaving != true) place.HasTactilePaving = true;
+            }
+
+            var featureCount = 0;
+            if (place.HasRamp == true) featureCount++;
+            if (place.DoorWidthOk == true) featureCount++;
+            if (place.HasAccessibleElevator == true) featureCount++;
+            if (place.HasAccessibleRestroom == true) featureCount++;
+            if (place.HasTactilePaving == true) featureCount++;
+
+            place.AccessibilityScore = Math.Round((decimal)featureCount / 5.0m * 10.0m, 1);
+            place.LastVerifiedAt = submission.CreatedAt.UtcDateTime;
+            await _db.SaveChangesAsync(cancellationToken);
+        }
+
         var appUser = await FindAppUserAsync(submission.UserId, cancellationToken);
 
         return Ok(MapToDetail(submission, place, appUser));
@@ -214,28 +261,47 @@ public sealed class AdminSubmissionsController : ControllerBase
         }
 
         // 2. Project accessibility onto the target Place
-        if (place != null)
+        if (place == null)
         {
-            foreach (var tag in submission.FeatureTags)
+            var placeName = !string.IsNullOrWhiteSpace(submission.TextDescription) && !submission.TextDescription.Contains("file:")
+                ? submission.TextDescription.Split(new[] { '\r', '\n', '.' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim() ?? "Địa điểm đóng góp thực địa"
+                : "Địa điểm đóng góp thực địa";
+
+            place = new Place
             {
-                var lower = tag.ToLowerInvariant();
-                if (lower.Contains("ramp")) place.HasRamp = true;
-                if (lower.Contains("door") || lower.Contains("entrance")) place.DoorWidthOk = true;
-                if (lower.Contains("elevator")) place.HasAccessibleElevator = true;
-                if (lower.Contains("restroom")) place.HasAccessibleRestroom = true;
-                if (lower.Contains("tactile")) place.HasTactilePaving = true;
-            }
+                Name = placeName,
+                Category = "other",
+                Address = "Vị trí khảo sát thực địa",
+                Lat = submission.GpsLat,
+                Lng = submission.GpsLng,
+                Status = LocationStatus.Active,
+                MetadataVersion = 1,
+            };
+            _db.Places.Add(place);
+            await _db.SaveChangesAsync(cancellationToken);
 
-            var featureCount = 0;
-            if (place.HasRamp == true) featureCount++;
-            if (place.DoorWidthOk == true) featureCount++;
-            if (place.HasAccessibleElevator == true) featureCount++;
-            if (place.HasAccessibleRestroom == true) featureCount++;
-            if (place.HasTactilePaving == true) featureCount++;
-
-            place.AccessibilityScore = Math.Round((decimal)featureCount / 5.0m * 10.0m, 1);
-            place.LastVerifiedAt = now;
+            submission.PlaceId = place.Id.ToString();
         }
+
+        foreach (var tag in submission.FeatureTags)
+        {
+            var lower = tag.ToLowerInvariant();
+            if (lower.Contains("ramp")) place.HasRamp = true;
+            if (lower.Contains("door") || lower.Contains("entrance")) place.DoorWidthOk = true;
+            if (lower.Contains("elevator")) place.HasAccessibleElevator = true;
+            if (lower.Contains("restroom")) place.HasAccessibleRestroom = true;
+            if (lower.Contains("tactile")) place.HasTactilePaving = true;
+        }
+
+        var featureCount = 0;
+        if (place.HasRamp == true) featureCount++;
+        if (place.DoorWidthOk == true) featureCount++;
+        if (place.HasAccessibleElevator == true) featureCount++;
+        if (place.HasAccessibleRestroom == true) featureCount++;
+        if (place.HasTactilePaving == true) featureCount++;
+
+        place.AccessibilityScore = Math.Round((decimal)featureCount / 5.0m * 10.0m, 1);
+        place.LastVerifiedAt = now;
 
         await _db.SaveChangesAsync(cancellationToken);
 

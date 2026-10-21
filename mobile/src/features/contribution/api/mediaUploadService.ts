@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
 import { resolveServiceUrl } from '@/shared/api/client';
 
 export interface MediaUploadResponse {
@@ -8,21 +9,58 @@ export interface MediaUploadResponse {
   size: number;
 }
 
+function base64ToUint8Array(base64: string): Uint8Array {
+  const binaryString = atob(base64.replace(/\s/g, ''));
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
 /**
- * Uploads a local photo (from camera capture or picker) to the backend.
- * Uses base64 if available, or multipart FormData as fallback.
- * Returns the public URL served by the backend.
+ * Uploads a local photo (from camera capture or picker) to Supabase Cloud Storage (primary)
+ * or to the local backend as a fallback.
+ * Returns the public URL.
  */
 export async function uploadMediaToBackend(
   uri: string,
   base64?: string
 ): Promise<string> {
-  const baseUrl = resolveServiceUrl(5256, process.env.EXPO_PUBLIC_API_URL);
+  const ext = uri.endsWith('.png') ? 'png' : 'jpg';
+  const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+  const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${ext}`;
 
-  // 1. If base64 is available, upload directly via JSON (fastest and most reliable on RN)
+  // 1. Try Supabase Storage first (Cloud storage accessible by everyone globally)
+  if (isSupabaseConfigured && base64) {
+    try {
+      const fileBytes = base64ToUint8Array(base64);
+      const { data, error } = await supabase.storage
+        .from('contributions-media')
+        .upload(fileName, fileBytes, {
+          contentType: mimeType,
+          upsert: true,
+        });
+
+      if (!error && data) {
+        const { data: publicUrlData } = supabase.storage
+          .from('contributions-media')
+          .getPublicUrl(fileName);
+
+        if (publicUrlData?.publicUrl) {
+          return publicUrlData.publicUrl;
+        }
+      }
+    } catch (e) {
+      console.warn('[uploadMediaToBackend] Supabase storage upload failed, falling back to backend', e);
+    }
+  }
+
+  // 2. Fallback to backend upload if Supabase Storage failed or offline
+  const baseUrl = resolveServiceUrl(5256, process.env.EXPO_PUBLIC_API_URL);
   if (base64) {
     try {
-      const fileName = uri.split('/').pop() || `photo_${Date.now()}.jpg`;
       const response = await fetch(`${baseUrl}/api/v1/media/upload-base64`, {
         method: 'POST',
         headers: {
@@ -40,20 +78,19 @@ export async function uploadMediaToBackend(
         if (data.url) return data.url;
       }
     } catch (e) {
-      console.warn('[uploadMediaToBackend] Base64 upload failed, trying FormData fallback', e);
+      console.warn('[uploadMediaToBackend] Base64 backend upload failed, trying FormData fallback', e);
     }
   }
 
-  // 2. FormData fallback
+  // 3. FormData fallback
   try {
     const formData = new FormData();
     const cleanUri = Platform.OS === 'android' ? uri : uri.replace('file://', '');
-    const fileName = uri.split('/').pop() || `photo_${Date.now()}.jpg`;
 
     formData.append('file', {
       uri: cleanUri,
       name: fileName,
-      type: uri.endsWith('.png') ? 'image/png' : 'image/jpeg',
+      type: mimeType,
     } as any);
 
     const response = await fetch(`${baseUrl}/api/v1/media/upload`, {
@@ -72,6 +109,6 @@ export async function uploadMediaToBackend(
     console.warn('[uploadMediaToBackend] FormData upload failed', e);
   }
 
-  // Fallback: return original uri if server upload failed
+  // Fallback: return original uri if all uploads failed
   return uri;
 }

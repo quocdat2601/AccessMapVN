@@ -37,8 +37,10 @@ import {
   type VerificationMatrixInput,
 } from '../../lib/verificationEngine';
 import { runAiPreScan, type PreScanFeatureTag } from '../../api/aiPreScanService';
+import { matchSelectedTagsWithCvDetections } from '../../model/tagReviewModel';
 import { getPoiAnchorCoords } from '../../testing/mocks/mockPoiAnchor';
 import { TestGalleryPickerButton } from '../../testing/components/TestGalleryPickerButton';
+import { fetchPlaceById } from '@/entities/place';
 
 type CameraType = 'back' | 'front';
 
@@ -70,6 +72,26 @@ function ActiveCameraContributionScreen() {
   const locationName = firstParam(params.locationName, 'S9.01');
   const paramLat = parseFloat(firstParam(params.latitude, ''));
   const paramLng = parseFloat(firstParam(params.longitude, ''));
+
+  const [poiCoordsState, setPoiCoordsState] = useState<{ latitude: number; longitude: number } | null>(() => {
+    if (!isNaN(paramLat) && !isNaN(paramLng)) {
+      return { latitude: paramLat, longitude: paramLng };
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    if (!poiCoordsState && locationId) {
+      void fetchPlaceById(locationId).then((place) => {
+        if (place && !isNaN(place.lat) && !isNaN(place.lng) && place.lat !== 0 && place.lng !== 0) {
+          setPoiCoordsState({ latitude: place.lat, longitude: place.lng });
+        }
+      });
+    }
+  }, [locationId, poiCoordsState]);
+
+  const targetPoiCoords = poiCoordsState ?? getPoiAnchorCoords(locationId, locationName);
+
   const cameraRef = useRef<any>(null);
   const requestedInitialPermissions = useRef(false);
   const recordingStartedAt = useRef<number | null>(null);
@@ -388,49 +410,12 @@ function ActiveCameraContributionScreen() {
       setConfirmedTagKeys(selectedKeys);
       setFieldNotes(notes);
 
-      // Map QCVN sub-features to their pre-scan parent detection keys
-      const PARENT_MAP: Record<string, string> = {
-        ramp_slope_comfortable: 'exterior_ramp_present',
-        ramp_handrails_present: 'exterior_ramp_present',
-        door_width_wide: 'door_width_ok',
-        door_threshold_flat: 'door_width_ok',
-        door_handle_lever: 'door_width_ok',
-        door_lever_handle: 'door_width_ok',
-        elevator_accessible: 'elevator_present',
-        restroom_accessible_stall: 'accessible_restroom_sign',
-        restroom_grab_bars: 'accessible_restroom_sign',
-        tactile_paving_guiding: 'tactile_paving_present',
-        tactile_paving_warning: 'tactile_paving_present',
-      };
-
       const detectedPreScan = preScanTags.filter((t) => t.detected && t.confidence > 0);
       const detectedMap = new Map(detectedPreScan.map((t) => [t.key, t.confidence]));
-
-      // Determine CV confidence strictly based on actual detections verified in the photo
-      let cvConfidence = 0.0;
-      let matchedCount = 0;
-      if (selectedKeys.length > 0 && detectedMap.size > 0) {
-        let totalConfidence = 0;
-
-        for (const key of selectedKeys) {
-          const directConf = detectedMap.get(key);
-          if (directConf !== undefined) {
-            matchedCount++;
-            totalConfidence += directConf;
-          } else {
-            const parentKey = PARENT_MAP[key];
-            if (parentKey && detectedMap.has(parentKey)) {
-              matchedCount++;
-              totalConfidence += detectedMap.get(parentKey)!;
-            }
-          }
-        }
-
-        if (matchedCount > 0) {
-          // Proportionate CV confidence across all claimed tags
-          cvConfidence = totalConfidence / selectedKeys.length;
-        }
-      }
+      const { matchedCount, cvConfidence } = matchSelectedTagsWithCvDetections(
+        selectedKeys,
+        detectedMap
+      );
 
       const verifiedTagCount = matchedCount;
       const unverifiedTagCount = Math.max(0, selectedKeys.length - matchedCount);
@@ -443,10 +428,7 @@ function ActiveCameraContributionScreen() {
           }
         : null;
 
-      const poiCoords =
-        !isNaN(paramLat) && !isNaN(paramLng)
-          ? { latitude: paramLat, longitude: paramLng }
-          : getPoiAnchorCoords(locationId, locationName, contributorCoords);
+      const poiCoords = targetPoiCoords;
 
       const evalInput: VerificationMatrixInput = {
         cvConfidence,
@@ -463,7 +445,7 @@ function ActiveCameraContributionScreen() {
       setMatrixResult(result);
       setWorkflowStep('final_scorecard');
     },
-    [capturedMedia, locationId, preScanTags]
+    [capturedMedia, targetPoiCoords, preScanTags]
   );
 
   // Workflow 1: Final Scorecard Screen
@@ -598,17 +580,6 @@ function ActiveCameraContributionScreen() {
             <Text style={styles.messageText}>{message}</Text>
           </Pressable>
         ) : null}
-        {__DEV__ && (
-          <View style={{ alignItems: 'center', marginBottom: 12 }}>
-            <TestGalleryPickerButton
-              locationId={locationId}
-              locationName={locationName}
-              onMediaPicked={(media) => {
-                startPreScanForPhoto(media);
-              }}
-            />
-          </View>
-        )}
         <CaptureControls
           mode={mode}
           isRecording={isRecording}
@@ -619,6 +590,19 @@ function ActiveCameraContributionScreen() {
           onFlip={() => {
             setFacing((current: CameraType) => (current === 'back' ? 'front' : 'back'));
           }}
+          leftAction={
+            __DEV__ ? (
+              <TestGalleryPickerButton
+                locationId={locationId}
+                locationName={locationName}
+                targetCoordinates={targetPoiCoords}
+                disabled={isRecording || isCapturing}
+                onMediaPicked={(media) => {
+                  startPreScanForPhoto(media);
+                }}
+              />
+            ) : null
+          }
         />
       </View>
     </View>

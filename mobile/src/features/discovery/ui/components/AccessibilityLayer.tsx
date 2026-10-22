@@ -85,6 +85,10 @@ function categoryToSpriteIcon(category: string): string {
     case 'parking':
       return 'parking';
 
+    case 'charging_station':
+    case 'fuel':
+      return 'fuel_11';
+
     case 'hairdresser':
       return 'hairdresser';
 
@@ -94,15 +98,18 @@ function categoryToSpriteIcon(category: string): string {
     case 'apartment':
     case 'residential':
     case 'building':
+      return 'building_11';
+
     default:
-      return 'circle_stroked';
+      return 'marker_11';
   }
 }
 
 function getAccessibilityColor(score: number): string {
   if (score >= 0.8) return '#10b981'; // Xanh lá: Tiếp cận tốt
   if (score >= 0.5) return '#f59e0b'; // Vàng cam: Tiếp cận một phần
-  return '#ef4444'; // Đỏ: Khó tiếp cận
+  if (score >= 0) return '#ef4444';   // Đỏ: Khó tiếp cận
+  return '#006874';                   // Xanh Teal thương hiệu: Chưa có khảo sát cộng đồng
 }
 
 export function AccessibilityLayer({
@@ -116,7 +123,7 @@ export function AccessibilityLayer({
     features: places.map((p) => {
       const score = Number(p.accessibility_score);
       const isRated = !isNaN(score) && score >= 0;
-      const accessColor = isRated ? getAccessibilityColor(score) : '#94a3b8';
+      const accessColor = getAccessibilityColor(score);
       const icon = categoryToSpriteIcon(p.category);
 
       return {
@@ -155,25 +162,6 @@ export function AccessibilityLayer({
         }
       }}
     >
-      {/* Viền tròn màu tiếp cận - chỉ hiển thị cho các địa điểm ĐÃ CÓ ĐÁNH GIÁ (isRated = true) */}
-      <MapLibreGL.Layer
-        type="circle"
-        id="places-rated-badge"
-        minZoomLevel={13}
-        filter={['==', ['get', 'isRated'], true]}
-        style={{
-          circleRadius: [
-            'case',
-            ['get', 'isSelected'], 15,
-            12,
-          ],
-          circleColor: '#ffffff',
-          circleOpacity: 0.95,
-          circleStrokeWidth: 2.5,
-          circleStrokeColor: ['get', 'accessColor'],
-        }}
-      />
-
       {/* Icon thể loại POI + Tên địa điểm */}
       <MapLibreGL.Layer
         type="symbol"

@@ -9,12 +9,22 @@ const HCMC_INITIAL: MapRegion = {
   zoom: 15,
 };
 
+function getBoundingBoxFromRegion(region: MapRegion): BoundingBox {
+  const delta = Math.max(0.015, 0.45 / Math.pow(2, Math.max(1, region.zoom - 11)));
+  return {
+    north: region.latitude + delta,
+    south: region.latitude - delta,
+    east: region.longitude + delta,
+    west: region.longitude - delta,
+  };
+}
+
 export function useMapRegion(initialCoords?: { latitude: number; longitude: number } | null) {
   const initialRegion: MapRegion = initialCoords
     ? { latitude: initialCoords.latitude, longitude: initialCoords.longitude, zoom: 16 }
     : HCMC_INITIAL;
   const [region, setRegion] = useState<MapRegion>(initialRegion);
-  const [bbox, setBbox] = useState<BoundingBox | null>(null);
+  const [bbox, setBbox] = useState<BoundingBox | null>(() => getBoundingBoxFromRegion(initialRegion));
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const onRegionDidChange = useCallback(

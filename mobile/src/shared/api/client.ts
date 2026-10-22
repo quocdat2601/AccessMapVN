@@ -272,11 +272,46 @@ async function postIdempotent<T>(
 }
 
 /** Multipart helper for the WF-01 AI service; it intentionally does not attach app auth. */
-export function postMultipart<T = unknown>(
+export async function postMultipart<T = unknown>(
   url: string,
   formData: FormData,
   timeoutMs = 15_000
 ): Promise<T> {
+  // Use standard fetch first (native OkHttp streaming on Android, handles FormData reliably)
+  if (typeof fetch === 'function') {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+        },
+        body: formData,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      if (response.ok) {
+        try {
+          return (await response.json()) as T;
+        } catch {
+          return (await response.text()) as unknown as T;
+        }
+      }
+      const errText = await response.text().catch(() => '');
+      throw new Error(`Server responded with status ${response.status}: ${errText}`);
+    } catch (fetchErr: any) {
+      clearTimeout(timeoutId);
+      if (controller.signal.aborted) {
+        throw new Error(`Request timed out after ${timeoutMs}ms`);
+      }
+      // If server returned a 4xx/5xx HTTP error, do not retry with XHR
+      if (fetchErr.message?.startsWith('Server responded with status')) {
+        throw fetchErr;
+      }
+    }
+  }
+
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', url);
@@ -293,7 +328,7 @@ export function postMultipart<T = unknown>(
         reject(new Error(`Server responded with status ${xhr.status}: ${xhr.responseText}`));
       }
     };
-    xhr.onerror = () => reject(new Error('Network request failed via XMLHttpRequest'));
+    xhr.onerror = () => reject(new Error(`Network request failed to ${url} (status: ${xhr.status || 'aborted/offline'})`));
     xhr.ontimeout = () => reject(new Error(`Request timed out after ${timeoutMs}ms`));
     xhr.send(formData as any);
   });

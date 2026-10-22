@@ -306,7 +306,7 @@ export function evaluateVerificationMatrix(
     statusLabel = 'Chờ duyệt viên';
     statusDescription =
       `Đã xác thực ${verifiedTagCount}/${input.selectedTags.length} đặc điểm qua ảnh. ${unverifiedTagCount} đặc điểm tự khai báo thêm cần kiểm duyệt viên xác minh.`;
-  } else if (overallScore >= 80 && spatialValid) {
+  } else if (overallScore >= 90 && spatialValid) {
     status = 'AutoVerified';
     statusLabel = 'Tự động duyệt';
     statusDescription =

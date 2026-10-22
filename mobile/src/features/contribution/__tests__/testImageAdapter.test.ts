@@ -49,6 +49,31 @@ export function runTestImageAdapterTests() {
     assert.strictEqual(deviation, 0, 'Deviation from POI anchor must be 0 meters');
     console.log('  ✅ Test Case 2: Auto-anchor GPS to POI with 0m deviation (PASSED)');
   }
+
+  // Test Case 3: Neo tự động tọa độ GPS động theo targetCoordinates của bất kỳ địa điểm nào (0m deviation)
+  {
+    const pickerInput: PickerImageInput = {
+      uri: 'file:///cache/sample-door.png',
+    };
+    const customCoords = { latitude: 10.845412, longitude: 106.837311 };
+    const media = adaptPickerImageToMediaResult(
+      pickerInput,
+      'custom-osm-12345',
+      'Tòa nhà S9.01',
+      customCoords
+    );
+
+    if (!media.gps) throw new Error('Mock GPS anchor must be populated');
+    assert.strictEqual(media.gps.latitude, customCoords.latitude);
+    assert.strictEqual(media.gps.longitude, customCoords.longitude);
+
+    const deviation = calculateHaversineDistanceMeters(
+      { latitude: media.gps.latitude, longitude: media.gps.longitude },
+      customCoords
+    );
+    assert.strictEqual(deviation, 0, 'Deviation from custom coordinates must be 0 meters');
+    console.log('  ✅ Test Case 3: Auto-anchor GPS to custom targetCoordinates with 0m deviation (PASSED)');
+  }
 }
 
 if (process.argv[1]?.endsWith('testImageAdapter.test.ts')) {

@@ -33,7 +33,9 @@ const AI_TO_QCVN_MAP: Record<string, string[]> = {
   exterior_ramp_present: ['exterior_ramp_present'],
   steps_present: ['steps_present'],
   elevator_present: ['elevator_accessible'],
+  door_detected: ['door_width_ok'],
   door_width_ok: ['door_width_ok'],
+  door_width_compliant: ['door_width_ok'],
   accessible_restroom_sign: ['restroom_accessible_stall'],
   tactile_paving_present: ['tactile_paving_guiding'],
 };

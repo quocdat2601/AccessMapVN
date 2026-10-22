@@ -2,6 +2,7 @@ import assert from 'node:assert';
 import {
   getTagsByCategory,
   isViolationOrObstacleTag,
+  matchSelectedTagsWithCvDetections,
   QCVN_FEATURE_TAGS,
   toggleFeatureTagKey,
   updateFieldNotes,
@@ -65,9 +66,32 @@ export function runTagReviewTests() {
     assert.strictEqual(isViolationOrObstacleTag('door_width_ok'), false);
     console.log('  ✅ Test Case 4: Correctly flags violation and obstacle tags (PASSED)');
   }
+
+  // Test Case 5: Khớp nhãn AI Pre-Scan với đặc tính QCVN (Adapter Pattern: door_detected -> door_width_ok)
+  {
+    // Cửa ra vào: AI detector trả về 'door_detected'
+    const doorDetections = new Map<string, number>([['door_detected', 0.85]]);
+    const doorMatch = matchSelectedTagsWithCvDetections(
+      ['door_width_ok', 'door_threshold_flat'],
+      doorDetections
+    );
+    assert.strictEqual(doorMatch.matchedCount, 2, 'Cả 2 đặc tính cửa phải khớp với door_detected');
+    assert.strictEqual(doorMatch.cvConfidence, 0.85, 'Độ tin cậy CV phải bằng 0.85');
+
+    // Ram dốc: AI detector trả về 'exterior_ramp_present'
+    const rampDetections = new Map<string, number>([['exterior_ramp_present', 0.90]]);
+    const rampMatch = matchSelectedTagsWithCvDetections(
+      ['exterior_ramp_present', 'ramp_slope_comfortable'],
+      rampDetections
+    );
+    assert.strictEqual(rampMatch.matchedCount, 2);
+    assert.strictEqual(rampMatch.cvConfidence, 0.90);
+    console.log('  ✅ Test Case 5: AI Pre-scan door_detected & ramp tags match QCVN features (PASSED)');
+  }
 }
 
 if (process.argv[1]?.endsWith('tagReview.test.ts')) {
   runTagReviewTests();
 }
+
 

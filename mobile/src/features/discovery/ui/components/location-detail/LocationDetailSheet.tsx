@@ -184,7 +184,12 @@ export function LocationDetailSheet({
   const hasPublishedAccessibilityInfo =
     !isUnrated && features.some((feature) => feature.publishedStatus !== 'Unknown');
   const hasDemoCommunityContent = isDemo1 || isDemo2;
-  const showVerificationSection = !isFullyVerified && features.length > 0;
+  const publishedFeaturesCount = useMemo(() => {
+    if (hasDemoCommunityContent) return features.length;
+    return features.filter((feature) => feature.publishedStatus === 'Available').length;
+  }, [hasDemoCommunityContent, features]);
+  const showVerificationSection =
+    !isFullyVerified && (hasDemoCommunityContent || (hasPublishedAccessibilityInfo && publishedFeaturesCount > 0));
 
   const handleRequestReportFromFeature = useCallback(
     (feature: CommunityFeatureInput, editingData?: SubmittedObservation['reportData']) => {
@@ -493,7 +498,7 @@ export function LocationDetailSheet({
                   <View style={styles.verificationCardTitleRow}>
                     <Text style={styles.verificationCardTitle}>Giúp xác nhận thông tin tiếp cận</Text>
                     <View style={styles.verificationBadge}>
-                      <Text style={styles.verificationBadgeText}>{features.length} tiện ích</Text>
+                      <Text style={styles.verificationBadgeText}>{publishedFeaturesCount} tiện ích</Text>
                     </View>
                   </View>
                   <Text style={styles.verificationCardSub}>

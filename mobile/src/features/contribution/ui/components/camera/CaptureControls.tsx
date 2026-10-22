@@ -8,6 +8,7 @@ interface CaptureControlsProps {
   isRecording: boolean;
   recordingSeconds: number;
   disabled: boolean;
+  leftAction?: React.ReactNode;
   onModeChange: (mode: CaptureMode) => void;
   onCapture: () => void;
   onFlip: () => void;
@@ -24,6 +25,7 @@ export function CaptureControls({
   isRecording,
   recordingSeconds,
   disabled,
+  leftAction,
   onModeChange,
   onCapture,
   onFlip,
@@ -60,7 +62,9 @@ export function CaptureControls({
 
       {/* Shutter & Actions Row */}
       <View style={styles.actionRow}>
-        <View style={styles.sideSpacer} />
+        <View style={styles.sideAction}>
+          {leftAction ?? <View style={styles.sideSpacer} />}
+        </View>
 
         <Pressable
           style={({ pressed }) => [

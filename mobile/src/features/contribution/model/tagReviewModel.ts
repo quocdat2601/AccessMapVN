@@ -207,3 +207,58 @@ export function toggleFeatureTagKey(currentKeys: string[], targetKey: string): s
 export function updateFieldNotes(currentNotes: string, newNotes: string): string {
   return newNotes.trim();
 }
+
+/**
+ * Adapter mapping QCVN sub-features to candidate pre-scan AI detection keys.
+ */
+export const CV_TO_QCVN_PARENT_MAP: Record<string, string[]> = {
+  door_width_ok: ['door_detected', 'door_width_compliant', 'door_width_ok'],
+  door_width_wide: ['door_detected', 'door_width_compliant', 'door_width_ok'],
+  door_threshold_flat: ['door_detected', 'door_width_compliant', 'door_width_ok'],
+  door_handle_lever: ['door_detected', 'door_width_compliant', 'door_width_ok'],
+  door_lever_handle: ['door_detected', 'door_width_compliant', 'door_width_ok'],
+  ramp_slope_comfortable: ['exterior_ramp_present', 'ramp_slope_compliant'],
+  ramp_handrails_present: ['exterior_ramp_present'],
+  exterior_ramp_present: ['exterior_ramp_present'],
+  steps_present: ['steps_present'],
+  elevator_accessible: ['elevator_present'],
+  restroom_accessible_stall: ['accessible_restroom_sign'],
+  restroom_grab_bars: ['accessible_restroom_sign'],
+  restroom_sink_clearance: ['accessible_restroom_sign'],
+  tactile_paving_guiding: ['tactile_paving_present'],
+  tactile_paving_warning: ['tactile_paving_present'],
+  tactile_paving_blocked: ['tactile_paving_present'],
+};
+
+/**
+ * Matches user-selected QCVN tags with actual AI pre-scan detections.
+ */
+export function matchSelectedTagsWithCvDetections(
+  selectedKeys: string[],
+  detectedMap: Map<string, number>
+): { matchedCount: number; cvConfidence: number } {
+  if (selectedKeys.length === 0 || detectedMap.size === 0) {
+    return { matchedCount: 0, cvConfidence: 0.0 };
+  }
+
+  let matchedCount = 0;
+  let totalConfidence = 0;
+
+  for (const key of selectedKeys) {
+    const directConf = detectedMap.get(key);
+    if (directConf !== undefined) {
+      matchedCount++;
+      totalConfidence += directConf;
+    } else {
+      const candidates = CV_TO_QCVN_PARENT_MAP[key] ?? [];
+      const matchedKey = candidates.find((cand) => detectedMap.has(cand));
+      if (matchedKey) {
+        matchedCount++;
+        totalConfidence += detectedMap.get(matchedKey)!;
+      }
+    }
+  }
+
+  const cvConfidence = matchedCount > 0 ? totalConfidence / selectedKeys.length : 0.0;
+  return { matchedCount, cvConfidence };
+}

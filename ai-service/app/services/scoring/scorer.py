@@ -20,8 +20,8 @@ Weighted mean of the three most important features:
 
 Thresholds
 ----------
-    ≥ 0.80 → auto_verify
-    0.60 – 0.79 → pending_moderation
+    ≥ 0.90 → auto_verify
+    0.60 – 0.89 → pending_moderation
     < 0.60 → awaiting_more_info
 """
 from __future__ import annotations

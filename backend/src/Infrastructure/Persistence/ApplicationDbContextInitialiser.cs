@@ -89,6 +89,74 @@ public class ApplicationDbContextInitialiser
                 ALTER TABLE places ADD COLUMN IF NOT EXISTS entrance_lat DOUBLE PRECISION NULL;
                 ALTER TABLE places ADD COLUMN IF NOT EXISTS entrance_lng DOUBLE PRECISION NULL;
                 ALTER TABLE places ADD COLUMN IF NOT EXISTS geofence_radius_meters DOUBLE PRECISION NULL;
+                ALTER TABLE places ALTER COLUMN id SET DEFAULT gen_random_uuid();
+
+                UPDATE places 
+                SET lng = ST_X(geom::geometry), lat = ST_Y(geom::geometry) 
+                WHERE (lng = 0 OR lat = 0) AND geom IS NOT NULL;
+
+                DO $$
+                BEGIN
+                    IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'hangfire' AND table_name = 'lock') THEN
+                        DELETE FROM hangfire.lock;
+                    END IF;
+                END $$;
+
+                CREATE OR REPLACE FUNCTION bulk_upsert_places(places_json jsonb)
+                RETURNS integer
+                LANGUAGE plpgsql
+                SECURITY DEFINER
+                AS $$
+                DECLARE
+                    inserted_count integer := 0;
+                BEGIN
+                    WITH inserted AS (
+                        INSERT INTO places (
+                            id, name, category, address, phone, website, opening_hours,
+                            lng, lat, geom,
+                            has_ramp, door_width_ok, has_accessible_restroom,
+                            accessibility_score, accessibility_note,
+                            status, metadata_version, created_at_utc, updated_at_utc
+                        )
+                        SELECT
+                            COALESCE((p->>'id')::uuid, gen_random_uuid()),
+                            p->>'name',
+                            COALESCE(p->>'category', 'other'),
+                            p->>'address',
+                            p->>'phone',
+                            p->>'website',
+                            p->>'opening_hours',
+                            (p->>'lng')::double precision,
+                            (p->>'lat')::double precision,
+                            ST_SetSRID(ST_MakePoint((p->>'lng')::double precision, (p->>'lat')::double precision), 4326)::geography,
+                            COALESCE((p->>'has_ramp')::boolean, false),
+                            COALESCE((p->>'door_width_ok')::boolean, false),
+                            COALESCE((p->>'has_accessible_restroom')::boolean, false),
+                            COALESCE((p->>'accessibility_score')::numeric, -1),
+                            COALESCE(p->>'accessibility_note', 'Chưa có dữ liệu khảo sát tiếp cận'),
+                            1,
+                            1,
+                            NOW(),
+                            NOW()
+                        FROM jsonb_array_elements(places_json) p
+                        WHERE (p->>'lat') IS NOT NULL AND (p->>'lng') IS NOT NULL
+                        ON CONFLICT (id) DO UPDATE SET
+                            name = EXCLUDED.name,
+                            category = EXCLUDED.category,
+                            address = EXCLUDED.address,
+                            phone = EXCLUDED.phone,
+                            website = EXCLUDED.website,
+                            opening_hours = EXCLUDED.opening_hours,
+                            lng = EXCLUDED.lng,
+                            lat = EXCLUDED.lat,
+                            geom = EXCLUDED.geom,
+                            updated_at_utc = NOW()
+                        RETURNING id
+                    )
+                    SELECT count(*) INTO inserted_count FROM inserted;
+                    RETURN inserted_count;
+                END;
+                $$;
 
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_submissions_user_client_sub 
                 ON submissions (user_id, client_submission_id)

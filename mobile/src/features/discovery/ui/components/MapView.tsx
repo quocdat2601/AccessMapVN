@@ -478,14 +478,28 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
 
   // Convert real lat/lng places into SVG LocationPoi coordinates for Expo Go / Web fallback
   const fallbackLocations = useMemo<LocationPoi[]>(() => {
+    if (places.length === 0) return [];
+
+    let minLng = Math.min(...places.map((p) => p.lng));
+    let maxLng = Math.max(...places.map((p) => p.lng));
+    let minLat = Math.min(...places.map((p) => p.lat));
+    let maxLat = Math.max(...places.map((p) => p.lat));
+
+    if (maxLng - minLng < 0.005) {
+      minLng -= 0.005;
+      maxLng += 0.005;
+    }
+    if (maxLat - minLat < 0.005) {
+      minLat -= 0.005;
+      maxLat += 0.005;
+    }
+
+    const lngSpan = maxLng - minLng;
+    const latSpan = maxLat - minLat;
+
     return places.map((p, idx) => {
-      // District 1 bounding approximation for SVG projection
-      const minLng = 106.692;
-      const maxLng = 106.710;
-      const minLat = 10.768;
-      const maxLat = 10.785;
-      const x = Math.max(15, Math.min(85, ((p.lng - minLng) / (maxLng - minLng)) * 100));
-      const y = Math.max(20, Math.min(80, (1 - (p.lat - minLat) / (maxLat - minLat)) * 100));
+      const x = Math.max(15, Math.min(85, ((p.lng - minLng) / lngSpan) * 70 + 15));
+      const y = Math.max(20, Math.min(80, (1 - (p.lat - minLat) / latSpan) * 60 + 20));
 
       return {
         id: p.id,

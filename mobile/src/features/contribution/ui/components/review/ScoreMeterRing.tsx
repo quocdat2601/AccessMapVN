@@ -57,13 +57,13 @@ export function ScoreMeterRing({
 
   const strokeDashoffset = circumference - (circumference * displayScore) / 100;
 
-  let strokeColor = '#10b981'; // >= 80% AutoVerified (Emerald)
+  let strokeColor = '#10b981'; // >= 90% AutoVerified (Emerald)
   let statusBadge = 'CAO';
   if (displayScore < 60) {
     strokeColor = '#f43f5e'; // < 60% AwaitingMoreInfo (Rose)
     statusBadge = 'THẤP';
-  } else if (displayScore < 80) {
-    strokeColor = '#f59e0b'; // 60-79% PendingModeration (Amber)
+  } else if (displayScore < 90) {
+    strokeColor = '#f59e0b'; // 60-89% PendingModeration (Amber)
     statusBadge = 'TRUNG BÌNH';
   }
 

@@ -46,9 +46,9 @@ class Settings(BaseSettings):
     face_blur_kernel: int = 51                 # Gaussian kernel for blurring faces
 
     # ── Scoring thresholds ─────────────────────────────────────────────────────
-    score_auto_verify: float = 0.80
+    score_auto_verify: float = 0.90
     score_pending: float = 0.60
-    # <0.60 → awaiting_more_info, 0.60–0.79 → pending_moderation, ≥0.80 → auto_verify
+    # <0.60 → awaiting_more_info, 0.60–0.89 → pending_moderation, ≥0.90 → auto_verify
 
     # CV/NLP fusion weights
     cv_weight: float = 0.6

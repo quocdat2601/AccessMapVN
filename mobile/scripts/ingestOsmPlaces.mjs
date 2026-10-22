@@ -31,10 +31,10 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Target Areas in Ho Chi Minh City / Thu Duc City
+// Target Areas in Ho Chi Minh City (Thu Duc City & District 1)
 const TARGET_AREAS = [
   {
-    name: 'Vinhomes Grand Park (Q9) - Phước Thiện, Nguyễn Xiển, Origami, Rainbow',
+    name: 'Vinhomes Grand Park (Q9) - Phước Thiện, Nguyễn Xiển, Origami (S9.01), Rainbow',
     bbox: '10.835,106.835,10.875,106.875',
   },
   {
@@ -60,6 +60,10 @@ const TARGET_AREAS = [
   {
     name: 'Phước Long & Đỗ Xuân Hợp (Q9 cũ)',
     bbox: '10.810,106.755,10.840,106.785',
+  },
+  {
+    name: 'Trung tâm Quận 1 (Bến Nghé, Bến Thành, Nguyễn Thái Bình, Đa Kao)',
+    bbox: '10.760,106.685,10.795,106.715',
   },
 ];
 
@@ -131,11 +135,11 @@ function parseAccessibility(tags) {
 
 async function fetchFromOverpass(query) {
   const endpoints = [
+    'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
     'https://overpass-api.de/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter',
     'https://lz4.overpass-api.de/api/interpreter',
     'https://z.overpass-api.de/api/interpreter',
-    'https://overpass.kumi.systems/api/interpreter',
-    'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
   ];
 
   for (const ep of endpoints) {
@@ -148,7 +152,7 @@ async function fetchFromOverpass(query) {
           'User-Agent': 'AccessMapVN/1.0 (https://accessmap.vn)',
         },
         body: `data=${encodeURIComponent(query)}`,
-        signal: AbortSignal.timeout(25000),
+        signal: AbortSignal.timeout(45000),
       });
       if (response.ok) {
         const data = await response.json();

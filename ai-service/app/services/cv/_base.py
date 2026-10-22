@@ -173,42 +173,80 @@ class CVHeuristicEngine:
             import cv2
             h, w = img.shape[:2]
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            edges = cv2.Canny(gray, 50, 150)
-            lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=40, minLineLength=30, maxLineGap=10)
+            edges = cv2.Canny(gray, 40, 140)
+
+            # Check for door and steps to differentiate entrance stairs from ramps
+            door_min_line = int(h * 0.25)
+            lines_door = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=35, minLineLength=door_min_line, maxLineGap=20)
+            door_verticals: list[float] = []
+            if lines_door is not None:
+                for l in lines_door:
+                    x1, y1, x2, y2 = l.flatten()
+                    dx = abs(x2 - x1)
+                    dy = abs(y2 - y1)
+                    if dx < dy * 0.20 and max(y1, y2) > h * 0.50:
+                        door_verticals.append(float((x1 + x2) / 2.0))
+
+            has_large_door = False
+            if len(door_verticals) >= 2:
+                for i in range(len(door_verticals)):
+                    for j in range(i + 1, len(door_verticals)):
+                        span = abs(door_verticals[j] - door_verticals[i])
+                        if 0.18 * w <= span <= 0.85 * w:
+                            has_large_door = True
+                            break
+                    if has_large_door:
+                        break
+
+            lines_ramp = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=35, minLineLength=35, maxLineGap=15)
             ramp_slope_lines = 0
-            if lines is not None:
-                for l in lines:
+            entrance_horizontal_steps = 0
+            if lines_ramp is not None:
+                for l in lines_ramp:
                     pts = l.flatten()
                     if len(pts) == 4:
                         x1, y1, x2, y2 = pts
                         dx = abs(x2 - x1)
                         dy = abs(y2 - y1)
-                        angle = float(np.degrees(np.arctan2(dy, dx)))
-                        # Real accessibility ramps exhibit gentle incline (5 deg - 35 deg) on ground plane
-                        if 5.0 <= angle <= 35.0 and min(y1, y2) > h * 0.20:
+                        y_bot = max(y1, y2)
+                        deg = float(np.degrees(np.arctan2(dy, max(dx, 1))))
+                        # Ramp corridor sloping lines in ground area
+                        if 6.0 <= deg <= 78.0 and y_bot > h * 0.35 and dy > h * 0.035:
                             ramp_slope_lines += 1
-            edge_density = float(np.mean(edges > 0))
-            contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-            small_boxes = sum(1 for cnt in contours if 50 < cv2.contourArea(cnt) < 1500)
+                        # Near-horizontal entrance steps in threshold zone
+                        if deg < 6.0 and y_bot > h * 0.65 and dx > 0.15 * w:
+                            entrance_horizontal_steps += 1
 
-            if small_boxes < 250 and ramp_slope_lines >= 12 and edge_density >= 0.070:
-                conf = min(0.92, round(0.72 + min(0.20, (ramp_slope_lines / 200.0) * 0.20), 2))
+            # Detect saturated yellow guidance marking on ground (arrow or tactile tiles)
+            hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+            yellow_mask = cv2.inRange(hsv, np.array([16, 110, 90]), np.array([36, 255, 255]))
+            ground_yellow_px = int(cv2.countNonZero(yellow_mask[int(h * 0.60):, :]))
+            has_ground_yellow = ground_yellow_px > 3000
+
+            # Entrance stairs exclusion: if a prominent door with horizontal entrance steps exists
+            is_entrance_steps_only = has_large_door and entrance_horizontal_steps >= 20
+
+            if not is_entrance_steps_only and (has_ground_yellow or ramp_slope_lines >= 8):
+                conf = min(0.92, round(0.75 + min(0.15, (ramp_slope_lines / 20.0) * 0.15), 2))
                 return DetectionResult(
                     detected=True,
                     max_confidence=conf,
-                    boxes=[[float(w * 0.1), float(h * 0.2), float(w * 0.9), float(h * 0.9)]],
+                    boxes=[[float(w * 0.1), float(h * 0.35), float(w * 0.9), float(h * 0.95)]],
                     class_names=["ramp"],
                     count=1,
                 )
 
-        # ponytail: OpenCV vertical frame jamb heuristic for door detection; upgrade to fine-tuned YOLOv8 weights once door.pt is mounted.
+        # ponytail: OpenCV vertical frame jamb and lintel heuristic for door detection; upgrade to fine-tuned YOLOv8 weights once door.pt is mounted.
         if self._target_class == "door" and img is not None and img.size > 0:
             import cv2
             h, w = img.shape[:2]
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             edges = cv2.Canny(gray, 40, 140)
-            lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=45, minLineLength=int(h * 0.30), maxLineGap=25)
-            valid_v_xs: list[float] = []
+            # Entrance door jambs are human-scale (at least 25% of image height)
+            door_min_line = int(h * 0.25)
+            lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=35, minLineLength=door_min_line, maxLineGap=20)
+            vertical_jambs: list[tuple[float, float, float, float]] = []
+            horizontal_headers: list[tuple[float, float, float, float]] = []
             if lines is not None:
                 for l in lines:
                     pts = l.flatten()
@@ -216,36 +254,58 @@ class CVHeuristicEngine:
                         x1, y1, x2, y2 = pts
                         dx = abs(x2 - x1)
                         dy = abs(y2 - y1)
-                        if dy > h * 0.30 and dx < dy * 0.15:
+                        y_top = min(y1, y2)
+                        y_bot = max(y1, y2)
+                        # Vertical door jamb: near vertical, bottom extends into lower half
+                        if dx < dy * 0.20 and y_bot > h * 0.50 and dy >= door_min_line:
                             xm = float((x1 + x2) / 2.0)
-                            # Exclude lines near outer image borders (border artifacts)
-                            if 0.04 * w <= xm <= 0.96 * w:
-                                valid_v_xs.append(xm)
+                            if 0.05 * w <= xm <= 0.95 * w:
+                                vertical_jambs.append((xm, float(y_top), float(y_bot), float(dy)))
+                        # Horizontal header / lintel candidate
+                        if dy < dx * 0.18 and dx >= 0.15 * w:
+                            ym = float((y1 + y2) / 2.0)
+                            horizontal_headers.append((min(x1, x2), max(x1, x2), ym, float(dx)))
 
-            # Cluster vertical lines (grouping nearby parallel lines into jambs/edges)
-            clusters: list[list[float]] = []
-            for x in sorted(valid_v_xs):
-                if not clusters or abs(x - clusters[-1][-1]) > 0.05 * w:
-                    clusters.append([x])
+            # Cluster vertical lines
+            clusters: list[list[tuple[float, float, float, float]]] = []
+            for jm in sorted(vertical_jambs, key=lambda j: j[0]):
+                if not clusters or abs(jm[0] - clusters[-1][-1][0]) > 0.04 * w:
+                    clusters.append([jm])
                 else:
-                    clusters[-1].append(x)
-            cluster_means = [sum(c) / len(c) for c in clusters]
+                    clusters[-1].append(jm)
 
-            # Door detected if at least 2 distinct vertical clusters span 22% - 85% of image width
-            if len(cluster_means) >= 2:
-                for i in range(len(cluster_means)):
-                    for j in range(i + 1, len(cluster_means)):
-                        span = (cluster_means[j] - cluster_means[i]) / float(w)
-                        if 0.22 <= span <= 0.85:
-                            x_min = max(0.0, float(cluster_means[i]))
-                            x_max = min(float(w), float(cluster_means[j]))
-                            return DetectionResult(
-                                detected=True,
-                                max_confidence=0.85,
-                                boxes=[[x_min, float(h * 0.05), x_max, float(h * 0.95)]],
-                                class_names=["door"],
-                                count=1,
+            cluster_reps: list[tuple[float, float, float, float]] = []
+            for c in clusters:
+                avg_x = sum(j[0] for j in c) / len(c)
+                min_yt = min(j[1] for j in c)
+                max_yb = max(j[2] for j in c)
+                max_dy = max(j[3] for j in c)
+                cluster_reps.append((avg_x, min_yt, max_yb, max_dy))
+
+            if len(cluster_reps) >= 2:
+                for i in range(len(cluster_reps)):
+                    for j in range(i + 1, len(cluster_reps)):
+                        c1 = cluster_reps[i]
+                        c2 = cluster_reps[j]
+                        span = abs(c2[0] - c1[0])
+                        span_ratio = span / float(w)
+                        avg_jamb_h = max(c1[3], c2[3])
+                        # Door opening aspect ratio: width/height <= 1.5 to exclude short, widely spaced planter/curb posts
+                        if 0.18 <= span_ratio <= 0.85 and span <= avg_jamb_h * 1.5:
+                            y_top_ref = min(c1[1], c2[1])
+                            has_header = any(
+                                (h_line[0] <= c2[0] and h_line[1] >= c1[0])
+                                and abs(h_line[2] - y_top_ref) < h * 0.20
+                                for h_line in horizontal_headers
                             )
+                            if has_header or (c1[3] > 0.28 * h and c2[3] > 0.28 * h):
+                                return DetectionResult(
+                                    detected=True,
+                                    max_confidence=0.85,
+                                    boxes=[[float(c1[0]), float(y_top_ref), float(c2[0]), float(max(c1[2], c2[2]))]],
+                                    class_names=["door"],
+                                    count=1,
+                                )
 
         return DetectionResult(
             detected=False,

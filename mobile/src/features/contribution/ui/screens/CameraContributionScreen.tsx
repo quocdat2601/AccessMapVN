@@ -41,6 +41,8 @@ import { matchSelectedTagsWithCvDetections } from '../../model/tagReviewModel';
 import { getPoiAnchorCoords } from '../../testing/mocks/mockPoiAnchor';
 import { TestGalleryPickerButton } from '../../testing/components/TestGalleryPickerButton';
 import { fetchPlaceById } from '@/entities/place';
+import { LocationSelectionModal, type SelectedLocationData } from '../components/location/LocationSelectionModal';
+
 
 type CameraType = 'back' | 'front';
 
@@ -67,9 +69,11 @@ function ActiveCameraContributionScreen() {
     locationName?: string | string[];
     latitude?: string | string[];
     longitude?: string | string[];
+    flow?: string | string[];
   }>();
   const locationId = firstParam(params.locationId, 'saigon-centre');
-  const locationName = firstParam(params.locationName, 'S9.01');
+  const locationName = firstParam(params.locationName, 'Địa điểm mới gần bạn');
+  const flow = firstParam(params.flow, 'contribute');
   const paramLat = parseFloat(firstParam(params.latitude, ''));
   const paramLng = parseFloat(firstParam(params.longitude, ''));
 
@@ -96,6 +100,15 @@ function ActiveCameraContributionScreen() {
   const requestedInitialPermissions = useRef(false);
   const recordingStartedAt = useRef<number | null>(null);
   const mounted = useRef(true);
+
+  // Target Location State (shared across Camera, TagReview, and FinalScorecard)
+  const [targetLocationId, setTargetLocationId] = useState(locationId);
+  const [targetLocationName, setTargetLocationName] = useState(locationName);
+  const [targetAddress, setTargetAddress] = useState<string | null>(null);
+  const [targetCoords, setTargetCoords] = useState<{ latitude: number; longitude: number } | null>(
+    !isNaN(paramLat) && !isNaN(paramLng) ? { latitude: paramLat, longitude: paramLng } : null
+  );
+  const [showLocationModal, setShowLocationModal] = useState(false);
 
   const [cameraPermission, requestCameraPermission, getCameraPermission] = ExpoCamera.useCameraPermissions();
   const [locationPermission, requestLocationPermission, getLocationPermission] = Location.useForegroundPermissions();
@@ -187,7 +200,12 @@ function ActiveCameraContributionScreen() {
               geo.city || geo.region,
             ].filter(Boolean);
             if (parts.length > 0) {
-              setCurrentAddress(parts.join(', '));
+              const fullAddr = parts.join(', ');
+              setCurrentAddress(fullAddr);
+              setTargetAddress((prev) => prev || fullAddr);
+              setTargetLocationName((prev) =>
+                !prev || prev === 'Địa điểm mới gần bạn' || prev === 'S9.01' ? parts[0] || 'Vị trí hiện tại' : prev
+              );
               return;
             }
           }
@@ -196,7 +214,13 @@ function ActiveCameraContributionScreen() {
         }
         try {
           const fallback = await reverseGeocode(current.coords.latitude, current.coords.longitude);
-          if (fallback && mounted.current) setCurrentAddress(fallback);
+          if (fallback && mounted.current) {
+            setCurrentAddress(fallback);
+            setTargetAddress((prev) => prev || fallback);
+            setTargetLocationName((prev) =>
+              !prev || prev === 'Địa điểm mới gần bạn' || prev === 'S9.01' ? fallback.split(',')[0]?.trim() || 'Vị trí hiện tại' : prev
+            );
+          }
         } catch {
           // ignore fallback error
         }
@@ -286,6 +310,39 @@ function ActiveCameraContributionScreen() {
     setMode(nextMode);
   }, [isRecording, mode]);
 
+  const handleSelectLocation = useCallback(
+    (data: SelectedLocationData) => {
+      setTargetLocationId(data.id);
+      setTargetLocationName(data.name);
+      setTargetAddress(data.address || null);
+      setTargetCoords({ latitude: data.latitude, longitude: data.longitude });
+      setGps({
+        latitude: data.latitude,
+        longitude: data.longitude,
+        accuracy: 5.0,
+        timestamp: Date.now(),
+      });
+      if (capturedMedia) {
+        setCapturedMedia((prev) =>
+          prev
+            ? {
+                ...prev,
+                locationId: data.id,
+                locationName: data.name,
+                gps: {
+                  latitude: data.latitude,
+                  longitude: data.longitude,
+                  accuracy: 5.0,
+                  timestamp: Date.now(),
+                },
+              }
+            : null
+        );
+      }
+    },
+    [capturedMedia]
+  );
+
   const startPreScanForPhoto = useCallback((media: CapturedContributionMedia) => {
     setCapturedMedia(media);
     setWorkflowStep('tag_review');
@@ -306,7 +363,7 @@ function ActiveCameraContributionScreen() {
     setIsCapturing(true);
     setMessage(null);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.7, skipProcessing: true });
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.55, skipProcessing: true, base64: true });
       if (!mounted.current) return;
       const media: CapturedContributionMedia = {
         id: createMediaId(),
@@ -314,10 +371,11 @@ function ActiveCameraContributionScreen() {
         uri: photo.uri,
         width: photo.width,
         height: photo.height,
+        base64: photo.base64,
         capturedAt: Date.now(),
-        locationId,
-        locationName,
-        gps,
+        locationId: targetLocationId,
+        locationName: targetLocationName,
+        gps: targetCoords ? { latitude: targetCoords.latitude, longitude: targetCoords.longitude, accuracy: 5.0, timestamp: Date.now() } : gps,
       };
       startPreScanForPhoto(media);
     } catch {
@@ -325,7 +383,7 @@ function ActiveCameraContributionScreen() {
     } finally {
       if (mounted.current) setIsCapturing(false);
     }
-  }, [cameraReady, gps, isCapturing, locationId, locationName, startPreScanForPhoto]);
+  }, [cameraReady, gps, isCapturing, startPreScanForPhoto, targetCoords, targetLocationId, targetLocationName]);
 
   const startVideoRecording = useCallback(async () => {
     if (!cameraRef.current || !cameraReady || isCapturing) return;
@@ -368,9 +426,9 @@ function ActiveCameraContributionScreen() {
           uri: result.uri,
           durationSeconds,
           capturedAt: Date.now(),
-          locationId,
-          locationName,
-          gps,
+          locationId: targetLocationId,
+          locationName: targetLocationName,
+          gps: targetCoords ? { latitude: targetCoords.latitude, longitude: targetCoords.longitude, accuracy: 5.0, timestamp: Date.now() } : gps,
         });
         setWorkflowStep('video_preview');
       }
@@ -384,7 +442,7 @@ function ActiveCameraContributionScreen() {
         setRecordingSeconds(0);
       }
     }
-  }, [cameraReady, gps, isCapturing, locationId, locationName]);
+  }, [cameraReady, gps, isCapturing, targetCoords, targetLocationId, targetLocationName]);
 
   const handleCapture = useCallback(() => {
     if (isRecording) {
@@ -428,7 +486,8 @@ function ActiveCameraContributionScreen() {
           }
         : null;
 
-      const poiCoords = targetPoiCoords;
+      const poiCoords =
+        targetCoords ?? targetPoiCoords ?? getPoiAnchorCoords(targetLocationId, targetLocationName, contributorCoords);
 
       const evalInput: VerificationMatrixInput = {
         cvConfidence,
@@ -445,36 +504,66 @@ function ActiveCameraContributionScreen() {
       setMatrixResult(result);
       setWorkflowStep('final_scorecard');
     },
-    [capturedMedia, targetPoiCoords, preScanTags]
+    [capturedMedia, paramLat, paramLng, preScanTags, targetCoords, targetLocationId, targetLocationName, targetPoiCoords]
+
   );
 
   // Workflow 1: Final Scorecard Screen
   if (workflowStep === 'final_scorecard' && capturedMedia && matrixResult) {
     return (
-      <FinalScorecardScreen
-        media={capturedMedia}
-        matrixResult={matrixResult}
-        selectedTagKeys={confirmedTagKeys}
-        notes={fieldNotes}
-        onRetakeOrReset={handleRetake}
-        onEditTags={() => setWorkflowStep('tag_review')}
-        onFinish={() => router.back()}
-      />
+      <>
+        <FinalScorecardScreen
+          media={capturedMedia}
+          matrixResult={matrixResult}
+          selectedTagKeys={confirmedTagKeys}
+          notes={fieldNotes}
+          locationName={targetLocationName}
+          locationAddress={targetAddress}
+          onChangeLocation={() => setShowLocationModal(true)}
+          onRetakeOrReset={handleRetake}
+          onEditTags={() => setWorkflowStep('tag_review')}
+          flow={flow}
+          onFinish={() => router.back()}
+        />
+        <LocationSelectionModal
+          visible={showLocationModal}
+          currentLocationName={targetLocationName}
+          currentLatitude={targetCoords?.latitude ?? gps?.latitude ?? null}
+          currentLongitude={targetCoords?.longitude ?? gps?.longitude ?? null}
+          currentAddress={targetAddress ?? currentAddress}
+          onSelectLocation={handleSelectLocation}
+          onClose={() => setShowLocationModal(false)}
+        />
+      </>
     );
   }
 
   // Workflow 1: Step 2.5 Human-in-the-Loop Review Screen
   if (workflowStep === 'tag_review' && capturedMedia) {
     return (
-      <TagReviewScreen
-        media={capturedMedia}
-        availableTags={preScanTags}
-        aiSummary={aiSummary}
-        isPreScanning={isPreScanning}
-        onProceedToVerification={handleProceedToVerification}
-        onRetake={handleRetake}
-        onBack={handleRetake}
-      />
+      <>
+        <TagReviewScreen
+          media={capturedMedia}
+          availableTags={preScanTags}
+          aiSummary={aiSummary}
+          isPreScanning={isPreScanning}
+          locationName={targetLocationName}
+          locationAddress={targetAddress}
+          onChangeLocation={() => setShowLocationModal(true)}
+          onProceedToVerification={handleProceedToVerification}
+          onRetake={handleRetake}
+          onBack={handleRetake}
+        />
+        <LocationSelectionModal
+          visible={showLocationModal}
+          currentLocationName={targetLocationName}
+          currentLatitude={targetCoords?.latitude ?? gps?.latitude ?? null}
+          currentLongitude={targetCoords?.longitude ?? gps?.longitude ?? null}
+          currentAddress={targetAddress ?? currentAddress}
+          onSelectLocation={handleSelectLocation}
+          onClose={() => setShowLocationModal(false)}
+        />
+      </>
     );
   }
 
@@ -490,8 +579,8 @@ function ActiveCameraContributionScreen() {
           setPendingContributionMedia(capturedMedia);
           addContributionRecord({
             id: createMediaId(),
-            locationId,
-            locationName: customName || locationName,
+            locationId: targetLocationId,
+            locationName: customName || targetLocationName,
             mediaUri: capturedMedia.uri,
             mediaType: capturedMedia.type,
             featureTags: confirmedTags,
@@ -523,7 +612,7 @@ function ActiveCameraContributionScreen() {
       <>
         <StatusBar style="light" />
         <PermissionState
-          locationName={locationName}
+          locationName={targetLocationName}
           title="Cần quyền truy cập camera"
           message="AccessMapVN chỉ dùng camera trong ứng dụng để ghi nhận bằng chứng tiếp cận. Không có ảnh nào được tải lên ở bước này."
           canAskAgain={cameraPermission.canAskAgain}
@@ -553,12 +642,13 @@ function ActiveCameraContributionScreen() {
       <View style={styles.previewScrim} pointerEvents="none" />
       <View style={[styles.hud, { paddingTop: insets.top + 8, paddingBottom: insets.bottom }]} pointerEvents="box-none">
         <CameraHeader
-          locationName={locationName}
+          locationName={targetLocationName}
           onBack={handleBack}
           disabled={isCapturing}
           gpsAccuracy={gps?.accuracy ?? null}
           gpsState={gpsState}
           onGpsPress={() => void handleGpsPress()}
+          onLocationPress={() => setShowLocationModal(true)}
           flashMode={flashMode}
           onToggleFlash={() => setFlashMode((prev) => (prev === 'off' ? 'on' : 'off'))}
         />
@@ -593,9 +683,9 @@ function ActiveCameraContributionScreen() {
           leftAction={
             __DEV__ ? (
               <TestGalleryPickerButton
-                locationId={locationId}
-                locationName={locationName}
-                targetCoordinates={targetPoiCoords}
+                locationId={targetLocationId}
+                locationName={targetLocationName}
+                targetCoordinates={targetCoords ?? targetPoiCoords}
                 disabled={isRecording || isCapturing}
                 onMediaPicked={(media) => {
                   startPreScanForPhoto(media);
@@ -604,7 +694,17 @@ function ActiveCameraContributionScreen() {
             ) : null
           }
         />
+
       </View>
+      <LocationSelectionModal
+        visible={showLocationModal}
+        currentLocationName={targetLocationName}
+        currentLatitude={targetCoords?.latitude ?? gps?.latitude ?? null}
+        currentLongitude={targetCoords?.longitude ?? gps?.longitude ?? null}
+        currentAddress={targetAddress ?? currentAddress}
+        onSelectLocation={handleSelectLocation}
+        onClose={() => setShowLocationModal(false)}
+      />
     </View>
   );
 }

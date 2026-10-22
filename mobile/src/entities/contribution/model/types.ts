@@ -18,6 +18,7 @@ export interface CapturedContributionMedia {
   locationId: string;
   locationName: string;
   gps: GpsSnapshot | null;
+  base64?: string;
 }
 
 export interface ContributionLocation {

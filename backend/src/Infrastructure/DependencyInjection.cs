@@ -73,6 +73,7 @@ public static class DependencyInjection
             services.AddHangfireServer(options =>
             {
                 options.Queues = new[] { "wf02-community", "default" };
+                options.WorkerCount = 2;
             });
             services.AddScoped<IWf02JobScheduler, HangfireWf02JobScheduler>();
             services.AddHostedService<Wf02RecurringJobRegistrar>();

@@ -74,7 +74,52 @@ export function ReportDetailPage({ id }: { id: string }) {
     <div className="grid gap-4 lg:grid-cols-[1.2fr_.8fr]">
       <div className="space-y-4">
         <Card><CardHeader><CardTitle>Noi dung nguoi dung gui</CardTitle></CardHeader><CardContent className="space-y-2 text-sm"><p className="whitespace-pre-wrap text-slate-800">{data.description}</p><p className="text-xs text-slate-500">Gui luc {formatAdminDate(data.createdAt)} · {data.reporterDisplayName ?? "Nguoi bao cao"}</p>{data.proposedAddress && <p className="rounded-lg bg-amber-50 p-2 text-amber-900">Dia chi de xuat: {data.proposedAddress}</p>}</CardContent></Card>
-        <Card><CardHeader><CardTitle>Minh chung rieng tu</CardTitle></CardHeader><CardContent className="space-y-2">{data.evidence.length ? data.evidence.map((item) => <div key={item.id} className="rounded-lg border border-slate-100 p-3 text-sm"><p>{item.description || "Tep minh chung da duoc xac thuc quyen truy cap."}</p><div className="mt-2 flex items-center justify-between gap-3"><span className="text-xs text-slate-400">{formatAdminDate(item.createdAt)}</span>{item.mediaContentType && <Button size="sm" variant="outline" disabled={openingEvidenceId === item.id} onClick={() => void openEvidence(item.id)}><ExternalLink className="size-3.5" /> Mo tep 5 phut</Button>}</div></div>) : <p className="text-sm text-slate-500">Chua co minh chung bo sung.</p>}</CardContent></Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Minh chứng thực địa & Phân tích AI</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {data.evidence.length ? (
+              data.evidence.map((item) => (
+                <div key={item.id} className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  {item.mediaUrl && (
+                    <div className="relative flex max-h-[360px] w-full items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-900/5">
+                      <img
+                        src={item.mediaUrl}
+                        alt="Minh chứng báo cáo"
+                        className="max-h-[360px] w-full object-contain"
+                      />
+                    </div>
+                  )}
+                  <div className="rounded-lg border border-teal-100 bg-teal-50/60 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="flex size-2 rounded-full bg-teal-600 animate-pulse" />
+                        <span className="text-xs font-bold uppercase tracking-wide text-teal-800">Đánh giá AI từ Mobile</span>
+                      </div>
+                      <span className="text-xs text-slate-500">{formatAdminDate(item.createdAt)}</span>
+                    </div>
+                    <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{item.description || "Tệp minh chứng đã được AI thẩm định độ tin cậy."}</p>
+                  </div>
+                  {item.mediaUrl && (
+                    <div className="flex justify-end">
+                      <a
+                        href={item.mediaUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-teal-700 hover:text-teal-800 hover:underline"
+                      >
+                        <ExternalLink className="size-3.5" /> Mở ảnh gốc (Cloud CDN)
+                      </a>
+                    </div>
+                  )}
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-slate-500">Chưa có minh chứng bổ sung.</p>
+            )}
+          </CardContent>
+        </Card>
         <Card><CardHeader><CardTitle>Lich su trang thai</CardTitle></CardHeader><CardContent className="space-y-3">{data.history.map((item) => <div key={item.id} className="border-l-2 border-teal-200 pl-3 text-sm"><strong>{reportStatusLabels[item.toStatus]}</strong><p className="text-slate-600">{item.reason}</p><span className="text-xs text-slate-400">{formatAdminDate(item.occurredAt)}</span></div>)}</CardContent></Card>
       </div>
       <div className="space-y-4">

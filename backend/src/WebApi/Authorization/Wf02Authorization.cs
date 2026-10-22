@@ -32,18 +32,25 @@ public sealed class Wf02ModerationAuthorizationHandler
             return;
         }
 
-        var hasPermission = context.User.Claims
-            .Where(claim => claim.Type is "permissions" or "permission")
-            .SelectMany(claim => claim.Value.Split(new[] { ',', ' ' }, StringSplitOptions.RemoveEmptyEntries))
-            .Any(value => string.Equals(value, Wf02Policies.Moderate, StringComparison.OrdinalIgnoreCase));
-        if (!hasPermission)
+        var isServerAuthorizedAdmin = await _db.AppUsers.AsNoTracking()
+            .AnyAsync(user => user.Id == userId && user.IsActive && user.Role == AppUserRole.Admin);
+        if (!isServerAuthorizedAdmin)
         {
             return;
         }
 
-        var isServerAuthorizedAdmin = await _db.AppUsers.AsNoTracking()
-            .AnyAsync(user => user.Id == userId && user.IsActive && user.Role == AppUserRole.Admin);
-        if (isServerAuthorizedAdmin)
+        var hasPermission = context.User.Claims
+            .Where(claim => claim.Type is "permissions" or "permission" or "app_role" or "role")
+            .SelectMany(claim => claim.Value.Split(new[] { ',', ' ' }, StringSplitOptions.RemoveEmptyEntries))
+            .Any(value => string.Equals(value, Wf02Policies.Moderate, StringComparison.OrdinalIgnoreCase) ||
+                          string.Equals(value, "admin", StringComparison.OrdinalIgnoreCase));
+
+        var hasAppMetadataPermission = context.User.Claims
+            .Any(claim => claim.Type.Contains("app_metadata", StringComparison.OrdinalIgnoreCase) &&
+                          (claim.Value.Contains(Wf02Policies.Moderate, StringComparison.OrdinalIgnoreCase) ||
+                           claim.Value.Contains("admin", StringComparison.OrdinalIgnoreCase)));
+
+        if (hasPermission || hasAppMetadataPermission || isServerAuthorizedAdmin)
         {
             context.Succeed(requirement);
         }

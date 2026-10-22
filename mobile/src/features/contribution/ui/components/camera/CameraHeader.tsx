@@ -9,6 +9,7 @@ interface CameraHeaderProps {
   gpsAccuracy?: number | null;
   gpsState?: 'loading' | 'available' | 'denied' | 'unavailable';
   onGpsPress?: () => void;
+  onLocationPress?: () => void;
   flashMode?: 'off' | 'on';
   onToggleFlash?: () => void;
 }
@@ -20,6 +21,7 @@ export function CameraHeader({
   gpsAccuracy,
   gpsState,
   onGpsPress,
+  onLocationPress,
   flashMode = 'off',
   onToggleFlash,
 }: CameraHeaderProps) {
@@ -44,12 +46,18 @@ export function CameraHeader({
         <MaterialCommunityIcons name="arrow-left" size={22} color="#ffffff" />
       </Pressable>
 
-      <View style={styles.locationPill}>
+      <Pressable
+        style={({ pressed }) => [styles.locationPill, pressed && styles.pressed]}
+        onPress={onLocationPress}
+        accessibilityRole="button"
+        accessibilityLabel={`Địa điểm đang chọn: ${locationName}. Chạm để thay đổi.`}
+      >
         <MaterialCommunityIcons name="map-marker" size={14} color="#5eead4" />
         <Text style={styles.locationText} numberOfLines={1}>
           {locationName}
         </Text>
-      </View>
+        <MaterialCommunityIcons name="pencil-outline" size={12} color="#99f6e4" />
+      </Pressable>
 
       <View style={styles.rightGroup}>
         {onToggleFlash ? (

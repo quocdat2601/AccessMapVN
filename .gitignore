@@ -67,3 +67,8 @@ yarn-error.*
 *.orig.*
 .DS_Store
 .idea/
+
+# Uploaded media
+backend/src/WebApi/wwwroot/uploads/*
+!backend/src/WebApi/wwwroot/uploads/.gitkeep
+

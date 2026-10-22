@@ -22,6 +22,8 @@ import Animated, {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '@/shared/theme';
 import { loadContributionRecords } from '@/entities/contribution';
+import { fetchPlaceEvidence } from '@/entities/place';
+import { resolveServiceUrl } from '@/shared/api/client';
 import { useAuth } from '@/features/auth';
 import {
   castCommunityVote,
@@ -31,7 +33,13 @@ import {
   type CommunityFeatureInput,
   type SubmittedObservation,
 } from '@/features/community';
-import { ReportFormModal, type ReportFormData, type ReportSummary } from '@/features/reports';
+import {
+  ReportFormModal,
+  type ReportFormData,
+  type ReportSummary,
+  getReportDraft,
+  subscribeReportDraft,
+} from '@/features/reports';
 import type { PlaceDto } from '../../../model';
 import { AccessibilitySummary } from './AccessibilitySummary';
 import { CommunityReviewsSection } from './CommunityReviewsSection';
@@ -104,6 +112,22 @@ function calculateDistance(
   return `Cách ${d.toFixed(1)} km`;
 }
 
+function resolveEvidenceImageUrl(rawUrl?: string | null): string {
+  if (!rawUrl) return '';
+  if (rawUrl.startsWith('data:') || rawUrl.startsWith('file://')) return rawUrl;
+  const baseUrl = resolveServiceUrl(5256, process.env.EXPO_PUBLIC_API_URL);
+  if (rawUrl.startsWith('/')) {
+    return `${baseUrl}${rawUrl}`;
+  }
+  if (rawUrl.startsWith('http://localhost:5256/')) {
+    return rawUrl.replace('http://localhost:5256', baseUrl);
+  }
+  if (rawUrl.startsWith('http://127.0.0.1:5256/')) {
+    return rawUrl.replace('http://127.0.0.1:5256', baseUrl);
+  }
+  return rawUrl;
+}
+
 export function LocationDetailSheet({
   place,
   userLatitude,
@@ -129,6 +153,15 @@ export function LocationDetailSheet({
   const [reportInitialFeature, setReportInitialFeature] = useState<AccessibilityFeatureType | undefined>(undefined);
   const [reportInitialData, setReportInitialData] = useState<ReportFormData | undefined>(undefined);
   const [verificationRefreshKey, setVerificationRefreshKey] = useState(0);
+
+  useEffect(() => {
+    return subscribeReportDraft(() => {
+      const draft = getReportDraft();
+      if (draft && draft.isOpen && (draft.locationId === place.id || !draft.locationId)) {
+        setShowReportForm(true);
+      }
+    });
+  }, [place.id]);
 
   const isUnrated =
     place.accessibility_score == null ||
@@ -223,8 +256,6 @@ export function LocationDetailSheet({
       primaryFeatureType?: AccessibilityFeatureType,
       formData?: ReportFormData
     ) => {
-      Alert.alert('Đã gửi báo cáo', 'Báo cáo mâu thuẫn đã được ghi nhận. Bạn có thể chỉnh sửa trong vòng 30 phút.');
-
       if (primaryFeatureType && formData) {
         try {
           await castCommunityVote(
@@ -278,22 +309,61 @@ export function LocationDetailSheet({
       const seenUrls = new Set<string>();
 
       try {
+        const remoteEvidence = await fetchPlaceEvidence(place.id);
+        remoteEvidence.forEach((r) => {
+          const resolved = resolveEvidenceImageUrl(r.imageUrl);
+          if (resolved && !seenUrls.has(resolved)) {
+            seenUrls.add(resolved);
+            items.push({
+              id: r.id,
+              title: r.title || getEvidenceTitle(r.featureTags),
+              subtitle: r.createdAt ? new Date(r.createdAt).toLocaleDateString('vi-VN') : (r.subtitle ?? 'Đã công bố'),
+              badge: r.badge || 'Đã xác thực',
+              imageUrl: resolved,
+            });
+          }
+        });
+      } catch {}
+
+      try {
         const localRecords = await loadContributionRecords();
         localRecords
           .filter((r) => r.locationId === place.id && r.mediaUri)
           .forEach((r) => {
-            if (!seenUrls.has(r.mediaUri)) {
-              seenUrls.add(r.mediaUri);
+            const resolved = resolveEvidenceImageUrl(r.mediaUri);
+            if (resolved && !seenUrls.has(resolved)) {
+              seenUrls.add(resolved);
               items.push({
                 id: r.id,
                 title: getEvidenceTitle(r.featureTags),
                 subtitle: new Date(r.createdAt).toLocaleDateString('vi-VN'),
-                badge: 'Đã xác thực',
-                imageUrl: r.mediaUri,
+                badge: 'Đã gửi từ máy này',
+                imageUrl: resolved,
               });
             }
           });
       } catch {}
+
+      // Fake demo evidence for the 2 demo venues only
+      if (items.length === 0) {
+        if (isDemo1) {
+          items.push({
+            id: 'demo-1-ramp',
+            title: 'Ram dốc lối Pasteur',
+            subtitle: '96 ngày trước • Bởi Mai Anh',
+            badge: 'Đã xác thực',
+            imageUrl: 'https://images.unsplash.com/photo-1584824486509-112e4181ff6b?auto=format&fit=crop&w=800&q=80',
+          });
+        } else if (isDemo2) {
+          items.push({
+            id: 'demo-2-ramp',
+            title: 'Ram dốc & Lối vào tiếp cận chuẩn',
+            subtitle: 'Vừa xác thực • Bởi Chuyên viên Thẩm định',
+            badge: 'Đã thẩm định',
+            imageUrl: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=800&q=80',
+          });
+        }
+      }
 
       if (isMounted) {
         setEvidenceList(items);

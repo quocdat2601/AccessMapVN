@@ -25,6 +25,8 @@ export interface CreateReportInput {
     latitude: number;
     longitude: number;
   };
+  evidenceMediaUrl?: string;
+  aiAnalysisJson?: string;
 }
 
 export interface ReportSummary {

@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import net from 'node:net';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import net from 'node:net';
 
 const repositoryRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const environmentPath = join(repositoryRoot, 'infra', '.env');
@@ -65,10 +66,10 @@ console.log(
     ? '[backend] Xác thực JWT dùng Supabase URL từ mobile/.env.'
     : '[backend] Chưa có Supabase URL hợp lệ; các thao tác cần đăng nhập sẽ bị từ chối.'
 );
-function isPortInUse(port, host = '127.0.0.1') {
+function isPortListening(targetPort) {
   return new Promise((resolve) => {
     const socket = new net.Socket();
-    socket.setTimeout(800);
+    socket.setTimeout(600);
     socket.once('connect', () => {
       socket.destroy();
       resolve(true);
@@ -80,19 +81,19 @@ function isPortInUse(port, host = '127.0.0.1') {
     socket.once('error', () => {
       resolve(false);
     });
-    socket.connect(port, host);
+    socket.connect(targetPort, '127.0.0.1');
   });
 }
 
-if (await isPortInUse(5256)) {
-  console.log('[backend] Cổng 5256 đã có tiến trình Backend đang chạy. Tự động tái sử dụng Backend hiện tại...');
-  const interval = setInterval(() => {}, 60000);
+const alreadyListening = await isPortListening(5256);
+if (alreadyListening) {
+  console.log('[backend] Cổng 5256 đã có tiến trình Backend đang chạy sẵn. Tái sử dụng tiến trình hiện tại.');
+  const keepAlive = setInterval(() => {}, 60000);
   for (const signal of ['SIGINT', 'SIGTERM']) {
     process.on(signal, () => {
-      clearInterval(interval);
+      clearInterval(keepAlive);
       process.exit(0);
     });
-  }
 } else {
   const child = spawn('dotnet', ['run', '--project', 'backend/src/WebApi/AccessMapVN.WebApi.csproj'], {
     cwd: repositoryRoot,

@@ -69,7 +69,8 @@ export function TestGalleryPickerButton({
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: false,
-        quality: 0.9,
+        quality: 0.8,
+        base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -81,6 +82,7 @@ export function TestGalleryPickerButton({
             height: asset.height,
             fileName: asset.fileName ?? 'gallery-test.jpg',
             fileSize: asset.fileSize,
+            base64: asset.base64 ?? undefined,
           },
           locationId,
           locationName,

@@ -24,6 +24,9 @@ interface TagReviewScreenProps {
   availableTags: PreScanFeatureTag[];
   aiSummary: string | null;
   isPreScanning: boolean;
+  locationName?: string;
+  locationAddress?: string | null;
+  onChangeLocation?: () => void;
   onProceedToVerification: (confirmedTagKeys: string[], notes: string) => void;
   onRetake: () => void;
   onBack: () => void;
@@ -56,6 +59,9 @@ export function TagReviewScreen({
   availableTags,
   aiSummary,
   isPreScanning,
+  locationName,
+  locationAddress,
+  onChangeLocation,
   onProceedToVerification,
   onRetake,
   onBack,
@@ -135,12 +141,20 @@ export function TagReviewScreen({
           <View style={styles.mediaCard}>
             <Image source={{ uri: media.uri }} style={styles.mediaImage} contentFit="cover" />
             <View style={styles.mediaOverlay}>
-              <View style={styles.locationPill}>
+              <Pressable
+                style={({ pressed }) => [styles.locationPill, pressed && { opacity: 0.8 }]}
+                onPress={onChangeLocation}
+                accessibilityRole="button"
+                accessibilityLabel="Chạm để đổi địa điểm đóng góp"
+              >
                 <MaterialCommunityIcons name="map-marker-radius" size={13} color="#004e58" />
                 <Text style={styles.locationPillText} numberOfLines={1}>
-                  {media.locationName}
+                  {locationName || media.locationName}
                 </Text>
-              </View>
+                {onChangeLocation ? (
+                  <MaterialCommunityIcons name="pencil-outline" size={12} color="#004e58" />
+                ) : null}
+              </Pressable>
               {media.gps ? (
                 <View style={styles.gpsPill}>
                   <MaterialCommunityIcons name="crosshairs-gps" size={12} color="#b45309" />

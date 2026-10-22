@@ -345,3 +345,22 @@ export async function unifiedSearch(
 
   return [...accessMapFormatted, ...osmFormatted];
 }
+
+export interface PlaceEvidenceDto {
+  id: string;
+  title: string;
+  subtitle?: string;
+  badge: string;
+  imageUrl: string;
+  featureTags?: string[];
+  createdAt?: string;
+}
+
+export async function fetchPlaceEvidence(placeId: string): Promise<PlaceEvidenceDto[]> {
+  try {
+    const raw = await apiClient.get<PlaceEvidenceDto[]>(`/api/v1/places/${encodeURIComponent(placeId)}/evidence`);
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
+  }
+}

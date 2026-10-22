@@ -24,8 +24,17 @@ import type {
   CommunityFeatureState,
 } from '@/features/community';
 import { fetchCommunityState } from '@/features/community';
+import { uploadMediaToBackend } from '@/features/contribution/api/mediaUploadService';
 import { ApiError } from '@/shared/api/client';
 import { createReport } from '../api/reportsApi';
+import {
+  clearReportDraft,
+  getActiveUploadPromise,
+  getReportDraft,
+  setActiveUploadPromise,
+  setReportDraft,
+  type ReportEvidenceDraft,
+} from '../model/reportDraftStore';
 import type { ReportReason, ReportSummary } from '../model/types';
 
 type FormReasonType = 'Changed' | 'Blocked' | 'Incorrect' | 'Other';
@@ -141,28 +150,44 @@ export function ReportFormModal({
   const [description, setDescription] = useState('');
   const [featureStates, setFeatureStates] = useState<Partial<Record<AccessibilityFeatureType, CommunityFeatureState>>>({});
   const [pickedAsset, setPickedAsset] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [evidence, setEvidence] = useState<ReportEvidenceDraft | null>(null);
+  const [pickedUploadedUrl, setPickedUploadedUrl] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visible) return;
 
-    if (initialFormData?.reason) {
-      setSelectedReason(initialFormData.reason);
+    const draft = getReportDraft();
+    if (draft && (draft.locationId === locationId || !draft.locationId)) {
+      setSelectedReason(draft.reason ?? 'Changed');
+      if (draft.featureIds && draft.featureIds.length > 0) {
+        setSelectedFeatureIds(draft.featureIds);
+      } else {
+        setSelectedFeatureIds(resolveFeatureIds(initialFeatureType));
+      }
+      setDescription(draft.description ?? '');
+      if (draft.evidence) {
+        setEvidence(draft.evidence);
+      }
     } else {
-      setSelectedReason('Changed');
-    }
+      if (initialFormData?.reason) {
+        setSelectedReason(initialFormData.reason);
+      } else {
+        setSelectedReason('Changed');
+      }
 
-    if (initialFormData?.featureIds && initialFormData.featureIds.length > 0) {
-      setSelectedFeatureIds(initialFormData.featureIds);
-    } else {
-      setSelectedFeatureIds(resolveFeatureIds(initialFeatureType));
-    }
+      if (initialFormData?.featureIds && initialFormData.featureIds.length > 0) {
+        setSelectedFeatureIds(initialFormData.featureIds);
+      } else {
+        setSelectedFeatureIds(resolveFeatureIds(initialFeatureType));
+      }
 
-    setDescription(initialFormData?.description ?? '');
-    setPickedAsset(initialFormData?.imageUri ? ({ uri: initialFormData.imageUri } as ImagePicker.ImagePickerAsset) : null);
+      setDescription(initialFormData?.description ?? '');
+      setPickedAsset(initialFormData?.imageUri ? ({ uri: initialFormData.imageUri } as ImagePicker.ImagePickerAsset) : null);
+    }
     setErrorMessage(null);
-  }, [visible, initialFeatureType, initialFormData]);
+  }, [visible, locationId, initialFeatureType, initialFormData]);
 
   useEffect(() => {
     if (!visible) return;
@@ -204,27 +229,43 @@ export function ReportFormModal({
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images', 'videos'],
       allowsEditing: false,
-      quality: 0.8,
+      quality: 0.7,
+      base64: true,
     });
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      setPickedAsset(result.assets[0]);
+      const asset = result.assets[0];
+      setPickedAsset(asset);
+      setEvidence(null);
+      // Pre-upload in background immediately
+      if (asset.uri && !asset.uri.startsWith('http')) {
+        const promise = uploadMediaToBackend(asset.uri, asset.base64 ?? undefined);
+        setActiveUploadPromise(promise);
+        promise.then((url) => {
+          setPickedUploadedUrl(url);
+        }).catch(() => {});
+      }
     }
   };
 
-  const handleTakePhoto = async () => {
-    setErrorMessage(null);
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      setErrorMessage('Cần cấp quyền máy ảnh.');
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: false,
-      quality: 0.8,
+  const handleOpenAppCamera = (targetMode: 'photo' | 'video' = 'photo') => {
+    setReportDraft({
+      locationId,
+      locationName,
+      reason: selectedReason,
+      description,
+      featureIds: selectedFeatureIds,
+      evidence,
+      isOpen: false,
     });
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      setPickedAsset(result.assets[0]);
-    }
+    onClose();
+    router.push({
+      pathname: '/contribute/camera',
+      params: {
+        flow: 'report',
+        locationId,
+        locationName,
+      },
+    } as never);
   };
 
   const resetAndClose = () => {
@@ -232,6 +273,10 @@ export function ReportFormModal({
     setSelectedFeatureIds(['ramp']);
     setDescription('');
     setPickedAsset(null);
+    setPickedUploadedUrl(null);
+    setEvidence(null);
+    clearReportDraft();
+    setActiveUploadPromise(null);
     setErrorMessage(null);
     onClose();
   };
@@ -263,6 +308,67 @@ export function ReportFormModal({
         ? `[Hạng mục: ${selectedLabels.join(', ')}]\n${description.trim()}`
         : description.trim();
 
+    let uploadedMediaUrl: string | undefined = undefined;
+    let aiAnalysisJson: string | undefined = undefined;
+
+    if (evidence) {
+      if (evidence.uploadedUrl) {
+        uploadedMediaUrl = evidence.uploadedUrl;
+      } else if (evidence.uri.startsWith('http')) {
+        uploadedMediaUrl = evidence.uri;
+      } else {
+        const inFlight = getActiveUploadPromise();
+        if (inFlight) {
+          try {
+            uploadedMediaUrl = await inFlight;
+          } catch {
+            try {
+              uploadedMediaUrl = await uploadMediaToBackend(evidence.uri, evidence.base64);
+            } catch (e) {
+              console.warn('Upload fallback failed', e);
+            }
+          }
+        } else {
+          try {
+            uploadedMediaUrl = await uploadMediaToBackend(evidence.uri, evidence.base64);
+          } catch (uploadErr) {
+            console.warn('Failed to upload evidence to server', uploadErr);
+          }
+        }
+      }
+      aiAnalysisJson =
+        evidence.aiSummary ||
+        (evidence.aiScore != null
+          ? `Điểm tin cậy AI: ${evidence.aiScore}/100\nĐặc tính: ${evidence.featureTags.join(', ')}`
+          : 'Minh chứng chụp từ Camera AI (WF-02)');
+    } else if (pickedAsset) {
+      if (pickedUploadedUrl) {
+        uploadedMediaUrl = pickedUploadedUrl;
+      } else if (pickedAsset.uri.startsWith('http')) {
+        uploadedMediaUrl = pickedAsset.uri;
+      } else {
+        const inFlight = getActiveUploadPromise();
+        if (inFlight) {
+          try {
+            uploadedMediaUrl = await inFlight;
+          } catch {
+            try {
+              uploadedMediaUrl = await uploadMediaToBackend(pickedAsset.uri, pickedAsset.base64 ?? undefined);
+            } catch (e) {
+              console.warn('Upload fallback failed', e);
+            }
+          }
+        } else {
+          try {
+            uploadedMediaUrl = await uploadMediaToBackend(pickedAsset.uri, pickedAsset.base64 ?? undefined);
+          } catch (uploadErr) {
+            console.warn('Failed to upload picked asset to server', uploadErr);
+          }
+        }
+      }
+      aiAnalysisJson = 'Ảnh minh chứng đính kèm từ thư viện ảnh';
+    }
+
     try {
       const state = primaryFeatureType ? featureStates[primaryFeatureType] : undefined;
       const report = await createReport(
@@ -272,39 +378,28 @@ export function ReportFormModal({
           description: fullDescription,
           featureType: primaryFeatureType,
           observedFeatureVersion: state?.featureVersion,
+          evidenceMediaUrl: uploadedMediaUrl,
+          aiAnalysisJson,
         },
         user.id
       );
 
+      clearReportDraft();
       onCreated?.(report, primaryFeatureType, {
         reason: selectedReason,
         description: description.trim(),
         featureIds: selectedFeatureIds,
-        imageUri: pickedAsset?.uri,
+        imageUri: uploadedMediaUrl || evidence?.uri || pickedAsset?.uri,
       });
       resetAndClose();
 
-      if (pickedAsset) {
-        Alert.alert(
-          'Đã gửi báo cáo',
-          'Báo cáo đã được ghi nhận. Bạn có muốn nộp ảnh minh chứng vừa chụp vào luồng đóng góp tiếp cận (+50 EXP) cho địa điểm này không?',
-          [
-            { text: 'Để sau', style: 'cancel' },
-            {
-              text: 'Đóng góp ngay',
-              onPress: () => {
-                router.push({
-                  pathname: '/contribute/camera',
-                  params: {
-                    locationId,
-                    locationName,
-                  },
-                } as never);
-              },
-            },
-          ]
-        );
-      }
+      Alert.alert(
+        'Đã gửi báo cáo',
+        evidence
+          ? 'Báo cáo mâu thuẫn kèm minh chứng ảnh & phân tích AI đã được ghi nhận thành công (+30 EXP).'
+          : 'Báo cáo đã được ghi nhận. Quản trị viên sẽ sớm kiểm tra và xác thực.',
+        [{ text: 'Đóng', style: 'default' }]
+      );
     } catch (error) {
       if (error instanceof ApiError && error.status === 429) {
         setErrorMessage('Bạn đã đạt giới hạn báo cáo cho địa điểm này hôm nay.');
@@ -425,22 +520,99 @@ export function ReportFormModal({
               </View>
             </View>
             <View style={styles.evidenceBtnRow}>
-              <TouchableOpacity style={styles.evidenceActionBtn} onPress={handleTakePhoto} activeOpacity={0.8}>
+              <TouchableOpacity
+                style={styles.evidenceActionBtn}
+                onPress={() => handleOpenAppCamera('photo')}
+                activeOpacity={0.8}
+              >
                 <MaterialCommunityIcons name="camera-outline" size={16} color="#1E293B" />
                 <Text style={styles.evidenceActionText}>Chụp ảnh</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.evidenceActionBtn} onPress={handleTakePhoto} activeOpacity={0.8}>
+              <TouchableOpacity
+                style={styles.evidenceActionBtn}
+                onPress={() => handleOpenAppCamera('video')}
+                activeOpacity={0.8}
+              >
                 <MaterialCommunityIcons name="video-outline" size={16} color="#1E293B" />
                 <Text style={styles.evidenceActionText}>Quay video</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.evidenceActionBtn} onPress={handlePickImage} activeOpacity={0.8}>
+              <TouchableOpacity
+                style={styles.evidenceActionBtn}
+                onPress={handlePickImage}
+                activeOpacity={0.8}
+              >
                 <MaterialCommunityIcons name="image-outline" size={16} color="#1E293B" />
                 <Text style={styles.evidenceActionText}>Thư viện</Text>
               </TouchableOpacity>
             </View>
 
-            {/* Attached Image Preview */}
-            {pickedAsset ? (
+            {/* Attached AI Evidence or Picked Asset */}
+            {evidence ? (
+              <View style={styles.aiEvidenceCard}>
+                <View style={styles.aiEvidenceHeader}>
+                  <View style={styles.aiBadgeGroup}>
+                    <View style={styles.aiScoreBadge}>
+                      <MaterialCommunityIcons name="robot" size={14} color="#0D9488" />
+                      <Text style={styles.aiScoreText}>
+                        AI Duyệt: {evidence.aiScore ?? 90}/100
+                      </Text>
+                    </View>
+                    {evidence.isUploading ? (
+                      <View style={styles.uploadingBadge}>
+                        <ActivityIndicator size="small" color="#0284C7" style={{ transform: [{ scale: 0.7 }] }} />
+                        <Text style={styles.uploadingText}>Đang tải lên...</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.readyBadge}>
+                        <MaterialCommunityIcons name="cloud-check-outline" size={13} color="#059669" />
+                        <Text style={styles.readyText}>Sẵn sàng</Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={styles.aiEvidenceHeaderActions}>
+                    <TouchableOpacity
+                      onPress={() => handleOpenAppCamera('photo')}
+                      style={styles.retakeBtn}
+                      activeOpacity={0.7}
+                    >
+                      <MaterialCommunityIcons name="camera-retake-outline" size={13} color="#006874" />
+                      <Text style={styles.retakeBtnText}>Chụp lại</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setEvidence(null)}
+                      style={styles.removeEvidenceBtn}
+                      hitSlop={8}
+                      activeOpacity={0.7}
+                    >
+                      <MaterialCommunityIcons name="trash-can-outline" size={16} color="#EF4444" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.aiEvidenceBody}>
+                  <Image source={{ uri: evidence.uri }} style={styles.aiEvidenceThumb} resizeMode="cover" />
+                  <View style={styles.aiEvidenceInfo}>
+                    <Text style={styles.aiEvidenceTagTitle}>Đặc tính AI ghi nhận:</Text>
+                    <View style={styles.aiEvidenceTagsRow}>
+                      {evidence.featureTags && evidence.featureTags.length > 0 ? (
+                        evidence.featureTags.map((tag) => (
+                          <View key={tag} style={styles.aiTagPill}>
+                            <Text style={styles.aiTagPillText}>{tag}</Text>
+                          </View>
+                        ))
+                      ) : (
+                        <Text style={styles.aiEmptyTagText}>Chung</Text>
+                      )}
+                    </View>
+                    {evidence.aiSummary ? (
+                      <Text numberOfLines={3} style={styles.aiSummarySnippet}>
+                        {evidence.aiSummary}
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+              </View>
+            ) : pickedAsset ? (
               <View style={styles.attachmentBox}>
                 <View style={styles.attachmentThumbWrapper}>
                   <Image source={{ uri: pickedAsset.uri }} style={styles.attachmentThumb} resizeMode="cover" />
@@ -807,5 +979,146 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.55,
+  },
+  aiEvidenceCard: {
+    backgroundColor: '#F0FDFA',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    padding: 12,
+    marginBottom: 12,
+  },
+  aiEvidenceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  aiBadgeGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  uploadingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    gap: 3,
+  },
+  uploadingText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#0284C7',
+  },
+  readyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    gap: 3,
+  },
+  readyText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  aiScoreBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#CCFBF1',
+    borderWidth: 1,
+    borderColor: '#5EEAD4',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    gap: 4,
+  },
+  aiScoreText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#0F766E',
+  },
+  aiEvidenceHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  retakeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#E0F2FE',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  retakeBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0369A1',
+  },
+  removeEvidenceBtn: {
+    padding: 4,
+  },
+  aiEvidenceBody: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  aiEvidenceThumb: {
+    width: 80,
+    height: 80,
+    borderRadius: 10,
+    backgroundColor: '#E2E8F0',
+  },
+  aiEvidenceInfo: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  aiEvidenceTagTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 4,
+  },
+  aiEvidenceTagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginBottom: 4,
+  },
+  aiTagPill: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  aiTagPillText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#0F766E',
+  },
+  aiEmptyTagText: {
+    fontSize: 10,
+    color: '#94A3B8',
+    fontStyle: 'italic',
+  },
+  aiSummarySnippet: {
+    fontSize: 10.5,
+    color: '#475569',
+    lineHeight: 14,
+    marginTop: 2,
   },
 });

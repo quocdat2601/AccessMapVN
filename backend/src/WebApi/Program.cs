@@ -196,7 +196,10 @@ else
     app.UseHttpsRedirection();
 }
 
-app.UseAuthentication();
+var uploadsDir = Path.Combine(app.Environment.ContentRootPath, "wwwroot", "uploads");
+Directory.CreateDirectory(uploadsDir);
+app.UseStaticFiles();
+
 app.UseAuthorization();
 
 app.MapControllers();

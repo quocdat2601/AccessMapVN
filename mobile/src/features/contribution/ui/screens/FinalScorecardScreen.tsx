@@ -5,9 +5,10 @@ import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { addContributionRecord, type CapturedContributionMedia } from '@/entities/contribution';
 import { apiClient } from '@/shared/api/client';
+import { uploadMediaToBackend } from '../../api/mediaUploadService';
 import type { VerificationMatrixResult } from '../../lib/verificationEngine';
+import { getReportDraft, setActiveUploadPromise, setReportEvidence } from '@/features/reports';
 import { ScoreMatrixBreakdown } from '../components/review/ScoreMatrixBreakdown';
-import { ScoreMeterRing } from '../components/review/ScoreMeterRing';
 import {
   saveSurveyDraft,
   loadSurveyDraft,
@@ -16,12 +17,18 @@ import {
   defaultFileExistenceChecker,
   type SurveyDraftMedia,
 } from '../../model/surveyDraftStore';
+import { ScoreCriteriaExplainer } from '../components/review/ScoreCriteriaExplainer';
+
 
 interface FinalScorecardScreenProps {
   media: CapturedContributionMedia;
   matrixResult: VerificationMatrixResult;
   selectedTagKeys: string[];
   notes: string;
+  flow?: string;
+  locationName?: string;
+  locationAddress?: string | null;
+  onChangeLocation?: () => void;
   onRetakeOrReset: () => void;
   onEditTags: () => void;
   onFinish?: () => void;
@@ -32,6 +39,10 @@ export function FinalScorecardScreen({
   matrixResult,
   selectedTagKeys,
   notes,
+  flow,
+  locationName,
+  locationAddress,
+  onChangeLocation,
   onRetakeOrReset,
   onEditTags,
   onFinish,
@@ -141,12 +152,24 @@ export function FinalScorecardScreen({
         }
       }
 
+      // 1. Upload the authentic photo to backend so Web Admin can display it
+      let uploadedUrl = media.uri;
+      if (media.uri.startsWith('file:') || media.uri.startsWith('content:')) {
+        try {
+          uploadedUrl = await uploadMediaToBackend(media.uri, media.base64);
+        } catch (uploadErr) {
+          console.warn('Could not upload media to server, using local uri fallback', uploadErr);
+        }
+      }
+
       const payload = {
         client_submission_id: clientSubmissionIdRef.current,
         location_id: media.locationId || 'custom-location',
-        media_urls: [media.uri],
+        user_id: 'mobile-contributor',
+        media_urls: [uploadedUrl],
         client_observations: selectedTagKeys,
         feature_tags: selectedTagKeys,
+
         measurements: {
           door_clear_width: {
             status: 'not_measured',
@@ -180,7 +203,7 @@ export function FinalScorecardScreen({
           id: res.submission_id,
           locationId: media.locationId,
           locationName: media.locationName,
-          mediaUri: media.uri,
+          mediaUri: uploadedUrl,
           mediaType: media.type,
           featureTags: selectedTagKeys,
           textDescription: notes,
@@ -259,6 +282,52 @@ export function FinalScorecardScreen({
     statusColor = '#f43f5e';
   }
 
+  const handleAttachToReport = () => {
+    // Start background upload immediately so it's ready before user finishes typing
+    let uploadPromise: Promise<string> | null = null;
+    if (media.uri && !media.uri.startsWith('http')) {
+      uploadPromise = uploadMediaToBackend(media.uri, media.base64);
+      setActiveUploadPromise(uploadPromise);
+      uploadPromise
+        .then((url) => {
+          const draft = getReportDraft();
+          if (draft?.evidence) {
+            setReportEvidence({
+              ...draft.evidence,
+              uploadedUrl: url,
+              isUploading: false,
+            });
+          }
+        })
+        .catch((err) => {
+          console.warn('[Background upload error]', err);
+          const draft = getReportDraft();
+          if (draft?.evidence) {
+            setReportEvidence({
+              ...draft.evidence,
+              isUploading: false,
+            });
+          }
+        });
+    }
+
+    setReportEvidence({
+      uri: media.uri,
+      base64: media.base64,
+      aiScore: overallScore,
+      confidenceScore: overallScore / 100,
+      featureTags: selectedTagKeys,
+      aiSummary:
+        `Điểm tin cậy AI: ${overallScore}/100 (${statusLabel})\n` +
+        `Đánh giá: ${statusDescription}\n` +
+        `Đặc tính nhận diện: ${selectedTagKeys.length > 0 ? selectedTagKeys.join(', ') : 'Chung'}` +
+        (notes ? `\nGhi chú: ${notes}` : ''),
+      matrixResult,
+      isUploading: uploadPromise !== null,
+    });
+    onFinish?.();
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar style="dark" />
@@ -274,9 +343,11 @@ export function FinalScorecardScreen({
           <MaterialCommunityIcons name="arrow-left" size={22} color="#0f172a" />
         </Pressable>
         <View style={styles.headerCenter}>
-          <Text style={styles.headerStep}>BƯỚC 3 / 3</Text>
+          <Text style={styles.headerStep}>
+            {flow === 'report' ? 'MINH CHỨNG BÁO CÁO' : 'BƯỚC 3 / 3'}
+          </Text>
           <Text style={styles.headerTitle} numberOfLines={1}>
-            Kết quả đánh giá tiếp cận
+            {flow === 'report' ? 'Đánh giá AI minh chứng' : 'Kết quả đánh giá tiếp cận'}
           </Text>
         </View>
         <Pressable
@@ -390,15 +461,42 @@ export function FinalScorecardScreen({
             selectedTagKeys={selectedTagKeys}
           />
 
+          <ScoreCriteriaExplainer
+            overallScore={overallScore}
+            status={status}
+            hasNoFeatures={selectedTagKeys.length === 0}
+            cvScore={pillars.computerVision.score}
+            spatialDistanceMeters={spatialDistanceMeters}
+          />
+
         {/* POI & Submission Details Card */}
         <View style={styles.detailsCard}>
-          <Text style={styles.detailsTitle}>Thông tin ghi nhận</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <Text style={styles.detailsTitle}>Thông tin ghi nhận</Text>
+            {onChangeLocation ? (
+              <Pressable
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: '#f0fdfa' }}
+                onPress={onChangeLocation}
+              >
+                <MaterialCommunityIcons name="pencil-outline" size={13} color="#006874" />
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#006874' }}>Đổi vị trí</Text>
+              </Pressable>
+            ) : null}
+          </View>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Địa điểm:</Text>
             <Text style={styles.detailValue} numberOfLines={1}>
-              {media.locationName}
+              {locationName || media.locationName}
             </Text>
           </View>
+          {locationAddress ? (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Địa chỉ:</Text>
+              <Text style={styles.detailValue} numberOfLines={1}>
+                {locationAddress}
+              </Text>
+            </View>
+          ) : null}
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Đặc tính đã chọn:</Text>
             <Text style={styles.detailValue}>{selectedTagKeys.length} đặc tính</Text>
@@ -415,7 +513,8 @@ export function FinalScorecardScreen({
             <Text style={styles.detailLabel}>Ghi nhận EXP:</Text>
             <View style={styles.expPill}>
               <MaterialCommunityIcons name="clock-outline" size={14} color="#b45309" />
-              <Text style={styles.expPillText}>Tính sau khi duyệt</Text>
+              <Text style={styles.expPillText}>{flow === 'report' ? '+30 EXP (chờ duyệt)' : '+50 EXP (chờ duyệt)'}</Text>
+
             </View>
           </View>
         </View>
@@ -424,7 +523,27 @@ export function FinalScorecardScreen({
 
       {/* Bottom Actions */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 14) + 6 }]}>
-        {submittedResult ? (
+        {flow === 'report' ? (
+          <>
+            <Pressable
+              style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
+              onPress={onEditTags}
+              accessibilityRole="button"
+            >
+              <MaterialCommunityIcons name="tag-outline" size={16} color="#334155" />
+              <Text style={styles.secondaryBtnText}>Sửa đặc tính</Text>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
+              onPress={handleAttachToReport}
+              accessibilityRole="button"
+            >
+              <MaterialCommunityIcons name="clipboard-check-outline" size={18} color="#ffffff" />
+              <Text style={styles.primaryBtnText}>Đính kèm vào báo cáo</Text>
+            </Pressable>
+          </>
+        ) : submittedResult ? (
           <>
             <Pressable
               style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}

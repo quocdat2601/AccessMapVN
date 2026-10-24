@@ -1204,5 +1204,85 @@ public class SubmitSurveyCommandTests
 
         result.IsValid.Should().BeTrue();
     }
+
+    [Fact]
+    public async Task Handle_WhenSubmissionSucceeds_EnqueuesVerificationJob()
+    {
+        var placeLat = 10.7720;
+        var placeLng = 106.6980;
+        var targetPlace = new Place
+        {
+            Id = Guid.NewGuid(),
+            Name = "Chợ Bến Thành",
+            Lat = placeLat,
+            Lng = placeLng,
+        };
+
+        var placeRepoMock = new Mock<IPlaceRepository>();
+        placeRepoMock.Setup(r => r.GetByIdAsync(targetPlace.Id.ToString(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(targetPlace);
+
+        var submissionRepoMock = new Mock<ISubmissionRepository>();
+        var schedulerMock = new Mock<ISubmissionJobScheduler>();
+
+        var handler = new SubmitSurveyCommandHandler(
+            placeRepoMock.Object,
+            submissionRepoMock.Object,
+            schedulerMock.Object);
+
+        var command = new SubmitSurveyCommand
+        {
+            ClientSubmissionId = "sub-enqueue-1",
+            LocationId = targetPlace.Id.ToString(),
+            MediaUrls = new List<string> { "https://example.com/ramp.jpg" },
+            GpsLat = placeLat,
+            GpsLng = placeLng,
+            AuthenticatedUserId = "user-job-1",
+        };
+
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        result.Should().NotBeNull();
+        submissionRepoMock.Verify(r => r.AddAsync(It.IsAny<Submission>(), It.IsAny<CancellationToken>()), Times.Once);
+        schedulerMock.Verify(s => s.EnqueueVerification(It.IsAny<Guid>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SubmissionVerificationJob_WhenAiSucceeds_UpdatesAiObservationsAndConfidenceScoreWithoutChangingStatus()
+    {
+        var submissionId = Guid.NewGuid();
+        var submission = new Submission
+        {
+            Id = submissionId,
+            SubmissionCode = "S-2026-TEST",
+            MediaUrls = new List<string> { "https://example.com/ramp.jpg" },
+            TextDescription = "Có đường dốc",
+            Status = AccessMapVN.Domain.Enums.SubmissionStatus.PendingModeration,
+            ConfidenceScore = 0.5,
+        };
+
+        var repoMock = new Mock<ISubmissionRepository>();
+        repoMock.Setup(r => r.GetByIdAsync(submissionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(submission);
+
+        var aiClientMock = new Mock<IAiServiceClient>();
+        var fakeAiJson = "{\"overall_confidence_score\": 0.885, \"recommendation\": \"pending_moderation\"}";
+        aiClientMock.Setup(c => c.VerifySubmissionRawAsync(submissionId, submission.MediaUrls, submission.TextDescription, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(fakeAiJson);
+
+        var loggerMock = new Mock<ILogger<AccessMapVN.Infrastructure.Services.SubmissionVerificationJob>>();
+
+        var job = new AccessMapVN.Infrastructure.Services.SubmissionVerificationJob(
+            repoMock.Object,
+            aiClientMock.Object,
+            loggerMock.Object);
+
+        await job.RunAsync(submissionId, CancellationToken.None);
+
+        submission.AiObservationsJson.Should().Be(fakeAiJson);
+        submission.ConfidenceScore.Should().Be(0.885);
+        submission.Status.Should().Be(AccessMapVN.Domain.Enums.SubmissionStatus.PendingModeration);
+        repoMock.Verify(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
 }
 

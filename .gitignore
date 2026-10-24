@@ -72,3 +72,10 @@ yarn-error.*
 backend/src/WebApi/wwwroot/uploads/*
 !backend/src/WebApi/wwwroot/uploads/.gitkeep
 
+# Documentation drafts & binary files
+/docs/
+*.docx
+*.doc
+*.pptx
+*.pdf
+

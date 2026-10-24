@@ -24,6 +24,12 @@ public class SubmissionRepository : ISubmissionRepository
         await _context.PointTransactions.AddAsync(transaction, cancellationToken);
     }
 
+    public async Task<Submission?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return await _context.Submissions
+            .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
+    }
+
     public async Task<Submission?> GetByCodeAsync(string code, CancellationToken cancellationToken = default)
     {
         return await _context.Submissions

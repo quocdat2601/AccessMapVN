@@ -57,6 +57,14 @@ public static class DependencyInjection
                 AuthenticationRegion = configuration["ObjectStorage:Region"] ?? RegionEndpoint.USEast1.SystemName,
             }));
 
+        var aiBaseUrl = configuration["AiService:BaseUrl"] ?? "http://localhost:8000";
+        var aiTimeoutSeconds = configuration.GetValue<int>("AiService:TimeoutSeconds", 60);
+        services.AddHttpClient<IAiServiceClient, AiServiceClient>(client =>
+        {
+            client.BaseAddress = new Uri(aiBaseUrl.TrimEnd('/') + "/");
+            client.Timeout = TimeSpan.FromSeconds(aiTimeoutSeconds);
+        });
+
         var hangfireEnabled = configuration.GetValue<bool>("Hangfire:Enabled");
         if (hangfireEnabled && !string.IsNullOrWhiteSpace(connectionString))
         {
@@ -76,11 +84,13 @@ public static class DependencyInjection
                 options.WorkerCount = 2;
             });
             services.AddScoped<IWf02JobScheduler, HangfireWf02JobScheduler>();
+            services.AddScoped<ISubmissionJobScheduler, HangfireSubmissionJobScheduler>();
             services.AddHostedService<Wf02RecurringJobRegistrar>();
         }
         else
         {
             services.AddSingleton<IWf02JobScheduler, NoOpWf02JobScheduler>();
+            services.AddSingleton<ISubmissionJobScheduler, NoOpSubmissionJobScheduler>();
         }
 
         services.AddHostedService<Wf02OutboxDispatcher>();

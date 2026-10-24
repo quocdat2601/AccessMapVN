@@ -43,13 +43,16 @@ public class SubmitSurveyCommandHandler : IRequestHandler<SubmitSurveyCommand, S
 {
     private readonly IPlaceRepository _placeRepository;
     private readonly ISubmissionRepository _submissionRepository;
+    private readonly ISubmissionJobScheduler? _submissionJobScheduler;
 
     public SubmitSurveyCommandHandler(
         IPlaceRepository placeRepository,
-        ISubmissionRepository submissionRepository)
+        ISubmissionRepository submissionRepository,
+        ISubmissionJobScheduler? submissionJobScheduler = null)
     {
         _placeRepository = placeRepository;
         _submissionRepository = submissionRepository;
+        _submissionJobScheduler = submissionJobScheduler;
     }
 
     public async Task<SubmitSurveyResult> Handle(SubmitSurveyCommand request, CancellationToken cancellationToken)
@@ -218,6 +221,7 @@ public class SubmitSurveyCommandHandler : IRequestHandler<SubmitSurveyCommand, S
         {
             await _submissionRepository.AddAsync(submission, cancellationToken);
             await _submissionRepository.SaveChangesAsync(cancellationToken);
+            _submissionJobScheduler?.EnqueueVerification(submission.Id);
         }
         catch (Exception ex) when (ex.GetType().Name.Contains("DbUpdate") || ex.GetType().Name.Contains("Unique"))
         {

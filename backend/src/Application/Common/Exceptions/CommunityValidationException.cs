@@ -1,8 +1,8 @@
 namespace AccessMapVN.Application.Common.Exceptions;
 
-public sealed class Wf02Exception : Exception
+public class CommunityValidationException : Exception
 {
-    public Wf02Exception(string code, string message, int statusCode, object? details = null)
+    public CommunityValidationException(string code, string message, int statusCode, object? details = null)
         : base(message)
     {
         Code = code;

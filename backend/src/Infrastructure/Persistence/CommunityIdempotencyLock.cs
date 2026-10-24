@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AccessMapVN.Infrastructure.Persistence;
 
-internal static class Wf02IdempotencyLock
+internal static class CommunityIdempotencyLock
 {
     public static Task AcquireAsync(
         ApplicationDbContext db,

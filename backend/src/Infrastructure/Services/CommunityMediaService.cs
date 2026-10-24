@@ -5,7 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using AccessMapVN.Application.Common.Exceptions;
 using AccessMapVN.Application.Common.Options;
-using AccessMapVN.Application.Features.Wf02;
+using AccessMapVN.Application.Features.CommunityValidation;
 using AccessMapVN.Domain.Entities;
 using AccessMapVN.Domain.Enums;
 using AccessMapVN.Infrastructure.Persistence;
@@ -18,7 +18,7 @@ using Microsoft.Extensions.Options;
 
 namespace AccessMapVN.Infrastructure.Services;
 
-public sealed class Wf02MediaService : IWf02MediaService
+public sealed class CommunityMediaService : ICommunityMediaService
 {
     private const long MaxBytes = 25 * 1024 * 1024;
     private static readonly HashSet<string> SupportedMimeTypes = new(StringComparer.Ordinal)
@@ -32,15 +32,15 @@ public sealed class Wf02MediaService : IWf02MediaService
     };
     private readonly ApplicationDbContext _db;
     private readonly IAmazonS3 _s3;
-    private readonly Wf02Options _options;
+    private readonly CommunityValidationOptions _options;
     private readonly TimeProvider _clock;
     private readonly string _bucket;
     private readonly Protocol _preSignedProtocol;
 
-    public Wf02MediaService(
+    public CommunityMediaService(
         ApplicationDbContext db,
         IAmazonS3 s3,
-        IOptions<Wf02Options> options,
+        IOptions<CommunityValidationOptions> options,
         IConfiguration configuration,
         TimeProvider clock)
     {
@@ -69,14 +69,14 @@ public sealed class Wf02MediaService : IWf02MediaService
             request.SizeBytes is <= 0 or > MaxBytes || request.Sha256.Length != 64 ||
             !request.Sha256.All(Uri.IsHexDigit))
         {
-            throw new Wf02Exception("INVALID_MEDIA", "Only image/video media up to 25 MB with a SHA-256 digest is accepted.", 422);
+            throw new CommunityValidationException("INVALID_MEDIA", "Only image/video media up to 25 MB with a SHA-256 digest is accepted.", 422);
         }
         var endpoint = $"/api/v1/locations/{locationId:D}/media/upload-intents";
         var hash = Hash(request);
         var now = _clock.GetUtcNow();
         await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
-        await Wf02IdempotencyLock.AcquireAsync(_db, actorId, endpoint, idempotencyKey, cancellationToken);
-        await Wf02IdempotencyLock.AcquireResourceAsync(_db, $"actor:{actorId:D}", cancellationToken);
+        await CommunityIdempotencyLock.AcquireAsync(_db, actorId, endpoint, idempotencyKey, cancellationToken);
+        await CommunityIdempotencyLock.AcquireResourceAsync(_db, $"actor:{actorId:D}", cancellationToken);
         await EnsureUserAsync(actorId, cancellationToken);
         var replay = await ReplayAsync<CreateUploadIntentResponse>(actorId, endpoint, idempotencyKey, hash, now, cancellationToken);
         if (replay is not null)
@@ -87,7 +87,7 @@ public sealed class Wf02MediaService : IWf02MediaService
         var locationValid = await _db.Places.AnyAsync(
             item => item.Id == locationId && item.Status == LocationStatus.Active && item.MergedIntoLocationId == null,
             cancellationToken);
-        if (!locationValid) throw new Wf02Exception("LOCATION_NOT_ACTIVE", "The location is not active or canonical.", 409);
+        if (!locationValid) throw new CommunityValidationException("LOCATION_NOT_ACTIVE", "The location is not active or canonical.", 409);
 
         await EnsureBucketAsync(cancellationToken);
         var media = new OwnedMedia
@@ -142,8 +142,8 @@ public sealed class Wf02MediaService : IWf02MediaService
         var hash = Hash(new { uploadIntentId });
         var now = _clock.GetUtcNow();
         await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
-        await Wf02IdempotencyLock.AcquireAsync(_db, actorId, endpoint, idempotencyKey, cancellationToken);
-        await Wf02IdempotencyLock.AcquireResourceAsync(_db, $"upload-intent:{uploadIntentId:D}", cancellationToken);
+        await CommunityIdempotencyLock.AcquireAsync(_db, actorId, endpoint, idempotencyKey, cancellationToken);
+        await CommunityIdempotencyLock.AcquireResourceAsync(_db, $"upload-intent:{uploadIntentId:D}", cancellationToken);
         var replay = await ReplayAsync<CompleteUploadIntentResponse>(actorId, endpoint, idempotencyKey, hash, now, cancellationToken);
         if (replay is not null)
         {
@@ -152,10 +152,10 @@ public sealed class Wf02MediaService : IWf02MediaService
         }
         var intent = await _db.UploadIntents.SingleOrDefaultAsync(
             item => item.Id == uploadIntentId && item.OwnerId == actorId, cancellationToken)
-            ?? throw new Wf02Exception("UPLOAD_INTENT_NOT_FOUND", "The upload intent was not found.", 404);
+            ?? throw new CommunityValidationException("UPLOAD_INTENT_NOT_FOUND", "The upload intent was not found.", 404);
         var media = await _db.OwnedMedia.SingleAsync(item => item.Id == intent.OwnedMediaId, cancellationToken);
         if (intent.ExpiresAt <= now || intent.Status != UploadIntentStatus.Issued)
-            throw new Wf02Exception("UPLOAD_INTENT_EXPIRED", "The upload intent is no longer active.", 409);
+            throw new CommunityValidationException("UPLOAD_INTENT_EXPIRED", "The upload intent is no longer active.", 409);
 
         GetObjectMetadataResponse metadata;
         try
@@ -168,12 +168,12 @@ public sealed class Wf02MediaService : IWf02MediaService
         }
         catch (AmazonS3Exception)
         {
-            throw new Wf02Exception("UPLOAD_NOT_FOUND", "The uploaded object is not available.", 409);
+            throw new CommunityValidationException("UPLOAD_NOT_FOUND", "The uploaded object is not available.", 409);
         }
         if (metadata.ContentLength != media.SizeBytes)
-            throw new Wf02Exception("MEDIA_SIZE_MISMATCH", "The uploaded object size does not match the intent.", 409);
+            throw new CommunityValidationException("MEDIA_SIZE_MISMATCH", "The uploaded object size does not match the intent.", 409);
         if (!string.Equals(metadata.Headers.ContentType, media.MimeType, StringComparison.OrdinalIgnoreCase))
-            throw new Wf02Exception("MEDIA_TYPE_MISMATCH", "The uploaded object content type does not match the intent.", 409);
+            throw new CommunityValidationException("MEDIA_TYPE_MISMATCH", "The uploaded object content type does not match the intent.", 409);
 
         await ValidateObjectContentAsync(media, cancellationToken);
 
@@ -201,14 +201,14 @@ public sealed class Wf02MediaService : IWf02MediaService
                 cancellationToken);
         if (evidence?.OwnedMediaId is not Guid mediaId)
         {
-            throw new Wf02Exception("EVIDENCE_MEDIA_NOT_FOUND", "Private media was not found for this evidence item.", 404);
+            throw new CommunityValidationException("EVIDENCE_MEDIA_NOT_FOUND", "Private media was not found for this evidence item.", 404);
         }
 
         var media = await _db.OwnedMedia.AsNoTracking()
             .SingleOrDefaultAsync(item => item.Id == mediaId, cancellationToken);
         if (media is null || media.Status is not (OwnedMediaStatus.Ready or OwnedMediaStatus.Consumed))
         {
-            throw new Wf02Exception("EVIDENCE_MEDIA_UNAVAILABLE", "Private media is not available.", 409);
+            throw new CommunityValidationException("EVIDENCE_MEDIA_UNAVAILABLE", "Private media is not available.", 409);
         }
 
         var expiresAt = _clock.GetUtcNow().AddMinutes(5);
@@ -236,7 +236,7 @@ public sealed class Wf02MediaService : IWf02MediaService
         }
         catch (AmazonS3Exception)
         {
-            throw new Wf02Exception("UPLOAD_NOT_FOUND", "The uploaded object is not available.", 409);
+            throw new CommunityValidationException("UPLOAD_NOT_FOUND", "The uploaded object is not available.", 409);
         }
 
         using (response)
@@ -258,19 +258,19 @@ public sealed class Wf02MediaService : IWf02MediaService
                 }
                 totalBytes += bytesRead;
                 if (totalBytes > MaxBytes)
-                    throw new Wf02Exception("MEDIA_SIZE_MISMATCH", "The uploaded object exceeds the allowed size.", 409);
+                    throw new CommunityValidationException("MEDIA_SIZE_MISMATCH", "The uploaded object exceeds the allowed size.", 409);
             }
 
             if (totalBytes != media.SizeBytes)
-                throw new Wf02Exception("MEDIA_SIZE_MISMATCH", "The uploaded object size does not match the intent.", 409);
+                throw new CommunityValidationException("MEDIA_SIZE_MISMATCH", "The uploaded object size does not match the intent.", 409);
 
             var actualHash = hasher.GetHashAndReset();
             var expectedHash = Convert.FromHexString(media.Sha256);
             if (!CryptographicOperations.FixedTimeEquals(actualHash, expectedHash))
-                throw new Wf02Exception("MEDIA_HASH_MISMATCH", "The uploaded object digest does not match the intent.", 409);
+                throw new CommunityValidationException("MEDIA_HASH_MISMATCH", "The uploaded object digest does not match the intent.", 409);
 
             if (!MatchesDeclaredContent(media.MimeType, prefix.AsSpan(0, prefixLength)))
-                throw new Wf02Exception("MEDIA_CONTENT_MISMATCH", "The uploaded bytes do not match the declared media type.", 409);
+                throw new CommunityValidationException("MEDIA_CONTENT_MISMATCH", "The uploaded bytes do not match the declared media type.", 409);
         }
     }
 
@@ -330,7 +330,7 @@ public sealed class Wf02MediaService : IWf02MediaService
         if (row is null) return null;
         if (row.ExpiresAt <= now) { _db.IdempotencyRecords.Remove(row); return null; }
         if (!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(row.RequestHash), Encoding.UTF8.GetBytes(hash)))
-            throw new Wf02Exception("IDEMPOTENCY_KEY_REUSED", "This Idempotency-Key was already used with a different request.", 409);
+            throw new CommunityValidationException("IDEMPOTENCY_KEY_REUSED", "This Idempotency-Key was already used with a different request.", 409);
         return JsonSerializer.Deserialize<T>(row.ResponseBody, JsonOptions)
                ?? throw new InvalidOperationException("Stored idempotency response is invalid.");
     }
@@ -347,6 +347,6 @@ public sealed class Wf02MediaService : IWf02MediaService
     private static void ValidateKey(string key)
     {
         if (string.IsNullOrWhiteSpace(key) || key.Length > 200)
-            throw new Wf02Exception("IDEMPOTENCY_KEY_REQUIRED", "A valid Idempotency-Key header is required.", 400);
+            throw new CommunityValidationException("IDEMPOTENCY_KEY_REQUIRED", "A valid Idempotency-Key header is required.", 400);
     }
 }

@@ -1,6 +1,6 @@
 using AccessMapVN.Domain.Enums;
 
-namespace AccessMapVN.Application.Features.Wf02;
+namespace AccessMapVN.Application.Features.CommunityValidation;
 
 public sealed record PublicTimelineItemDto(
     Guid Id,
@@ -62,7 +62,7 @@ public sealed record ModerateCommentRequest(
     string Reason,
     int ExpectedVersion);
 
-public interface IWf02TimelineCommentService
+public interface ILocationTimelineCommentService
 {
     Task<PublicTimelinePage> GetTimelineAsync(Guid locationId, int pageSize, string? cursor, CancellationToken cancellationToken = default);
     Task<PublicCommunityCommentPage> GetCommentsAsync(
@@ -78,3 +78,5 @@ public interface IWf02TimelineCommentService
         Guid moderatorId, Guid locationId, Guid commentId, string idempotencyKey,
         ModerateCommentRequest request, CancellationToken cancellationToken = default);
 }
+
+

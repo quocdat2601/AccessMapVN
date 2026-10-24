@@ -1,6 +1,6 @@
 using AccessMapVN.Application.Common.Exceptions;
 using AccessMapVN.Application.Common.Options;
-using AccessMapVN.Application.Features.Wf02;
+using AccessMapVN.Application.Features.CommunityValidation;
 using AccessMapVN.Domain.Entities;
 using AccessMapVN.Domain.Enums;
 using AccessMapVN.Infrastructure.Persistence;
@@ -35,12 +35,12 @@ public sealed class Wf02PostgresIntegrationTests
 
         var actorId = Guid.NewGuid();
         var scheduler = new CapturingScheduler();
-        var service = new Wf02CommunityService(
+        var service = new CommunityValidationService(
             db,
-            Options.Create(new Wf02Options()),
+            Options.Create(new CommunityValidationOptions()),
             scheduler,
             TimeProvider.System,
-            NullLogger<Wf02CommunityService>.Instance);
+            NullLogger<CommunityValidationService>.Instance);
         var firstRequest = new CreateCommunityVoteRequest(
             1, CommunityVoteType.StillAccurate, null, null);
 
@@ -98,9 +98,9 @@ public sealed class Wf02PostgresIntegrationTests
         await db.SaveChangesAsync();
 
         var reporterId = Guid.NewGuid();
-        var service = new Wf02ReportService(
+        var service = new CommunityReportService(
             db,
-            Options.Create(new Wf02Options()),
+            Options.Create(new CommunityValidationOptions()),
             TimeProvider.System);
         var key = $"report-{Guid.NewGuid():N}";
         var request = new CreateInaccurateReportRequest(
@@ -123,7 +123,7 @@ public sealed class Wf02PostgresIntegrationTests
             location.Id,
             key,
             request with { Description = "A different payload using the same key." });
-        var exception = await conflict.Should().ThrowAsync<Wf02Exception>();
+        var exception = await conflict.Should().ThrowAsync<CommunityValidationException>();
         exception.Which.Code.Should().Be("IDEMPOTENCY_KEY_REUSED");
         exception.Which.StatusCode.Should().Be(409);
 
@@ -192,12 +192,12 @@ public sealed class Wf02PostgresIntegrationTests
         });
         await db.SaveChangesAsync();
 
-        var service = new Wf02CommunityService(
+        var service = new CommunityValidationService(
             db,
-            Options.Create(new Wf02Options()),
+            Options.Create(new CommunityValidationOptions()),
             new CapturingScheduler(),
             TimeProvider.System,
-            NullLogger<Wf02CommunityService>.Instance);
+            NullLogger<CommunityValidationService>.Instance);
         var response = await service.GetCommunityAsync(location.Id, AccessibilityFeatureType.Ramp);
 
         response.CommunityLabel.Should().Be(FeatureCommunityLabel.Uncorroborated);
@@ -291,9 +291,9 @@ public sealed class Wf02PostgresIntegrationTests
         });
         await db.SaveChangesAsync();
 
-        var service = new Wf02TimelineCommentService(
+        var service = new LocationTimelineCommentService(
             db,
-            Options.Create(new Wf02Options()),
+            Options.Create(new CommunityValidationOptions()),
             TimeProvider.System);
         var response = await service.GetTimelineAsync(merged.Id, 20, null);
 
@@ -325,7 +325,7 @@ public sealed class Wf02PostgresIntegrationTests
         MetadataVersion = 1,
     };
 
-    private sealed class CapturingScheduler : IWf02JobScheduler
+    private sealed class CapturingScheduler : ICommunityJobScheduler
     {
         public List<Guid> JobIds { get; } = [];
 

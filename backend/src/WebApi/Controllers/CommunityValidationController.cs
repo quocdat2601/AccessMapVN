@@ -1,5 +1,5 @@
 using AccessMapVN.Application.Common.Exceptions;
-using AccessMapVN.Application.Features.Wf02;
+using AccessMapVN.Application.Features.CommunityValidation;
 using AccessMapVN.Domain.Enums;
 using AccessMapVN.WebApi.Authorization;
 using Microsoft.AspNetCore.Authorization;
@@ -12,9 +12,9 @@ namespace AccessMapVN.WebApi.Controllers;
 [Route("api/v1/locations/{locationId:guid}/features/{featureType}")]
 public sealed class CommunityValidationController : ControllerBase
 {
-    private readonly IWf02CommunityService _service;
+    private readonly ICommunityValidationService _service;
 
-    public CommunityValidationController(IWf02CommunityService service)
+    public CommunityValidationController(ICommunityValidationService service)
     {
         _service = service;
     }
@@ -42,7 +42,7 @@ public sealed class CommunityValidationController : ControllerBase
     {
         if (!User.TryGetUserId(out var actorId))
         {
-            throw new Wf02Exception("INVALID_SUBJECT", "The authenticated subject is not a UUID.", 401);
+            throw new CommunityValidationException("INVALID_SUBJECT", "The authenticated subject is not a UUID.", 401);
         }
 
         var key = Request.Headers["Idempotency-Key"].ToString();
@@ -66,7 +66,7 @@ public sealed class CommunityValidationController : ControllerBase
     {
         if (!User.TryGetUserId(out var actorId))
         {
-            throw new Wf02Exception("INVALID_SUBJECT", "The authenticated subject is not a UUID.", 401);
+            throw new CommunityValidationException("INVALID_SUBJECT", "The authenticated subject is not a UUID.", 401);
         }
 
         var response = await _service.WithdrawVoteAsync(actorId, locationId, featureType, cancellationToken);
@@ -84,7 +84,7 @@ public sealed class CommunityValidationController : ControllerBase
     {
         if (!User.TryGetUserId(out var actorId))
         {
-            throw new Wf02Exception("INVALID_SUBJECT", "The authenticated subject is not a UUID.", 401);
+            throw new CommunityValidationException("INVALID_SUBJECT", "The authenticated subject is not a UUID.", 401);
         }
 
         return Ok(await _service.LinkSubmissionAsync(

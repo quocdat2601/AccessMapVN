@@ -5,7 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using AccessMapVN.Application.Common.Exceptions;
 using AccessMapVN.Application.Common.Options;
-using AccessMapVN.Application.Features.Wf02;
+using AccessMapVN.Application.Features.CommunityValidation;
 using AccessMapVN.Domain.Entities;
 using AccessMapVN.Domain.Enums;
 using AccessMapVN.Infrastructure.Persistence;
@@ -14,7 +14,7 @@ using Microsoft.Extensions.Options;
 
 namespace AccessMapVN.Infrastructure.Services;
 
-public sealed class Wf02ReportService : IWf02ReportService
+public sealed class CommunityReportService : ICommunityReportService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -22,12 +22,12 @@ public sealed class Wf02ReportService : IWf02ReportService
     };
 
     private readonly ApplicationDbContext _db;
-    private readonly Wf02Options _options;
+    private readonly CommunityValidationOptions _options;
     private readonly TimeProvider _clock;
 
-    public Wf02ReportService(
+    public CommunityReportService(
         ApplicationDbContext db,
-        IOptions<Wf02Options> options,
+        IOptions<CommunityValidationOptions> options,
         TimeProvider clock)
     {
         _db = db;
@@ -54,8 +54,8 @@ public sealed class Wf02ReportService : IWf02ReportService
             IsolationLevel.ReadCommitted,
             cancellationToken);
 
-        await Wf02IdempotencyLock.AcquireAsync(_db, reporterId, endpoint, idempotencyKey, cancellationToken);
-        await Wf02IdempotencyLock.AcquireResourceAsync(_db, $"actor:{reporterId:D}", cancellationToken);
+        await CommunityIdempotencyLock.AcquireAsync(_db, reporterId, endpoint, idempotencyKey, cancellationToken);
+        await CommunityIdempotencyLock.AcquireResourceAsync(_db, $"actor:{reporterId:D}", cancellationToken);
         await EnsureUserAsync(reporterId, cancellationToken);
         var replay = await TryReplayAsync<CreateInaccurateReportResponse>(
             reporterId,
@@ -75,7 +75,7 @@ public sealed class Wf02ReportService : IWf02ReportService
             cancellationToken);
         if (!locationStillActive)
         {
-            throw new Wf02Exception(
+            throw new CommunityValidationException(
                 "LOCATION_CHANGED",
                 "The target location changed while the report was being submitted.",
                 409,
@@ -89,7 +89,7 @@ public sealed class Wf02ReportService : IWf02ReportService
                 cancellationToken);
             if (!scopeValid)
             {
-                throw new Wf02Exception("SCOPE_MISMATCH", "The scope does not belong to this location.", 422);
+                throw new CommunityValidationException("SCOPE_MISMATCH", "The scope does not belong to this location.", 422);
             }
         }
 
@@ -104,7 +104,7 @@ public sealed class Wf02ReportService : IWf02ReportService
                 submissionLocationId != canonicalLocation.Id)
             {
                 // Non-disclosing response for a foreign or unrelated submission.
-                throw new Wf02Exception("LINKED_SUBMISSION_NOT_FOUND", "The linked submission was not found.", 404);
+                throw new CommunityValidationException("LINKED_SUBMISSION_NOT_FOUND", "The linked submission was not found.", 404);
             }
         }
 
@@ -285,7 +285,7 @@ public sealed class Wf02ReportService : IWf02ReportService
                 cancellationToken);
         if (report is null)
         {
-            throw new Wf02Exception("REPORT_NOT_FOUND", "The report was not found.", 404);
+            throw new CommunityValidationException("REPORT_NOT_FOUND", "The report was not found.", 404);
         }
 
         var locationName = await _db.Places.AsNoTracking()
@@ -343,18 +343,18 @@ public sealed class Wf02ReportService : IWf02ReportService
         ValidateIdempotencyKey(idempotencyKey);
         if (request.ExpectedVersion <= 0)
         {
-            throw new Wf02Exception("INVALID_EVIDENCE", "expectedVersion must be positive.", 422);
+            throw new CommunityValidationException("INVALID_EVIDENCE", "expectedVersion must be positive.", 422);
         }
 
         var description = NormalizeOptional(request.Description);
         if (description is null && request.OwnedMediaId is null)
         {
-            throw new Wf02Exception("INVALID_EVIDENCE", "A description or ownedMediaId is required.", 422);
+            throw new CommunityValidationException("INVALID_EVIDENCE", "A description or ownedMediaId is required.", 422);
         }
 
         if (description?.Length > 2000)
         {
-            throw new Wf02Exception("INVALID_EVIDENCE", "The evidence description is too long.", 422);
+            throw new CommunityValidationException("INVALID_EVIDENCE", "The evidence description is too long.", 422);
         }
 
         var endpoint = $"/api/v1/me/reports/{reportId:D}/evidence";
@@ -364,9 +364,9 @@ public sealed class Wf02ReportService : IWf02ReportService
             IsolationLevel.ReadCommitted,
             cancellationToken);
 
-        await Wf02IdempotencyLock.AcquireAsync(_db, reporterId, endpoint, idempotencyKey, cancellationToken);
-        await Wf02IdempotencyLock.AcquireResourceAsync(_db, $"actor:{reporterId:D}", cancellationToken);
-        await Wf02IdempotencyLock.AcquireResourceAsync(_db, $"report:{reportId:D}", cancellationToken);
+        await CommunityIdempotencyLock.AcquireAsync(_db, reporterId, endpoint, idempotencyKey, cancellationToken);
+        await CommunityIdempotencyLock.AcquireResourceAsync(_db, $"actor:{reporterId:D}", cancellationToken);
+        await CommunityIdempotencyLock.AcquireResourceAsync(_db, $"report:{reportId:D}", cancellationToken);
         await EnsureUserAsync(reporterId, cancellationToken);
         var replay = await TryReplayAsync<AddReportEvidenceResponse>(
             reporterId,
@@ -386,7 +386,7 @@ public sealed class Wf02ReportService : IWf02ReportService
             cancellationToken);
         if (report is null)
         {
-            throw new Wf02Exception("REPORT_NOT_FOUND", "The report was not found.", 404);
+            throw new CommunityValidationException("REPORT_NOT_FOUND", "The report was not found.", 404);
         }
 
         if (report.Version != request.ExpectedVersion)
@@ -396,7 +396,7 @@ public sealed class Wf02ReportService : IWf02ReportService
 
         if (report.Status != InaccurateReportStatus.AwaitingMoreInfo)
         {
-            throw new Wf02Exception(
+            throw new CommunityValidationException(
                 "INVALID_REPORT_TRANSITION",
                 "Evidence can only be added while more information is requested.",
                 409,
@@ -415,7 +415,7 @@ public sealed class Wf02ReportService : IWf02ReportService
                 media.Status != OwnedMediaStatus.Ready ||
                 (media.ExpiresAt is DateTimeOffset expiresAt && expiresAt <= now))
             {
-                throw new Wf02Exception("OWNED_MEDIA_NOT_FOUND", "The owned media item is unavailable.", 404);
+                throw new CommunityValidationException("OWNED_MEDIA_NOT_FOUND", "The owned media item is unavailable.", 404);
             }
         }
 
@@ -487,7 +487,7 @@ public sealed class Wf02ReportService : IWf02ReportService
     {
         if (page <= 0)
         {
-            throw new Wf02Exception("INVALID_PAGINATION", "page must be positive.", 422);
+            throw new CommunityValidationException("INVALID_PAGINATION", "page must be positive.", 422);
         }
 
         ValidatePageSize(pageSize);
@@ -507,7 +507,7 @@ public sealed class Wf02ReportService : IWf02ReportService
             var value = search.Trim();
             if (value.Length > 200)
             {
-                throw new Wf02Exception("INVALID_SEARCH", "search must not exceed 200 characters.", 422);
+                throw new CommunityValidationException("INVALID_SEARCH", "search must not exceed 200 characters.", 422);
             }
 
             var pattern = $"%{value}%";
@@ -570,7 +570,7 @@ public sealed class Wf02ReportService : IWf02ReportService
             .SingleOrDefaultAsync(item => item.Id == reportId, cancellationToken);
         if (report is null)
         {
-            throw new Wf02Exception("REPORT_NOT_FOUND", "The report was not found.", 404);
+            throw new CommunityValidationException("REPORT_NOT_FOUND", "The report was not found.", 404);
         }
 
         var location = await _db.Places.AsNoTracking()
@@ -680,7 +680,7 @@ public sealed class Wf02ReportService : IWf02ReportService
         if (!Enum.IsDefined(request.Decision) || request.ExpectedVersion <= 0 ||
             string.IsNullOrWhiteSpace(request.Note) || request.Note.Trim().Length > 2000)
         {
-            throw new Wf02Exception(
+            throw new CommunityValidationException(
                 "INVALID_REPORT_DECISION",
                 "A supported decision, note and positive expectedVersion are required.",
                 422);
@@ -693,14 +693,14 @@ public sealed class Wf02ReportService : IWf02ReportService
             IsolationLevel.ReadCommitted,
             cancellationToken);
 
-        await Wf02IdempotencyLock.AcquireAsync(_db, moderatorId, endpoint, idempotencyKey, cancellationToken);
-        await Wf02IdempotencyLock.AcquireResourceAsync(_db, $"report:{reportId:D}", cancellationToken);
+        await CommunityIdempotencyLock.AcquireAsync(_db, moderatorId, endpoint, idempotencyKey, cancellationToken);
+        await CommunityIdempotencyLock.AcquireResourceAsync(_db, $"report:{reportId:D}", cancellationToken);
         var moderator = await _db.AppUsers.SingleOrDefaultAsync(
             item => item.Id == moderatorId && item.IsActive && item.Role == AppUserRole.Admin,
             cancellationToken);
         if (moderator is null)
         {
-            throw new Wf02Exception("MODERATION_FORBIDDEN", "The moderator is not authorized.", 403);
+            throw new CommunityValidationException("MODERATION_FORBIDDEN", "The moderator is not authorized.", 403);
         }
 
         var replay = await TryReplayAsync<ModerateReportResponse>(
@@ -721,7 +721,7 @@ public sealed class Wf02ReportService : IWf02ReportService
             cancellationToken);
         if (report is null)
         {
-            throw new Wf02Exception("REPORT_NOT_FOUND", "The report was not found.", 404);
+            throw new CommunityValidationException("REPORT_NOT_FOUND", "The report was not found.", 404);
         }
 
         if (report.Version != request.ExpectedVersion)
@@ -740,7 +740,7 @@ public sealed class Wf02ReportService : IWf02ReportService
                 if (report.Status == InaccurateReportStatus.AwaitingMoreInfo &&
                     !await _db.ReportEvidence.AnyAsync(item => item.ReportId == report.Id, cancellationToken))
                 {
-                    throw new Wf02Exception(
+                    throw new CommunityValidationException(
                         "INVALID_REPORT_TRANSITION",
                         "An awaiting report cannot be reopened without existing owner evidence.",
                         409);
@@ -762,7 +762,7 @@ public sealed class Wf02ReportService : IWf02ReportService
                 RequireTransition(report, InaccurateReportStatus.UnderReview);
                 if (request.LinkedDisputeCaseId is not Guid disputeId)
                 {
-                    throw new Wf02Exception(
+                    throw new CommunityValidationException(
                         "INVALID_REPORT_DECISION",
                         "linkedDisputeCaseId is required for LinkDispute.",
                         422);
@@ -784,7 +784,7 @@ public sealed class Wf02ReportService : IWf02ReportService
                 RequireTransition(report, InaccurateReportStatus.UnderReview, InaccurateReportStatus.LinkedToDispute);
                 if (request.Resolution is not InaccurateReportResolution resolution)
                 {
-                    throw new Wf02Exception(
+                    throw new CommunityValidationException(
                         "INVALID_REPORT_DECISION",
                         "resolution is required for Resolve.",
                         422);
@@ -792,7 +792,7 @@ public sealed class Wf02ReportService : IWf02ReportService
 
                 if (resolution == InaccurateReportResolution.MetadataCorrected)
                 {
-                    throw new Wf02Exception(
+                    throw new CommunityValidationException(
                         "INVALID_REPORT_DECISION",
                         "MetadataCorrected is only available through the atomic location metadata endpoint.",
                         409);
@@ -803,7 +803,7 @@ public sealed class Wf02ReportService : IWf02ReportService
                     var publicationSubmissionId = request.LinkedSubmissionId ?? report.LinkedSubmissionId;
                     if (publicationSubmissionId is not Guid publishedSubmissionId)
                     {
-                        throw new Wf02Exception(
+                        throw new CommunityValidationException(
                             "PUBLICATION_REQUIRED",
                             "A published WF-01 submission is required for this resolution.",
                             409);
@@ -817,7 +817,7 @@ public sealed class Wf02ReportService : IWf02ReportService
                 {
                     if (request.AdvisoryId is not Guid advisoryId)
                     {
-                        throw new Wf02Exception(
+                        throw new CommunityValidationException(
                             "ADVISORY_REQUIRED",
                             "advisoryId is required for AdvisoryCreated.",
                             422);
@@ -836,7 +836,7 @@ public sealed class Wf02ReportService : IWf02ReportService
                             cancellationToken);
                     if (!validAdvisory)
                     {
-                        throw new Wf02Exception("ADVISORY_NOT_FOUND", "The advisory was not found for this location.", 404);
+                        throw new CommunityValidationException("ADVISORY_NOT_FOUND", "The advisory was not found for this location.", 404);
                     }
                 }
 
@@ -860,7 +860,7 @@ public sealed class Wf02ReportService : IWf02ReportService
                 break;
 
             default:
-                throw new Wf02Exception("INVALID_REPORT_DECISION", "Unsupported report decision.", 422);
+                throw new CommunityValidationException("INVALID_REPORT_DECISION", "Unsupported report decision.", 422);
         }
 
         report.Version += 1;
@@ -914,7 +914,7 @@ public sealed class Wf02ReportService : IWf02ReportService
             request.Reason.Trim().Length > 2000 ||
             (string.IsNullOrWhiteSpace(request.ProposedAddress) && request.ProposedPosition is null))
         {
-            throw new Wf02Exception(
+            throw new CommunityValidationException(
                 "INVALID_METADATA_CORRECTION",
                 "A metadata version, reason and proposed address or position are required.",
                 422);
@@ -925,7 +925,7 @@ public sealed class Wf02ReportService : IWf02ReportService
             (!double.IsFinite(invalidPosition.Latitude) || !double.IsFinite(invalidPosition.Longitude) ||
              invalidPosition.Latitude is < -90 or > 90 || invalidPosition.Longitude is < -180 or > 180))
         {
-            throw new Wf02Exception("INVALID_METADATA_CORRECTION", "The proposed location metadata is invalid.", 422);
+            throw new CommunityValidationException("INVALID_METADATA_CORRECTION", "The proposed location metadata is invalid.", 422);
         }
 
         var endpoint = $"/api/v1/admin/locations/{locationId:D}/metadata";
@@ -933,14 +933,14 @@ public sealed class Wf02ReportService : IWf02ReportService
         var now = _clock.GetUtcNow();
         await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
 
-        await Wf02IdempotencyLock.AcquireAsync(_db, moderatorId, endpoint, idempotencyKey, cancellationToken);
-        await Wf02IdempotencyLock.AcquireResourceAsync(_db, $"location-metadata:{locationId:D}", cancellationToken);
+        await CommunityIdempotencyLock.AcquireAsync(_db, moderatorId, endpoint, idempotencyKey, cancellationToken);
+        await CommunityIdempotencyLock.AcquireResourceAsync(_db, $"location-metadata:{locationId:D}", cancellationToken);
         var moderator = await _db.AppUsers.SingleOrDefaultAsync(
             item => item.Id == moderatorId && item.IsActive && item.Role == AppUserRole.Admin,
             cancellationToken);
         if (moderator is null)
         {
-            throw new Wf02Exception("MODERATION_FORBIDDEN", "The moderator is not authorized.", 403);
+            throw new CommunityValidationException("MODERATION_FORBIDDEN", "The moderator is not authorized.", 403);
         }
 
         var replay = await TryReplayAsync<CorrectLocationMetadataResponse>(
@@ -952,14 +952,14 @@ public sealed class Wf02ReportService : IWf02ReportService
         }
 
         var location = await _db.Places.SingleOrDefaultAsync(item => item.Id == locationId, cancellationToken)
-                       ?? throw new Wf02Exception("LOCATION_NOT_FOUND", "The location was not found.", 404);
+                       ?? throw new CommunityValidationException("LOCATION_NOT_FOUND", "The location was not found.", 404);
         if (location.Status != LocationStatus.Active)
         {
-            throw new Wf02Exception("LOCATION_NOT_ACTIVE", "Only an active canonical location can be corrected.", 409);
+            throw new CommunityValidationException("LOCATION_NOT_ACTIVE", "Only an active canonical location can be corrected.", 409);
         }
         if (location.MetadataVersion != request.ExpectedMetadataVersion)
         {
-            throw new Wf02Exception(
+            throw new CommunityValidationException(
                 "METADATA_VERSION_CHANGED",
                 "The location metadata changed; reload it before retrying.",
                 409,
@@ -969,7 +969,7 @@ public sealed class Wf02ReportService : IWf02ReportService
         var report = await _db.InaccurateInformationReports.SingleOrDefaultAsync(
             item => item.Id == request.SourceReportId && item.LocationId == locationId,
             cancellationToken)
-            ?? throw new Wf02Exception("REPORT_NOT_FOUND", "The source report was not found for this location.", 404);
+            ?? throw new CommunityValidationException("REPORT_NOT_FOUND", "The source report was not found for this location.", 404);
         if (expectedReportVersion is int reportVersion && report.Version != reportVersion)
         {
             throw ReportVersionChanged(report);
@@ -977,7 +977,7 @@ public sealed class Wf02ReportService : IWf02ReportService
         if (report.Reason != InaccurateReportReason.WrongAddressOrPin ||
             report.Status is not (InaccurateReportStatus.UnderReview or InaccurateReportStatus.LinkedToDispute))
         {
-            throw new Wf02Exception(
+            throw new CommunityValidationException(
                 "INVALID_REPORT_TRANSITION",
                 "Only an active WrongAddressOrPin report can authorize a metadata correction.",
                 409,
@@ -1084,7 +1084,7 @@ public sealed class Wf02ReportService : IWf02ReportService
             .SingleOrDefaultAsync(item => item.dispute.Id == disputeId, cancellationToken);
         if (context is null || context.feature.LocationId != report.LocationId)
         {
-            throw new Wf02Exception("DISPUTE_NOT_FOUND", "The dispute was not found for this location.", 404);
+            throw new CommunityValidationException("DISPUTE_NOT_FOUND", "The dispute was not found for this location.", 404);
         }
 
         if (report.FeatureType is null ||
@@ -1092,7 +1092,7 @@ public sealed class Wf02ReportService : IWf02ReportService
             context.feature.ScopeId != report.ScopeId ||
             report.ObservedFeatureVersion != context.dispute.FeatureVersion)
         {
-            throw new Wf02Exception(
+            throw new CommunityValidationException(
                 "DISPUTE_CONTEXT_MISMATCH",
                 "The dispute does not match the report feature, scope and observed version.",
                 409);
@@ -1111,7 +1111,7 @@ public sealed class Wf02ReportService : IWf02ReportService
             !Guid.TryParse(submission.PlaceId, out var submissionLocationId) ||
             submissionLocationId != report.LocationId)
         {
-            throw new Wf02Exception("LINKED_SUBMISSION_NOT_FOUND", "The linked submission was not found for this location.", 404);
+            throw new CommunityValidationException("LINKED_SUBMISSION_NOT_FOUND", "The linked submission was not found for this location.", 404);
         }
 
         if (requirePublishedFeature)
@@ -1125,7 +1125,7 @@ public sealed class Wf02ReportService : IWf02ReportService
                                         cancellationToken);
             if (!actuallyPublished)
             {
-                throw new Wf02Exception(
+                throw new CommunityValidationException(
                     "PUBLICATION_REQUIRED",
                     "The linked submission has not produced a matching published feature.",
                     409);
@@ -1139,7 +1139,7 @@ public sealed class Wf02ReportService : IWf02ReportService
     {
         if (requestedLocationId == Guid.Empty)
         {
-            throw new Wf02Exception("INVALID_LOCATION", "A valid locationId is required.", 422);
+            throw new CommunityValidationException("INVALID_LOCATION", "A valid locationId is required.", 422);
         }
 
         var visited = new HashSet<Guid>();
@@ -1155,7 +1155,7 @@ public sealed class Wf02ReportService : IWf02ReportService
                 .SingleOrDefaultAsync(item => item.Id == currentId, cancellationToken);
             if (location is null)
             {
-                throw new Wf02Exception("LOCATION_NOT_FOUND", "The location was not found.", 404);
+                throw new CommunityValidationException("LOCATION_NOT_FOUND", "The location was not found.", 404);
             }
 
             if (location.Status == LocationStatus.Active)
@@ -1169,10 +1169,10 @@ public sealed class Wf02ReportService : IWf02ReportService
                 continue;
             }
 
-            throw new Wf02Exception("LOCATION_NOT_ACTIVE", "The location is not an active canonical location.", 409);
+            throw new CommunityValidationException("LOCATION_NOT_ACTIVE", "The location is not an active canonical location.", 409);
         }
 
-        throw new Wf02Exception("INVALID_LOCATION_MERGE", "The location merge chain is invalid.", 409);
+        throw new CommunityValidationException("INVALID_LOCATION_MERGE", "The location merge chain is invalid.", 409);
     }
 
     private async Task EnsureUserAsync(Guid actorId, CancellationToken cancellationToken)
@@ -1217,7 +1217,7 @@ public sealed class Wf02ReportService : IWf02ReportService
                 Encoding.UTF8.GetBytes(record.RequestHash),
                 Encoding.UTF8.GetBytes(requestHash)))
         {
-            throw new Wf02Exception(
+            throw new CommunityValidationException(
                 "IDEMPOTENCY_KEY_REUSED",
                 "This Idempotency-Key was already used with a different request.",
                 409);
@@ -1254,7 +1254,7 @@ public sealed class Wf02ReportService : IWf02ReportService
             string.IsNullOrWhiteSpace(request.Description) ||
             request.Description.Trim().Length > 4000)
         {
-            throw new Wf02Exception(
+            throw new CommunityValidationException(
                 "INVALID_REPORT",
                 "A supported reason and a non-empty description of at most 4000 characters are required.",
                 422);
@@ -1262,17 +1262,17 @@ public sealed class Wf02ReportService : IWf02ReportService
 
         if (request.FeatureType is AccessibilityFeatureType featureType && !Enum.IsDefined(featureType))
         {
-            throw new Wf02Exception("INVALID_REPORT", "Unsupported featureType.", 422);
+            throw new CommunityValidationException("INVALID_REPORT", "Unsupported featureType.", 422);
         }
 
         if (request.ObservedFeatureVersion is <= 0)
         {
-            throw new Wf02Exception("INVALID_REPORT", "observedFeatureVersion must be positive.", 422);
+            throw new CommunityValidationException("INVALID_REPORT", "observedFeatureVersion must be positive.", 422);
         }
 
         if (request.ObservedFeatureVersion is not null && request.FeatureType is null)
         {
-            throw new Wf02Exception("INVALID_REPORT", "featureType is required with observedFeatureVersion.", 422);
+            throw new CommunityValidationException("INVALID_REPORT", "featureType is required with observedFeatureVersion.", 422);
         }
 
         var hasProposedAddress = !string.IsNullOrWhiteSpace(request.ProposedAddress);
@@ -1281,7 +1281,7 @@ public sealed class Wf02ReportService : IWf02ReportService
         {
             if (!hasProposedAddress && !hasProposedPosition)
             {
-                throw new Wf02Exception(
+                throw new CommunityValidationException(
                     "INVALID_REPORT",
                     "WrongAddressOrPin requires proposedAddress or proposedPosition.",
                     422);
@@ -1289,7 +1289,7 @@ public sealed class Wf02ReportService : IWf02ReportService
         }
         else if (hasProposedAddress || hasProposedPosition)
         {
-            throw new Wf02Exception(
+            throw new CommunityValidationException(
                 "INVALID_REPORT",
                 "Proposed location metadata is only valid for WrongAddressOrPin.",
                 422);
@@ -1297,14 +1297,14 @@ public sealed class Wf02ReportService : IWf02ReportService
 
         if (request.ProposedAddress?.Trim().Length > 1000)
         {
-            throw new Wf02Exception("INVALID_REPORT", "proposedAddress is too long.", 422);
+            throw new CommunityValidationException("INVALID_REPORT", "proposedAddress is too long.", 422);
         }
 
         if (request.ProposedPosition is { } position &&
             (!double.IsFinite(position.Latitude) || !double.IsFinite(position.Longitude) ||
              position.Latitude is < -90 or > 90 || position.Longitude is < -180 or > 180))
         {
-            throw new Wf02Exception("INVALID_REPORT", "proposedPosition is outside valid coordinate ranges.", 422);
+            throw new CommunityValidationException("INVALID_REPORT", "proposedPosition is outside valid coordinate ranges.", 422);
         }
     }
 
@@ -1314,7 +1314,7 @@ public sealed class Wf02ReportService : IWf02ReportService
     {
         if (!allowedFrom.Contains(report.Status))
         {
-            throw new Wf02Exception(
+            throw new CommunityValidationException(
                 "INVALID_REPORT_TRANSITION",
                 $"The requested action is not allowed from {report.Status}.",
                 409,
@@ -1322,7 +1322,7 @@ public sealed class Wf02ReportService : IWf02ReportService
         }
     }
 
-    private static Wf02Exception ReportVersionChanged(InaccurateInformationReport report) =>
+    private static CommunityValidationException ReportVersionChanged(InaccurateInformationReport report) =>
         new(
             "REPORT_VERSION_CHANGED",
             "The report changed; reload it before retrying.",
@@ -1357,7 +1357,7 @@ public sealed class Wf02ReportService : IWf02ReportService
     {
         if (string.IsNullOrWhiteSpace(key) || key.Length > 200)
         {
-            throw new Wf02Exception(
+            throw new CommunityValidationException(
                 "IDEMPOTENCY_KEY_REQUIRED",
                 "A valid Idempotency-Key header is required.",
                 400);
@@ -1368,7 +1368,7 @@ public sealed class Wf02ReportService : IWf02ReportService
     {
         if (pageSize is < 1 or > 100)
         {
-            throw new Wf02Exception("INVALID_PAGINATION", "pageSize must be between 1 and 100.", 422);
+            throw new CommunityValidationException("INVALID_PAGINATION", "pageSize must be between 1 and 100.", 422);
         }
     }
 
@@ -1403,6 +1403,6 @@ public sealed class Wf02ReportService : IWf02ReportService
             // Converted to the stable validation error below.
         }
 
-        throw new Wf02Exception("INVALID_CURSOR", "The pagination cursor is invalid.", 422);
+        throw new CommunityValidationException("INVALID_CURSOR", "The pagination cursor is invalid.", 422);
     }
 }

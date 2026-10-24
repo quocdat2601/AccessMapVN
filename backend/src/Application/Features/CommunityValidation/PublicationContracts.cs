@@ -1,6 +1,6 @@
 using AccessMapVN.Domain.Enums;
 
-namespace AccessMapVN.Application.Features.Wf02;
+namespace AccessMapVN.Application.Features.CommunityValidation;
 
 public sealed record PublishLocationFeatureRequest(
     Guid SubmissionId,

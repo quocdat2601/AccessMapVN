@@ -1,7 +1,7 @@
 using System.Data;
 using System.Text.Json;
 using AccessMapVN.Application.Common.Exceptions;
-using AccessMapVN.Application.Features.Wf02;
+using AccessMapVN.Application.Features.CommunityValidation;
 using AccessMapVN.Domain.Entities;
 using AccessMapVN.Domain.Enums;
 using AccessMapVN.Infrastructure.Persistence;
@@ -29,17 +29,17 @@ public sealed class LocationFeaturePublicationService : ILocationFeaturePublicat
         if (request.SubmissionId == Guid.Empty || request.LocationId == Guid.Empty ||
             string.IsNullOrWhiteSpace(request.Reason))
         {
-            throw new Wf02Exception("INVALID_PUBLICATION", "A submission, location and publication reason are required.", 422);
+            throw new CommunityValidationException("INVALID_PUBLICATION", "A submission, location and publication reason are required.", 422);
         }
 
         if (!Enum.IsDefined(request.FeatureType) || !Enum.IsDefined(request.Status))
         {
-            throw new Wf02Exception("INVALID_PUBLICATION", "Unsupported feature type or published status.", 422);
+            throw new CommunityValidationException("INVALID_PUBLICATION", "Unsupported feature type or published status.", 422);
         }
 
         if (request.Status == PublishedFeatureStatus.Unknown)
         {
-            throw new Wf02Exception("INVALID_PUBLICATION", "Unknown is not a publishable verified status.", 422);
+            throw new CommunityValidationException("INVALID_PUBLICATION", "Unknown is not a publishable verified status.", 422);
         }
 
         await using var transaction = await _db.Database.BeginTransactionAsync(
@@ -51,18 +51,18 @@ public sealed class LocationFeaturePublicationService : ILocationFeaturePublicat
             cancellationToken);
         if (submission is null)
         {
-            throw new Wf02Exception("SUBMISSION_NOT_FOUND", "The source submission does not exist.", 404);
+            throw new CommunityValidationException("SUBMISSION_NOT_FOUND", "The source submission does not exist.", 404);
         }
 
         if (!Guid.TryParse(submission.PlaceId, out var submittedLocationId) ||
             submittedLocationId != request.LocationId)
         {
-            throw new Wf02Exception("PUBLICATION_LOCATION_MISMATCH", "The submission does not belong to this location.", 409);
+            throw new CommunityValidationException("PUBLICATION_LOCATION_MISMATCH", "The submission does not belong to this location.", 409);
         }
 
         if (submission.Status is not (SubmissionStatus.AutoVerified or SubmissionStatus.PendingModeration or SubmissionStatus.Published))
         {
-            throw new Wf02Exception("SUBMISSION_NOT_VERIFIED", "Only a verified submission can be published.", 409);
+            throw new CommunityValidationException("SUBMISSION_NOT_VERIFIED", "Only a verified submission can be published.", 409);
         }
 
         var location = await _db.Places.SingleOrDefaultAsync(
@@ -70,12 +70,12 @@ public sealed class LocationFeaturePublicationService : ILocationFeaturePublicat
             cancellationToken);
         if (location is null)
         {
-            throw new Wf02Exception("LOCATION_NOT_FOUND", "The location does not exist.", 404);
+            throw new CommunityValidationException("LOCATION_NOT_FOUND", "The location does not exist.", 404);
         }
 
         if (location.Status != LocationStatus.Active)
         {
-            throw new Wf02Exception("LOCATION_NOT_ACTIVE", "Only an active canonical location can be published.", 409);
+            throw new CommunityValidationException("LOCATION_NOT_ACTIVE", "Only an active canonical location can be published.", 409);
         }
 
         if (request.ScopeId is Guid scopeId)
@@ -85,7 +85,7 @@ public sealed class LocationFeaturePublicationService : ILocationFeaturePublicat
                 cancellationToken);
             if (!validScope)
             {
-                throw new Wf02Exception("SCOPE_MISMATCH", "The scope is not active for this location.", 422);
+                throw new CommunityValidationException("SCOPE_MISMATCH", "The scope is not active for this location.", 422);
             }
         }
 
@@ -96,7 +96,7 @@ public sealed class LocationFeaturePublicationService : ILocationFeaturePublicat
                 cancellationToken);
             if (!authorizedActor)
             {
-                throw new Wf02Exception("PUBLICATION_FORBIDDEN", "The publication actor is not authorized.", 403);
+                throw new CommunityValidationException("PUBLICATION_FORBIDDEN", "The publication actor is not authorized.", 403);
             }
         }
 
@@ -194,7 +194,7 @@ public sealed class LocationFeaturePublicationService : ILocationFeaturePublicat
         {
             if (claim.LocationId != request.LocationId)
             {
-                throw new Wf02Exception("CLAIM_LOCATION_MISMATCH", "The submission claim belongs to another location.", 409);
+                throw new CommunityValidationException("CLAIM_LOCATION_MISMATCH", "The submission claim belongs to another location.", 409);
             }
 
             claim.ProposedStatus = request.Status;

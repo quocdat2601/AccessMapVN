@@ -5,7 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using AccessMapVN.Application.Common.Exceptions;
 using AccessMapVN.Application.Common.Options;
-using AccessMapVN.Application.Features.Wf02;
+using AccessMapVN.Application.Features.CommunityValidation;
 using AccessMapVN.Domain.Entities;
 using AccessMapVN.Domain.Enums;
 using AccessMapVN.Infrastructure.Persistence;
@@ -14,7 +14,7 @@ using Microsoft.Extensions.Options;
 
 namespace AccessMapVN.Infrastructure.Services;
 
-public sealed class Wf02TimelineCommentService : IWf02TimelineCommentService
+public sealed class LocationTimelineCommentService : ILocationTimelineCommentService
 {
     private const int CommentPreviewLimit = 3;
     private const int CommentHalfLifeDays = 30;
@@ -25,10 +25,10 @@ public sealed class Wf02TimelineCommentService : IWf02TimelineCommentService
     };
 
     private readonly ApplicationDbContext _db;
-    private readonly Wf02Options _options;
+    private readonly CommunityValidationOptions _options;
     private readonly TimeProvider _clock;
 
-    public Wf02TimelineCommentService(ApplicationDbContext db, IOptions<Wf02Options> options, TimeProvider clock)
+    public LocationTimelineCommentService(ApplicationDbContext db, IOptions<CommunityValidationOptions> options, TimeProvider clock)
     {
         _db = db;
         _options = options.Value;
@@ -43,7 +43,7 @@ public sealed class Wf02TimelineCommentService : IWf02TimelineCommentService
     {
         if (pageSize is < 1 or > 100)
         {
-            throw new Wf02Exception("INVALID_PAGINATION", "pageSize must be between 1 and 100.", 422);
+            throw new CommunityValidationException("INVALID_PAGINATION", "pageSize must be between 1 and 100.", 422);
         }
         locationId = await ResolvePublicLocationAsync(locationId, cancellationToken);
         var before = string.IsNullOrWhiteSpace(cursor)
@@ -93,7 +93,7 @@ public sealed class Wf02TimelineCommentService : IWf02TimelineCommentService
     {
         if (pageSize is < 1 or > 100)
         {
-            throw new Wf02Exception("INVALID_PAGINATION", "pageSize must be between 1 and 100.", 422);
+            throw new CommunityValidationException("INVALID_PAGINATION", "pageSize must be between 1 and 100.", 422);
         }
         locationId = await ResolvePublicLocationAsync(locationId, cancellationToken);
         var now = _clock.GetUtcNow();
@@ -140,14 +140,14 @@ public sealed class Wf02TimelineCommentService : IWf02TimelineCommentService
         ValidateIdempotencyKey(idempotencyKey);
         if (string.IsNullOrWhiteSpace(request.Body) || request.Body.Trim().Length > 2000)
         {
-            throw new Wf02Exception("INVALID_COMMENT", "A comment of at most 2000 characters is required.", 422);
+            throw new CommunityValidationException("INVALID_COMMENT", "A comment of at most 2000 characters is required.", 422);
         }
         var endpoint = $"/api/v1/locations/{locationId:D}/comments";
         var hash = Hash(request);
         var now = _clock.GetUtcNow();
         await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
-        await Wf02IdempotencyLock.AcquireAsync(_db, actorId, endpoint, idempotencyKey, cancellationToken);
-        await Wf02IdempotencyLock.AcquireResourceAsync(_db, $"actor:{actorId:D}", cancellationToken);
+        await CommunityIdempotencyLock.AcquireAsync(_db, actorId, endpoint, idempotencyKey, cancellationToken);
+        await CommunityIdempotencyLock.AcquireResourceAsync(_db, $"actor:{actorId:D}", cancellationToken);
         await EnsureUserAsync(actorId, cancellationToken);
         locationId = await ResolvePublicLocationAsync(locationId, cancellationToken);
 
@@ -160,7 +160,7 @@ public sealed class Wf02TimelineCommentService : IWf02TimelineCommentService
         if (request.ScopeId is Guid scopeId && !await _db.AccessScopes.AnyAsync(
                 item => item.Id == scopeId && item.LocationId == locationId && item.IsActive, cancellationToken))
         {
-            throw new Wf02Exception("SCOPE_MISMATCH", "The scope does not belong to this location.", 422);
+            throw new CommunityValidationException("SCOPE_MISMATCH", "The scope does not belong to this location.", 422);
         }
 
         var comment = new CommunityComment
@@ -228,17 +228,17 @@ public sealed class Wf02TimelineCommentService : IWf02TimelineCommentService
         if (!Enum.IsDefined(request.Decision) || request.ExpectedVersion <= 0 ||
             string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Trim().Length > 1500)
         {
-            throw new Wf02Exception("INVALID_COMMENT_DECISION", "A decision, reason and expectedVersion are required.", 422);
+            throw new CommunityValidationException("INVALID_COMMENT_DECISION", "A decision, reason and expectedVersion are required.", 422);
         }
         var endpoint = $"/api/v1/admin/locations/{locationId:D}/comments/{commentId:D}/moderation";
         var hash = Hash(request);
         var now = _clock.GetUtcNow();
         await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
-        await Wf02IdempotencyLock.AcquireAsync(_db, moderatorId, endpoint, idempotencyKey, cancellationToken);
-        await Wf02IdempotencyLock.AcquireResourceAsync(_db, $"comment:{commentId:D}", cancellationToken);
+        await CommunityIdempotencyLock.AcquireAsync(_db, moderatorId, endpoint, idempotencyKey, cancellationToken);
+        await CommunityIdempotencyLock.AcquireResourceAsync(_db, $"comment:{commentId:D}", cancellationToken);
         var moderator = await _db.AppUsers.SingleOrDefaultAsync(
             item => item.Id == moderatorId && item.IsActive && item.Role == AppUserRole.Admin, cancellationToken);
-        if (moderator is null) throw new Wf02Exception("MODERATION_FORBIDDEN", "The moderator is not authorized.", 403);
+        if (moderator is null) throw new CommunityValidationException("MODERATION_FORBIDDEN", "The moderator is not authorized.", 403);
 
         var replay = await TryReplayAsync<AdminCommentQueueItemDto>(moderatorId, endpoint, idempotencyKey, hash, now, cancellationToken);
         if (replay is not null)
@@ -248,10 +248,10 @@ public sealed class Wf02TimelineCommentService : IWf02TimelineCommentService
         }
         var comment = await _db.CommunityComments.SingleOrDefaultAsync(
             item => item.Id == commentId && item.LocationId == locationId, cancellationToken)
-            ?? throw new Wf02Exception("COMMENT_NOT_FOUND", "The comment was not found.", 404);
+            ?? throw new CommunityValidationException("COMMENT_NOT_FOUND", "The comment was not found.", 404);
         if (comment.Version != request.ExpectedVersion)
         {
-            throw new Wf02Exception("COMMENT_VERSION_CHANGED", "The comment changed; reload it before retrying.", 409,
+            throw new CommunityValidationException("COMMENT_VERSION_CHANGED", "The comment changed; reload it before retrying.", 409,
                 new { commentId, status = comment.Status.ToString(), version = comment.Version });
         }
         var previous = comment.Status;
@@ -291,7 +291,7 @@ public sealed class Wf02TimelineCommentService : IWf02TimelineCommentService
 
             var location = await _db.Places.AsNoTracking()
                 .SingleOrDefaultAsync(item => item.Id == currentId, cancellationToken)
-                ?? throw new Wf02Exception("LOCATION_NOT_FOUND", "The location was not found.", 404);
+                ?? throw new CommunityValidationException("LOCATION_NOT_FOUND", "The location was not found.", 404);
             if (location.Status == LocationStatus.Active && location.MergedIntoLocationId is null)
             {
                 return location.Id;
@@ -302,10 +302,10 @@ public sealed class Wf02TimelineCommentService : IWf02TimelineCommentService
                 continue;
             }
 
-            throw new Wf02Exception("LOCATION_NOT_ACTIVE", "The location is not active.", 404);
+            throw new CommunityValidationException("LOCATION_NOT_ACTIVE", "The location is not active.", 404);
         }
 
-        throw new Wf02Exception("INVALID_LOCATION_MERGE", "The location merge chain is invalid.", 409);
+        throw new CommunityValidationException("INVALID_LOCATION_MERGE", "The location merge chain is invalid.", 409);
     }
 
     private async Task EnsureUserAsync(Guid actorId, CancellationToken cancellationToken)
@@ -335,7 +335,7 @@ public sealed class Wf02TimelineCommentService : IWf02TimelineCommentService
         }
         if (!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(record.RequestHash), Encoding.UTF8.GetBytes(hash)))
         {
-            throw new Wf02Exception("IDEMPOTENCY_KEY_REUSED", "This Idempotency-Key was already used with a different request.", 409);
+            throw new CommunityValidationException("IDEMPOTENCY_KEY_REUSED", "This Idempotency-Key was already used with a different request.", 409);
         }
         return JsonSerializer.Deserialize<T>(record.ResponseBody, JsonOptions)
                ?? throw new InvalidOperationException("Stored idempotency response is invalid.");
@@ -363,13 +363,13 @@ public sealed class Wf02TimelineCommentService : IWf02TimelineCommentService
     private static void ValidatePagination(int page, int pageSize)
     {
         if (page < 1 || pageSize is < 1 or > 100)
-            throw new Wf02Exception("INVALID_PAGINATION", "page must be positive and pageSize must be between 1 and 100.", 422);
+            throw new CommunityValidationException("INVALID_PAGINATION", "page must be positive and pageSize must be between 1 and 100.", 422);
     }
 
     private static void ValidateIdempotencyKey(string key)
     {
         if (string.IsNullOrWhiteSpace(key) || key.Length > 200)
-            throw new Wf02Exception("IDEMPOTENCY_KEY_REQUIRED", "A valid Idempotency-Key header is required.", 400);
+            throw new CommunityValidationException("IDEMPOTENCY_KEY_REQUIRED", "A valid Idempotency-Key header is required.", 400);
     }
 
     private static string Hash<T>(T value) =>
@@ -387,7 +387,7 @@ public sealed class Wf02TimelineCommentService : IWf02TimelineCommentService
                 return new CursorPosition(new DateTimeOffset(ticks, TimeSpan.Zero), id);
         }
         catch (FormatException) { }
-        throw new Wf02Exception("INVALID_CURSOR", "The pagination cursor is invalid.", 422);
+        throw new CommunityValidationException("INVALID_CURSOR", "The pagination cursor is invalid.", 422);
     }
     private static DateTimeOffset ToOffset(DateTime value) => new(DateTime.SpecifyKind(value, DateTimeKind.Utc));
 }

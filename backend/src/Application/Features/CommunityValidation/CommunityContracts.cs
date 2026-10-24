@@ -1,6 +1,6 @@
 using AccessMapVN.Domain.Enums;
 
-namespace AccessMapVN.Application.Features.Wf02;
+namespace AccessMapVN.Application.Features.CommunityValidation;
 
 public sealed record ActiveAdvisoryDto(
     Guid AdvisoryId,
@@ -47,7 +47,7 @@ public sealed record LinkVoteSubmissionResponse(
     AssessmentJobStatus EvaluationStatus,
     DateTimeOffset LinkedAt);
 
-public interface IWf02CommunityService
+public interface ICommunityValidationService
 {
     Task<FeatureCommunityDto> GetCommunityAsync(
         Guid locationId,
@@ -80,7 +80,9 @@ public interface IWf02CommunityService
     Task ReconcileJobsAsync(CancellationToken cancellationToken = default);
 }
 
-public interface IWf02JobScheduler
+public interface ICommunityJobScheduler
 {
     string? EnqueueEvaluation(Guid assessmentJobId);
 }
+
+

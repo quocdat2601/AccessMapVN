@@ -5,7 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using AccessMapVN.Application.Common.Exceptions;
 using AccessMapVN.Application.Common.Options;
-using AccessMapVN.Application.Features.Wf02;
+using AccessMapVN.Application.Features.CommunityValidation;
 using AccessMapVN.Domain.Entities;
 using AccessMapVN.Domain.Enums;
 using AccessMapVN.Infrastructure.Persistence;
@@ -14,7 +14,7 @@ using Microsoft.Extensions.Options;
 
 namespace AccessMapVN.Infrastructure.Services;
 
-public sealed class Wf02DisputeService : IWf02DisputeService
+public sealed class CommunityDisputeService : ICommunityDisputeService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -22,10 +22,10 @@ public sealed class Wf02DisputeService : IWf02DisputeService
     };
 
     private readonly ApplicationDbContext _db;
-    private readonly Wf02Options _options;
+    private readonly CommunityValidationOptions _options;
     private readonly TimeProvider _clock;
 
-    public Wf02DisputeService(ApplicationDbContext db, IOptions<Wf02Options> options, TimeProvider clock)
+    public CommunityDisputeService(ApplicationDbContext db, IOptions<CommunityValidationOptions> options, TimeProvider clock)
     {
         _db = db;
         _options = options.Value;
@@ -88,7 +88,7 @@ public sealed class Wf02DisputeService : IWf02DisputeService
         var now = _clock.GetUtcNow();
         foreach (var row in rows)
         {
-            Wf02Metrics.DisputeAgeHours.Record(
+            CommunityMetrics.DisputeAgeHours.Record(
                 Math.Max(0, (now - row.dispute.OpenedAt).TotalHours),
                 new KeyValuePair<string, object?>("case.status", row.dispute.Status.ToString()));
         }
@@ -111,22 +111,22 @@ public sealed class Wf02DisputeService : IWf02DisputeService
         if (expectedVersion <= 0 || !Enum.IsDefined(request.Decision) ||
             string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Trim().Length > 2000)
         {
-            throw new Wf02Exception("INVALID_DISPUTE_DECISION", "A valid decision, reason and ETag are required.", 422);
+            throw new CommunityValidationException("INVALID_DISPUTE_DECISION", "A valid decision, reason and ETag are required.", 422);
         }
 
         var endpoint = $"/api/v1/admin/community-disputes/{disputeId:D}";
         var requestHash = Hash(new { expectedVersion, request });
         var now = _clock.GetUtcNow();
         await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
-        await Wf02IdempotencyLock.AcquireAsync(_db, moderatorId, endpoint, idempotencyKey, cancellationToken);
-        await Wf02IdempotencyLock.AcquireResourceAsync(_db, $"dispute:{disputeId:D}", cancellationToken);
+        await CommunityIdempotencyLock.AcquireAsync(_db, moderatorId, endpoint, idempotencyKey, cancellationToken);
+        await CommunityIdempotencyLock.AcquireResourceAsync(_db, $"dispute:{disputeId:D}", cancellationToken);
 
         var moderator = await _db.AppUsers.SingleOrDefaultAsync(
             item => item.Id == moderatorId && item.IsActive && item.Role == AppUserRole.Admin,
             cancellationToken);
         if (moderator is null)
         {
-            throw new Wf02Exception("MODERATION_FORBIDDEN", "The moderator is not authorized.", 403);
+            throw new CommunityValidationException("MODERATION_FORBIDDEN", "The moderator is not authorized.", 403);
         }
 
         var stored = await _db.IdempotencyRecords.SingleOrDefaultAsync(
@@ -138,7 +138,7 @@ public sealed class Wf02DisputeService : IWf02DisputeService
                     Encoding.UTF8.GetBytes(stored.RequestHash),
                     Encoding.UTF8.GetBytes(requestHash)))
             {
-                throw new Wf02Exception("IDEMPOTENCY_KEY_REUSED", "This Idempotency-Key was already used with a different request.", 409);
+                throw new CommunityValidationException("IDEMPOTENCY_KEY_REUSED", "This Idempotency-Key was already used with a different request.", 409);
             }
 
             var replay = JsonSerializer.Deserialize<DisputeDetailDto>(stored.ResponseBody, JsonOptions)
@@ -153,10 +153,10 @@ public sealed class Wf02DisputeService : IWf02DisputeService
         }
 
         var dispute = await _db.DisputeCases.SingleOrDefaultAsync(item => item.Id == disputeId, cancellationToken)
-                      ?? throw new Wf02Exception("DISPUTE_NOT_FOUND", "The dispute was not found.", 404);
+                      ?? throw new CommunityValidationException("DISPUTE_NOT_FOUND", "The dispute was not found.", 404);
         if (dispute.Version != expectedVersion)
         {
-            throw new Wf02Exception("DISPUTE_VERSION_CHANGED", "The dispute changed; reload it before retrying.", 409,
+            throw new CommunityValidationException("DISPUTE_VERSION_CHANGED", "The dispute changed; reload it before retrying.", 409,
                 new { disputeId = dispute.Id, status = dispute.Status.ToString(), version = dispute.Version });
         }
 
@@ -177,7 +177,7 @@ public sealed class Wf02DisputeService : IWf02DisputeService
             case DisputeDecisionType.LinkCorrection:
                 if (request.CorrectionSubmissionId is not Guid correctionId)
                 {
-                    throw new Wf02Exception("CORRECTION_REQUIRED", "correctionSubmissionId is required.", 422);
+                    throw new CommunityValidationException("CORRECTION_REQUIRED", "correctionSubmissionId is required.", 422);
                 }
                 await ValidateCorrectionAsync(correctionId, feature, false, cancellationToken);
                 dispute.CorrectionSubmissionId = correctionId;
@@ -188,12 +188,12 @@ public sealed class Wf02DisputeService : IWf02DisputeService
                 var publicationId = request.CorrectionSubmissionId ?? dispute.CorrectionSubmissionId;
                 if (publicationId is not Guid publishedId)
                 {
-                    throw new Wf02Exception("PUBLICATION_REQUIRED", "A linked correction publication is required.", 409);
+                    throw new CommunityValidationException("PUBLICATION_REQUIRED", "A linked correction publication is required.", 409);
                 }
                 await ValidateCorrectionAsync(publishedId, feature, true, cancellationToken);
                 if (feature.Version <= dispute.FeatureVersion || feature.SourceSubmissionId != publishedId)
                 {
-                    throw new Wf02Exception("PUBLICATION_REQUIRED", "The linked correction has not published a newer feature version.", 409);
+                    throw new CommunityValidationException("PUBLICATION_REQUIRED", "The linked correction has not published a newer feature version.", 409);
                 }
                 dispute.CorrectionSubmissionId = publishedId;
                 dispute.Status = DisputeStatus.ResolvedUpdated;
@@ -202,11 +202,11 @@ public sealed class Wf02DisputeService : IWf02DisputeService
 
             case DisputeDecisionType.CreateAdvisory:
                 var startsAt = request.StartsAt ?? now;
-                var endsAt = request.EndsAt ?? throw new Wf02Exception("INVALID_ADVISORY", "endsAt is required.", 422);
+                var endsAt = request.EndsAt ?? throw new CommunityValidationException("INVALID_ADVISORY", "endsAt is required.", 422);
                 if (startsAt < now.AddMinutes(-5) || endsAt <= startsAt ||
                     endsAt - startsAt > TimeSpan.FromDays(_options.Advisory.MaxDurationDays))
                 {
-                    throw new Wf02Exception("INVALID_ADVISORY", $"The advisory must be future-facing and no longer than {_options.Advisory.MaxDurationDays} days.", 422);
+                    throw new CommunityValidationException("INVALID_ADVISORY", $"The advisory must be future-facing and no longer than {_options.Advisory.MaxDurationDays} days.", 422);
                 }
                 var advisory = new TemporaryAccessAdvisory
                 {
@@ -233,7 +233,7 @@ public sealed class Wf02DisputeService : IWf02DisputeService
                 break;
 
             default:
-                throw new Wf02Exception("INVALID_DISPUTE_DECISION", "Unsupported dispute decision.", 422);
+                throw new CommunityValidationException("INVALID_DISPUTE_DECISION", "Unsupported dispute decision.", 422);
         }
 
         dispute.Version += 1;
@@ -297,7 +297,7 @@ public sealed class Wf02DisputeService : IWf02DisputeService
                              where dispute.Id == disputeId
                              select new { dispute, feature, location })
             .SingleOrDefaultAsync(cancellationToken)
-            ?? throw new Wf02Exception("DISPUTE_NOT_FOUND", "The dispute was not found.", 404);
+            ?? throw new CommunityValidationException("DISPUTE_NOT_FOUND", "The dispute was not found.", 404);
 
         var votes = await (from link in _db.DisputeCaseVotes.AsNoTracking()
                            join vote in _db.CommunityVotes.AsNoTracking() on link.CommunityVoteId equals vote.Id
@@ -344,7 +344,7 @@ public sealed class Wf02DisputeService : IWf02DisputeService
         var submission = await _db.Submissions.AsNoTracking().SingleOrDefaultAsync(item => item.Id == submissionId, cancellationToken);
         if (submission is null || !Guid.TryParse(submission.PlaceId, out var locationId) || locationId != feature.LocationId)
         {
-            throw new Wf02Exception("CORRECTION_NOT_FOUND", "The correction submission was not found for this location.", 404);
+            throw new CommunityValidationException("CORRECTION_NOT_FOUND", "The correction submission was not found for this location.", 404);
         }
 
         var matchingClaim = await _db.SubmissionClaims.AsNoTracking().AnyAsync(
@@ -354,7 +354,7 @@ public sealed class Wf02DisputeService : IWf02DisputeService
             cancellationToken);
         if (!matchingClaim)
         {
-            throw new Wf02Exception("CORRECTION_CONTEXT_MISMATCH", "The correction does not target this feature.", 409);
+            throw new CommunityValidationException("CORRECTION_CONTEXT_MISMATCH", "The correction does not target this feature.", 409);
         }
     }
 
@@ -362,7 +362,7 @@ public sealed class Wf02DisputeService : IWf02DisputeService
     {
         if (dispute.Status is DisputeStatus.ResolvedBaseline or DisputeStatus.ResolvedUpdated)
         {
-            throw new Wf02Exception("DISPUTE_ALREADY_RESOLVED", "The dispute is already resolved.", 409);
+            throw new CommunityValidationException("DISPUTE_ALREADY_RESOLVED", "The dispute is already resolved.", 409);
         }
     }
 
@@ -370,7 +370,7 @@ public sealed class Wf02DisputeService : IWf02DisputeService
     {
         if (page < 1 || pageSize is < 1 or > 100)
         {
-            throw new Wf02Exception("INVALID_PAGINATION", "page must be positive and pageSize must be between 1 and 100.", 422);
+            throw new CommunityValidationException("INVALID_PAGINATION", "page must be positive and pageSize must be between 1 and 100.", 422);
         }
     }
 
@@ -378,7 +378,7 @@ public sealed class Wf02DisputeService : IWf02DisputeService
     {
         if (string.IsNullOrWhiteSpace(key) || key.Length > 200)
         {
-            throw new Wf02Exception("IDEMPOTENCY_KEY_REQUIRED", "A valid Idempotency-Key header is required.", 400);
+            throw new CommunityValidationException("IDEMPOTENCY_KEY_REQUIRED", "A valid Idempotency-Key header is required.", 400);
         }
     }
 

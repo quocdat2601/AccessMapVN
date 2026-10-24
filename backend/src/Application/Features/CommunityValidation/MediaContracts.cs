@@ -1,4 +1,4 @@
-namespace AccessMapVN.Application.Features.Wf02;
+namespace AccessMapVN.Application.Features.CommunityValidation;
 
 public sealed record CreateUploadIntentRequest(string MimeType, long SizeBytes, string Sha256);
 
@@ -21,7 +21,7 @@ public sealed record AdminEvidenceAccessResponse(
     string ContentType,
     DateTimeOffset ExpiresAt);
 
-public interface IWf02MediaService
+public interface ICommunityMediaService
 {
     Task<CreateUploadIntentResponse> CreateIntentAsync(
         Guid actorId, Guid locationId, string idempotencyKey, CreateUploadIntentRequest request,
@@ -33,3 +33,5 @@ public interface IWf02MediaService
         Guid reportId, Guid evidenceId,
         CancellationToken cancellationToken = default);
 }
+
+

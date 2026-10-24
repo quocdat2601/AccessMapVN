@@ -4,13 +4,13 @@ using Microsoft.Extensions.Options;
 
 namespace AccessMapVN.WebApi.Middlewares;
 
-public sealed class Wf02FeatureFlagMiddleware
+public sealed class CommunityFeatureFlagMiddleware
 {
     private readonly RequestDelegate _next;
 
-    public Wf02FeatureFlagMiddleware(RequestDelegate next) => _next = next;
+    public CommunityFeatureFlagMiddleware(RequestDelegate next) => _next = next;
 
-    public async Task InvokeAsync(HttpContext context, IOptions<Wf02Options> options)
+    public async Task InvokeAsync(HttpContext context, IOptions<CommunityValidationOptions> options)
     {
         var path = context.Request.Path.Value ?? string.Empty;
         if (!path.StartsWith("/api/v1/", StringComparison.OrdinalIgnoreCase))
@@ -35,7 +35,7 @@ public sealed class Wf02FeatureFlagMiddleware
                             : true;
         if (!enabled)
         {
-            throw new Wf02Exception("FEATURE_DISABLED", "This WF-02 capability is temporarily unavailable.", 404);
+            throw new CommunityValidationException("FEATURE_DISABLED", "This WF-02 capability is temporarily unavailable.", 404);
         }
 
         await _next(context);

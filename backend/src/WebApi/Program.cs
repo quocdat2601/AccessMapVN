@@ -18,9 +18,15 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructureServices(builder.Configuration);
 
-builder.Services.AddOptions<Wf02Options>()
-    .Bind(builder.Configuration.GetSection(Wf02Options.SectionName))
-    .Validate(options => options.IsValid(), "WF-02 configuration is invalid.")
+var communitySection = builder.Configuration.GetSection(CommunityValidationOptions.SectionName);
+if (!communitySection.Exists())
+{
+    communitySection = builder.Configuration.GetSection(CommunityValidationOptions.LegacySectionName);
+}
+
+builder.Services.AddOptions<CommunityValidationOptions>()
+    .Bind(communitySection)
+    .Validate(options => options.IsValid(), "Community validation configuration is invalid.")
     .ValidateOnStart();
 
 var supabase = builder.Configuration.GetSection(SupabaseAuthOptions.SectionName).Get<SupabaseAuthOptions>()
@@ -89,10 +95,10 @@ builder.Services
 
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy(Wf02Policies.Moderate, policy =>
-        policy.RequireAuthenticatedUser().AddRequirements(new Wf02ModerationRequirement()));
+    options.AddPolicy(CommunityPolicies.Moderate, policy =>
+        policy.RequireAuthenticatedUser().AddRequirements(new CommunityModerationRequirement()));
 });
-builder.Services.AddScoped<IAuthorizationHandler, Wf02ModerationAuthorizationHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, CommunityModerationAuthorizationHandler>();
 
 builder.Services.AddRateLimiter(options =>
 {
@@ -174,7 +180,7 @@ if (builder.Configuration.GetValue<bool>("Database:ApplyMigrationsOnStartup"))
 }
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
-app.UseMiddleware<Wf02FeatureFlagMiddleware>();
+app.UseMiddleware<CommunityFeatureFlagMiddleware>();
 app.UseCors();
 app.UseAuthentication();
 app.UseRateLimiter();

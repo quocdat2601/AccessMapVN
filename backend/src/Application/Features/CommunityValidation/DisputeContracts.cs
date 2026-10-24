@@ -1,6 +1,6 @@
 using AccessMapVN.Domain.Enums;
 
-namespace AccessMapVN.Application.Features.Wf02;
+namespace AccessMapVN.Application.Features.CommunityValidation;
 
 public sealed record DisputeQueueItemDto(
     Guid Id,
@@ -76,7 +76,7 @@ public sealed record DecideDisputeRequest(
     DateTimeOffset? EndsAt = null,
     string? AdvisoryReason = null);
 
-public interface IWf02DisputeService
+public interface ICommunityDisputeService
 {
     Task<DisputeQueuePage> GetQueueAsync(
         DisputeStatus? status,
@@ -95,3 +95,5 @@ public interface IWf02DisputeService
         DecideDisputeRequest request,
         CancellationToken cancellationToken = default);
 }
+
+

@@ -1,7 +1,7 @@
 using AccessMapVN.Application.Common.Exceptions;
 using AccessMapVN.Application.Common.Utils;
 using AccessMapVN.Application.Features.Submissions.Admin;
-using AccessMapVN.Application.Features.Wf02;
+using AccessMapVN.Application.Features.CommunityValidation;
 using AccessMapVN.Domain.Entities;
 using AccessMapVN.Domain.Enums;
 using AccessMapVN.Infrastructure.Persistence;
@@ -13,7 +13,7 @@ using Microsoft.EntityFrameworkCore;
 namespace AccessMapVN.WebApi.Controllers;
 
 [ApiController]
-[Authorize(Policy = Wf02Policies.Moderate)]
+[Authorize(Policy = CommunityPolicies.Moderate)]
 [Route("api/v1/admin/submissions")]
 public sealed class AdminSubmissionsController : ControllerBase
 {

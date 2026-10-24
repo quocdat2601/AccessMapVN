@@ -5,7 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using AccessMapVN.Application.Common.Exceptions;
 using AccessMapVN.Application.Common.Options;
-using AccessMapVN.Application.Features.Wf02;
+using AccessMapVN.Application.Features.CommunityValidation;
 using AccessMapVN.Domain.Entities;
 using AccessMapVN.Domain.Enums;
 using AccessMapVN.Infrastructure.Persistence;
@@ -15,7 +15,7 @@ using Microsoft.Extensions.Options;
 
 namespace AccessMapVN.Infrastructure.Services;
 
-public sealed class Wf02CommunityService : IWf02CommunityService
+public sealed class CommunityValidationService : ICommunityValidationService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
@@ -23,17 +23,17 @@ public sealed class Wf02CommunityService : IWf02CommunityService
     };
 
     private readonly ApplicationDbContext _db;
-    private readonly Wf02Options _options;
-    private readonly IWf02JobScheduler _scheduler;
+    private readonly CommunityValidationOptions _options;
+    private readonly ICommunityJobScheduler _scheduler;
     private readonly TimeProvider _clock;
-    private readonly ILogger<Wf02CommunityService> _logger;
+    private readonly ILogger<CommunityValidationService> _logger;
 
-    public Wf02CommunityService(
+    public CommunityValidationService(
         ApplicationDbContext db,
-        IOptions<Wf02Options> options,
-        IWf02JobScheduler scheduler,
+        IOptions<CommunityValidationOptions> options,
+        ICommunityJobScheduler scheduler,
         TimeProvider clock,
-        ILogger<Wf02CommunityService> logger)
+        ILogger<CommunityValidationService> logger)
     {
         _db = db;
         _options = options.Value;
@@ -51,11 +51,11 @@ public sealed class Wf02CommunityService : IWf02CommunityService
             .SingleOrDefaultAsync(item => item.Id == locationId, cancellationToken);
         if (location is null || location.Status is LocationStatus.Provisional or LocationStatus.Archived)
         {
-            throw new Wf02Exception("LOCATION_NOT_FOUND", "The location was not found.", 404);
+            throw new CommunityValidationException("LOCATION_NOT_FOUND", "The location was not found.", 404);
         }
         if (location.Status == LocationStatus.Merged || location.MergedIntoLocationId is not null)
         {
-            throw new Wf02Exception(
+            throw new CommunityValidationException(
                 "LOCATION_MERGED",
                 "Use the canonical location.",
                 409,
@@ -72,7 +72,7 @@ public sealed class Wf02CommunityService : IWf02CommunityService
 
         if (feature is null || feature.CurrentStatus == PublishedFeatureStatus.Unknown)
         {
-            throw new Wf02Exception(
+            throw new CommunityValidationException(
                 "FEATURE_NOT_PUBLISHED",
                 "The requested accessibility feature has not been published.",
                 404);
@@ -124,7 +124,7 @@ public sealed class Wf02CommunityService : IWf02CommunityService
     {
         if (string.IsNullOrWhiteSpace(idempotencyKey) || idempotencyKey.Length > 200)
         {
-            throw new Wf02Exception("IDEMPOTENCY_KEY_REQUIRED", "A valid Idempotency-Key header is required.", 400);
+            throw new CommunityValidationException("IDEMPOTENCY_KEY_REQUIRED", "A valid Idempotency-Key header is required.", 400);
         }
 
         var endpoint = $"/api/v1/locations/{locationId:D}/features/{featureType}/votes";
@@ -132,9 +132,9 @@ public sealed class Wf02CommunityService : IWf02CommunityService
         var now = _clock.GetUtcNow();
 
         await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
-        await Wf02IdempotencyLock.AcquireAsync(_db, actorId, endpoint, idempotencyKey, cancellationToken);
-        await Wf02IdempotencyLock.AcquireResourceAsync(_db, $"actor:{actorId:D}", cancellationToken);
-        await Wf02IdempotencyLock.AcquireResourceAsync(
+        await CommunityIdempotencyLock.AcquireAsync(_db, actorId, endpoint, idempotencyKey, cancellationToken);
+        await CommunityIdempotencyLock.AcquireResourceAsync(_db, $"actor:{actorId:D}", cancellationToken);
+        await CommunityIdempotencyLock.AcquireResourceAsync(
             _db, $"vote:{actorId:D}:{locationId:D}:{featureType}", cancellationToken);
 
         var replay = await _db.IdempotencyRecords
@@ -147,7 +147,7 @@ public sealed class Wf02CommunityService : IWf02CommunityService
                     Encoding.UTF8.GetBytes(replay.RequestHash),
                     Encoding.UTF8.GetBytes(requestHash)))
             {
-                throw new Wf02Exception(
+                throw new CommunityValidationException(
                     "IDEMPOTENCY_KEY_REUSED",
                     "This idempotency key was already used with a different request.",
                     409);
@@ -162,7 +162,7 @@ public sealed class Wf02CommunityService : IWf02CommunityService
         var place = await _db.Places.SingleOrDefaultAsync(item => item.Id == locationId, cancellationToken);
         if (place is null || place.Status != LocationStatus.Active || place.MergedIntoLocationId is not null)
         {
-            throw new Wf02Exception("LOCATION_NOT_ACTIVE", "The location is not active or no longer canonical.", 409);
+            throw new CommunityValidationException("LOCATION_NOT_ACTIVE", "The location is not active or no longer canonical.", 409);
         }
 
         var feature = await _db.LocationFeatures.SingleOrDefaultAsync(
@@ -173,7 +173,7 @@ public sealed class Wf02CommunityService : IWf02CommunityService
             cancellationToken);
         if (feature is null || feature.CurrentStatus == PublishedFeatureStatus.Unknown)
         {
-            throw new Wf02Exception(
+            throw new CommunityValidationException(
                 "FEATURE_NOT_PUBLISHED",
                 "The feature is not published; contribute it through WF-01 instead.",
                 404);
@@ -181,14 +181,14 @@ public sealed class Wf02CommunityService : IWf02CommunityService
 
         if (request.ObservedFeatureVersion != feature.Version)
         {
-            throw new Wf02Exception(
+            throw new CommunityValidationException(
                 "FEATURE_VERSION_CHANGED",
                 "The published feature changed after it was displayed. Reload and decide again.",
                 409,
                 new { featureVersion = feature.Version, publishedStatus = feature.CurrentStatus });
         }
 
-        await Wf02IdempotencyLock.AcquireResourceAsync(
+        await CommunityIdempotencyLock.AcquireResourceAsync(
             _db, $"assessment:{feature.Id:D}:{feature.Version}", cancellationToken);
 
         ValidateVote(request, feature.CurrentStatus);
@@ -202,7 +202,7 @@ public sealed class Wf02CommunityService : IWf02CommunityService
                 !Guid.TryParse(evidence.UserId, out var ownerId) || ownerId != actorId ||
                 !string.Equals(evidence.PlaceId, locationId.ToString(), StringComparison.OrdinalIgnoreCase))
             {
-                throw new Wf02Exception("EVIDENCE_NOT_OWNED", "The linked WF-01 submission is not available for this vote.", 403);
+                throw new CommunityValidationException("EVIDENCE_NOT_OWNED", "The linked WF-01 submission is not available for this vote.", 403);
             }
         }
 
@@ -327,12 +327,12 @@ public sealed class Wf02CommunityService : IWf02CommunityService
         await _db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        Wf02Metrics.VotesRecorded.Add(1,
+        CommunityMetrics.VotesRecorded.Add(1,
             new KeyValuePair<string, object?>("vote.type", request.VoteType.ToString()),
             new KeyValuePair<string, object?>("vote.status", voteStatus.ToString()));
         if (voteStatus == CommunityVoteStatus.PendingValidation)
         {
-            Wf02Metrics.VotesPendingValidation.Add(1);
+            CommunityMetrics.VotesPendingValidation.Add(1);
         }
 
         try
@@ -356,11 +356,11 @@ public sealed class Wf02CommunityService : IWf02CommunityService
     {
         if (string.IsNullOrWhiteSpace(idempotencyKey) || idempotencyKey.Length > 200)
         {
-            throw new Wf02Exception("IDEMPOTENCY_KEY_REQUIRED", "A valid Idempotency-Key header is required.", 400);
+            throw new CommunityValidationException("IDEMPOTENCY_KEY_REQUIRED", "A valid Idempotency-Key header is required.", 400);
         }
         if (request.SubmissionId == Guid.Empty)
         {
-            throw new Wf02Exception("INVALID_SUBMISSION_LINK", "submissionId is required.", 422);
+            throw new CommunityValidationException("INVALID_SUBMISSION_LINK", "submissionId is required.", 422);
         }
 
         var endpoint = $"/api/v1/community-votes/{voteId:D}/link-submission";
@@ -368,9 +368,9 @@ public sealed class Wf02CommunityService : IWf02CommunityService
             Encoding.UTF8.GetBytes(JsonSerializer.Serialize(request, JsonOptions))));
         var now = _clock.GetUtcNow();
         await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
-        await Wf02IdempotencyLock.AcquireAsync(_db, actorId, endpoint, idempotencyKey, cancellationToken);
-        await Wf02IdempotencyLock.AcquireResourceAsync(_db, $"actor:{actorId:D}", cancellationToken);
-        await Wf02IdempotencyLock.AcquireResourceAsync(_db, $"vote-link:{voteId:D}", cancellationToken);
+        await CommunityIdempotencyLock.AcquireAsync(_db, actorId, endpoint, idempotencyKey, cancellationToken);
+        await CommunityIdempotencyLock.AcquireResourceAsync(_db, $"actor:{actorId:D}", cancellationToken);
+        await CommunityIdempotencyLock.AcquireResourceAsync(_db, $"vote-link:{voteId:D}", cancellationToken);
 
         var replay = await _db.IdempotencyRecords.SingleOrDefaultAsync(
             item => item.ActorId == actorId && item.Endpoint == endpoint && item.Key == idempotencyKey,
@@ -380,7 +380,7 @@ public sealed class Wf02CommunityService : IWf02CommunityService
             if (!CryptographicOperations.FixedTimeEquals(
                     Encoding.UTF8.GetBytes(replay.RequestHash), Encoding.UTF8.GetBytes(requestHash)))
             {
-                throw new Wf02Exception("IDEMPOTENCY_KEY_REUSED", "This idempotency key was already used with a different request.", 409);
+                throw new CommunityValidationException("IDEMPOTENCY_KEY_REUSED", "This idempotency key was already used with a different request.", 409);
             }
             var stored = JsonSerializer.Deserialize<LinkVoteSubmissionResponse>(replay.ResponseBody, JsonOptions)
                          ?? throw new InvalidOperationException("Stored idempotency response is invalid.");
@@ -390,26 +390,26 @@ public sealed class Wf02CommunityService : IWf02CommunityService
 
         var vote = await _db.CommunityVotes.SingleOrDefaultAsync(
             item => item.Id == voteId && item.VoterId == actorId, cancellationToken)
-            ?? throw new Wf02Exception("VOTE_NOT_FOUND", "The vote was not found.", 404);
+            ?? throw new CommunityValidationException("VOTE_NOT_FOUND", "The vote was not found.", 404);
         if (vote.Status is CommunityVoteStatus.Superseded or CommunityVoteStatus.Rejected or CommunityVoteStatus.Archived)
         {
-            throw new Wf02Exception("VOTE_NOT_ACTIVE", "Evidence can only be linked to the current observation.", 409);
+            throw new CommunityValidationException("VOTE_NOT_ACTIVE", "Evidence can only be linked to the current observation.", 409);
         }
         if (vote.EvidenceSubmissionId is not null && vote.EvidenceSubmissionId != request.SubmissionId)
         {
-            throw new Wf02Exception("VOTE_EVIDENCE_ALREADY_LINKED", "This vote already links a different submission.", 409);
+            throw new CommunityValidationException("VOTE_EVIDENCE_ALREADY_LINKED", "This vote already links a different submission.", 409);
         }
 
         var feature = await _db.LocationFeatures.AsNoTracking()
             .SingleAsync(item => item.Id == vote.LocationFeatureId, cancellationToken);
-        await Wf02IdempotencyLock.AcquireResourceAsync(
+        await CommunityIdempotencyLock.AcquireResourceAsync(
             _db, $"assessment:{feature.Id:D}:{vote.ObservedFeatureVersion}", cancellationToken);
         var submission = await _db.Submissions.AsNoTracking()
             .SingleOrDefaultAsync(item => item.Id == request.SubmissionId, cancellationToken);
         if (submission is null || !Guid.TryParse(submission.UserId, out var ownerId) || ownerId != actorId ||
             !Guid.TryParse(submission.PlaceId, out var locationId) || locationId != feature.LocationId)
         {
-            throw new Wf02Exception("SUBMISSION_NOT_FOUND", "The owned submission was not found for this location.", 404);
+            throw new CommunityValidationException("SUBMISSION_NOT_FOUND", "The owned submission was not found for this location.", 404);
         }
 
         var previous = vote.Status;
@@ -486,7 +486,7 @@ public sealed class Wf02CommunityService : IWf02CommunityService
         var place = await _db.Places.SingleOrDefaultAsync(item => item.Id == locationId, cancellationToken);
         if (place is null || place.Status != LocationStatus.Active || place.MergedIntoLocationId is not null)
         {
-            throw new Wf02Exception("LOCATION_NOT_ACTIVE", "The location is not active or no longer canonical.", 409);
+            throw new CommunityValidationException("LOCATION_NOT_ACTIVE", "The location is not active or no longer canonical.", 409);
         }
 
         var feature = await _db.LocationFeatures.SingleOrDefaultAsync(
@@ -497,7 +497,7 @@ public sealed class Wf02CommunityService : IWf02CommunityService
             cancellationToken);
         if (feature is null)
         {
-            throw new Wf02Exception("FEATURE_NOT_PUBLISHED", "The feature is not published.", 404);
+            throw new CommunityValidationException("FEATURE_NOT_PUBLISHED", "The feature is not published.", 404);
         }
 
         var now = _clock.GetUtcNow();
@@ -797,16 +797,16 @@ public sealed class Wf02CommunityService : IWf02CommunityService
             job.LastErrorCategory = null;
             job.LastErrorMessage = null;
             await _db.SaveChangesAsync(cancellationToken);
-            Wf02Metrics.AssessmentsCompleted.Add(1,
+            CommunityMetrics.AssessmentsCompleted.Add(1,
                 new KeyValuePair<string, object?>("result.label", label.ToString()));
             if (disputeOpened)
             {
-                Wf02Metrics.DisputesOpened.Add(1);
+                CommunityMetrics.DisputesOpened.Add(1);
             }
         }
         catch (Exception exception)
         {
-            Wf02Metrics.AssessmentFailures.Add(1,
+            CommunityMetrics.AssessmentFailures.Add(1,
                 new KeyValuePair<string, object?>("error.category", exception.GetType().Name));
             job.LastErrorCategory = exception.GetType().Name;
             job.LastErrorMessage = exception.Message.Length > 2000 ? exception.Message[..2000] : exception.Message;
@@ -830,7 +830,7 @@ public sealed class Wf02CommunityService : IWf02CommunityService
             .Select(item => new { item.Id, item.Version })
             .ToListAsync(cancellationToken);
 
-        Wf02Metrics.StaleFeaturesObserved.Add(featureIds.Count);
+        CommunityMetrics.StaleFeaturesObserved.Add(featureIds.Count);
 
         foreach (var feature in featureIds)
         {
@@ -896,18 +896,18 @@ public sealed class Wf02CommunityService : IWf02CommunityService
     {
         if (request.ObservedFeatureVersion <= 0)
         {
-            throw new Wf02Exception("INVALID_OBSERVATION", "observedFeatureVersion must be positive.", 422);
+            throw new CommunityValidationException("INVALID_OBSERVATION", "observedFeatureVersion must be positive.", 422);
         }
 
         if (request.Comment?.Length > _options.Votes.MaxCommentLength)
         {
-            throw new Wf02Exception("INVALID_OBSERVATION", "The vote comment is too long.", 422);
+            throw new CommunityValidationException("INVALID_OBSERVATION", "The vote comment is too long.", 422);
         }
 
         if (request.VoteType == CommunityVoteType.StillAccurate &&
             request.ProposedStatus is not null && request.ProposedStatus != baseline)
         {
-            throw new Wf02Exception("INVALID_OBSERVATION", "StillAccurate cannot propose a different status.", 422);
+            throw new CommunityValidationException("INVALID_OBSERVATION", "StillAccurate cannot propose a different status.", 422);
         }
 
         if (request.VoteType == CommunityVoteType.Changed)
@@ -917,7 +917,7 @@ public sealed class Wf02CommunityService : IWf02CommunityService
                                    request.ProposedStatus != baseline;
             if (!meaningfulStatus && string.IsNullOrWhiteSpace(request.Comment))
             {
-                throw new Wf02Exception(
+                throw new CommunityValidationException(
                     "INVALID_OBSERVATION",
                     "Changed requires a different concrete status or a description of the observed change.",
                     422);

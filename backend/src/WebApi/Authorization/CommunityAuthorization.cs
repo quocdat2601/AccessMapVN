@@ -6,26 +6,26 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AccessMapVN.WebApi.Authorization;
 
-public static class Wf02Policies
+public static class CommunityPolicies
 {
     public const string Moderate = "Wf02.Moderate";
 }
 
-public sealed class Wf02ModerationRequirement : IAuthorizationRequirement;
+public sealed class CommunityModerationRequirement : IAuthorizationRequirement;
 
-public sealed class Wf02ModerationAuthorizationHandler
-    : AuthorizationHandler<Wf02ModerationRequirement>
+public sealed class CommunityModerationAuthorizationHandler
+    : AuthorizationHandler<CommunityModerationRequirement>
 {
     private readonly ApplicationDbContext _db;
 
-    public Wf02ModerationAuthorizationHandler(ApplicationDbContext db)
+    public CommunityModerationAuthorizationHandler(ApplicationDbContext db)
     {
         _db = db;
     }
 
     protected override async Task HandleRequirementAsync(
         AuthorizationHandlerContext context,
-        Wf02ModerationRequirement requirement)
+        CommunityModerationRequirement requirement)
     {
         if (!context.User.TryGetUserId(out var userId))
         {
@@ -42,12 +42,12 @@ public sealed class Wf02ModerationAuthorizationHandler
         var hasPermission = context.User.Claims
             .Where(claim => claim.Type is "permissions" or "permission" or "app_role" or "role")
             .SelectMany(claim => claim.Value.Split(new[] { ',', ' ' }, StringSplitOptions.RemoveEmptyEntries))
-            .Any(value => string.Equals(value, Wf02Policies.Moderate, StringComparison.OrdinalIgnoreCase) ||
+            .Any(value => string.Equals(value, CommunityPolicies.Moderate, StringComparison.OrdinalIgnoreCase) ||
                           string.Equals(value, "admin", StringComparison.OrdinalIgnoreCase));
 
         var hasAppMetadataPermission = context.User.Claims
             .Any(claim => claim.Type.Contains("app_metadata", StringComparison.OrdinalIgnoreCase) &&
-                          (claim.Value.Contains(Wf02Policies.Moderate, StringComparison.OrdinalIgnoreCase) ||
+                          (claim.Value.Contains(CommunityPolicies.Moderate, StringComparison.OrdinalIgnoreCase) ||
                            claim.Value.Contains("admin", StringComparison.OrdinalIgnoreCase)));
 
         if (hasPermission || hasAppMetadataPermission || isServerAuthorizedAdmin)

@@ -1,5 +1,5 @@
 using AccessMapVN.Application.Common.Exceptions;
-using AccessMapVN.Application.Features.Wf02;
+using AccessMapVN.Application.Features.CommunityValidation;
 using AccessMapVN.WebApi.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -11,8 +11,8 @@ namespace AccessMapVN.WebApi.Controllers;
 [Route("api/v1/locations/{locationId:guid}")]
 public sealed class LocationTimelineCommentsController : ControllerBase
 {
-    private readonly IWf02TimelineCommentService _service;
-    public LocationTimelineCommentsController(IWf02TimelineCommentService service) => _service = service;
+    private readonly ILocationTimelineCommentService _service;
+    public LocationTimelineCommentsController(ILocationTimelineCommentService service) => _service = service;
 
     [AllowAnonymous]
     [HttpGet("timeline")]
@@ -35,7 +35,7 @@ public sealed class LocationTimelineCommentsController : ControllerBase
         Guid locationId, [FromBody] CreateCommunityCommentRequest request, CancellationToken cancellationToken)
     {
         if (!User.TryGetUserId(out var actorId))
-            throw new Wf02Exception("INVALID_SUBJECT", "The authenticated subject is not a UUID.", 401);
+            throw new CommunityValidationException("INVALID_SUBJECT", "The authenticated subject is not a UUID.", 401);
         var response = await _service.CreateCommentAsync(
             actorId, locationId, Request.Headers["Idempotency-Key"].ToString(), request, cancellationToken);
         return StatusCode(StatusCodes.Status201Created, response);

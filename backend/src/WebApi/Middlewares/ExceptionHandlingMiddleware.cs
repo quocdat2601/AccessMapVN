@@ -23,11 +23,11 @@ public class ExceptionHandlingMiddleware
         {
             await _next(context);
         }
-        catch (Wf02Exception ex)
+        catch (CommunityValidationException ex)
         {
             if (ex.Code == "IDEMPOTENCY_KEY_REUSED")
             {
-                Wf02Metrics.IdempotencyConflicts.Add(1);
+                CommunityMetrics.IdempotencyConflicts.Add(1);
             }
             _logger.LogWarning("WF-02 request failed with {Code}: {Message}", ex.Code, ex.Message);
             context.Response.StatusCode = ex.StatusCode;

@@ -93,7 +93,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.HasIndex(e => e.SubmissionId).IsUnique();
         });
 
-        modelBuilder.ConfigureWf02();
+        modelBuilder.ConfigureCommunityValidation();
         modelBuilder.ApplySnakeCaseColumnNames();
     }
 }

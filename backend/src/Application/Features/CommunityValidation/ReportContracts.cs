@@ -1,6 +1,6 @@
 using AccessMapVN.Domain.Enums;
 
-namespace AccessMapVN.Application.Features.Wf02;
+namespace AccessMapVN.Application.Features.CommunityValidation;
 
 public sealed record ProposedPositionRequest(double Latitude, double Longitude);
 
@@ -184,7 +184,7 @@ public sealed record CorrectLocationMetadataResponse(
     int LocationMetadataVersion,
     DateTimeOffset UpdatedAt);
 
-public interface IWf02ReportService
+public interface ICommunityReportService
 {
     Task<CreateInaccurateReportResponse> CreateAsync(
         Guid reporterId,
@@ -238,3 +238,5 @@ public interface IWf02ReportService
         CorrectLocationMetadataRequest request,
         CancellationToken cancellationToken = default);
 }
+
+

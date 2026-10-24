@@ -14,12 +14,12 @@ public sealed class Wf02MediaContentTests
     [InlineData("video/webm", "1A45DFA300000000")]
     public void MatchesDeclaredContent_AcceptsKnownSignatures(string mimeType, string hex)
     {
-        Wf02MediaService.MatchesDeclaredContent(mimeType, Convert.FromHexString(hex)).Should().BeTrue();
+        CommunityMediaService.MatchesDeclaredContent(mimeType, Convert.FromHexString(hex)).Should().BeTrue();
     }
 
     [Fact]
     public void MatchesDeclaredContent_RejectsArbitraryBytesDeclaredAsPng()
     {
-        Wf02MediaService.MatchesDeclaredContent("image/png", "nope"u8.ToArray()).Should().BeFalse();
+        CommunityMediaService.MatchesDeclaredContent("image/png", "nope"u8.ToArray()).Should().BeFalse();
     }
 }

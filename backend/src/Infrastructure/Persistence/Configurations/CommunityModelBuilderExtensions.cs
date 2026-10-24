@@ -6,9 +6,9 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace AccessMapVN.Infrastructure.Persistence.Configurations;
 
-internal static partial class Wf02ModelBuilderExtensions
+internal static partial class CommunityModelBuilderExtensions
 {
-    public static void ConfigureWf02(this ModelBuilder modelBuilder)
+    public static void ConfigureCommunityValidation(this ModelBuilder modelBuilder)
     {
         ConfigureUsers(modelBuilder);
         ConfigureWf01Foundations(modelBuilder);
@@ -18,6 +18,9 @@ internal static partial class Wf02ModelBuilderExtensions
         ConfigureReports(modelBuilder);
         ConfigureCommentsAndInfrastructure(modelBuilder);
     }
+
+    [Obsolete("Use ConfigureCommunityValidation instead.")]
+    public static void ConfigureWf02(this ModelBuilder modelBuilder) => ConfigureCommunityValidation(modelBuilder);
 
     private static void ConfigureUsers(ModelBuilder modelBuilder)
     {

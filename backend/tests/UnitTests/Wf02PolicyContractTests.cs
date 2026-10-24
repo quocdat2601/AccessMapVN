@@ -1,5 +1,5 @@
 using AccessMapVN.Application.Common.Options;
-using AccessMapVN.Application.Features.Wf02;
+using AccessMapVN.Application.Features.CommunityValidation;
 using AccessMapVN.Domain.Enums;
 using FluentAssertions;
 
@@ -10,7 +10,7 @@ public sealed class Wf02PolicyContractTests
     [Fact]
     public void Defaults_MatchApprovedProvisionalPolicy()
     {
-        var options = new Wf02Options();
+        var options = new CommunityValidationOptions();
 
         options.IsValid().Should().BeTrue();
         options.Recency.RecentWindowDays.Should().Be(30);

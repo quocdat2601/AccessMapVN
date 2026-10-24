@@ -1,5 +1,5 @@
 using AccessMapVN.Application.Common.Exceptions;
-using AccessMapVN.Application.Features.Wf02;
+using AccessMapVN.Application.Features.CommunityValidation;
 using AccessMapVN.Domain.Enums;
 using AccessMapVN.WebApi.Authorization;
 using Microsoft.AspNetCore.Authorization;
@@ -8,11 +8,11 @@ using Microsoft.AspNetCore.Mvc;
 namespace AccessMapVN.WebApi.Controllers;
 
 [ApiController]
-[Authorize(Policy = Wf02Policies.Moderate)]
+[Authorize(Policy = CommunityPolicies.Moderate)]
 public sealed class AdminCommentsController : ControllerBase
 {
-    private readonly IWf02TimelineCommentService _service;
-    public AdminCommentsController(IWf02TimelineCommentService service) => _service = service;
+    private readonly ILocationTimelineCommentService _service;
+    public AdminCommentsController(ILocationTimelineCommentService service) => _service = service;
 
     [HttpGet("api/v1/admin/comments")]
     public async Task<ActionResult<AdminCommentQueuePage>> GetQueue(
@@ -27,7 +27,7 @@ public sealed class AdminCommentsController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (!User.TryGetUserId(out var moderatorId))
-            throw new Wf02Exception("INVALID_SUBJECT", "The authenticated subject is not a UUID.", 401);
+            throw new CommunityValidationException("INVALID_SUBJECT", "The authenticated subject is not a UUID.", 401);
         ValidateIfMatch(request.ExpectedVersion);
         var response = await _service.ModerateCommentAsync(
             moderatorId, locationId, commentId, Request.Headers["Idempotency-Key"].ToString(), request, cancellationToken);
@@ -41,6 +41,6 @@ public sealed class AdminCommentsController : ControllerBase
         if (string.IsNullOrEmpty(value)) return;
         if (value.StartsWith("W/", StringComparison.OrdinalIgnoreCase)) value = value[2..].Trim();
         if (!int.TryParse(value.Trim('"'), out var version) || version != expectedVersion)
-            throw new Wf02Exception("COMMENT_VERSION_CHANGED", "If-Match and expectedVersion must identify the same comment version.", 409);
+            throw new CommunityValidationException("COMMENT_VERSION_CHANGED", "If-Match and expectedVersion must identify the same comment version.", 409);
     }
 }

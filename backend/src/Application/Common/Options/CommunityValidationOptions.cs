@@ -1,8 +1,9 @@
 namespace AccessMapVN.Application.Common.Options;
 
-public sealed class Wf02Options
+public class CommunityValidationOptions
 {
-    public const string SectionName = "Wf02";
+    public const string SectionName = "CommunityValidation";
+    public const string LegacySectionName = "Wf02";
 
     public string PolicyVersion { get; set; } = "wf02-v1";
     public RecencyOptions Recency { get; set; } = new();
@@ -65,7 +66,7 @@ public sealed class Wf02Options
         public int MaxAttempts { get; set; } = 3;
         public int LeaseSeconds { get; set; } = 300;
         public string ReconciliationCron { get; set; } = "* * * * *";
-        public string Queue { get; set; } = "wf02-community";
+        public string Queue { get; set; } = "community-validation";
     }
 
     public sealed class VoteOptions
@@ -90,3 +91,4 @@ public sealed class Wf02Options
         public bool Comments { get; set; } = true;
     }
 }
+

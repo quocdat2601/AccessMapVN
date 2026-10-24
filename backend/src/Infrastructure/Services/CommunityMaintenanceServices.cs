@@ -1,5 +1,5 @@
 using System.Text.Json;
-using AccessMapVN.Application.Features.Wf02;
+using AccessMapVN.Application.Features.CommunityValidation;
 using AccessMapVN.Domain.Entities;
 using AccessMapVN.Domain.Enums;
 using AccessMapVN.Infrastructure.Persistence;
@@ -18,10 +18,10 @@ namespace AccessMapVN.Infrastructure.Services;
 public sealed class Wf02MaintenanceJob
 {
     private readonly ApplicationDbContext _db;
-    private readonly IWf02CommunityService _community;
+    private readonly ICommunityValidationService _community;
     private readonly TimeProvider _clock;
 
-    public Wf02MaintenanceJob(ApplicationDbContext db, IWf02CommunityService community, TimeProvider clock)
+    public Wf02MaintenanceJob(ApplicationDbContext db, ICommunityValidationService community, TimeProvider clock)
     {
         _db = db;
         _community = community;
@@ -73,12 +73,12 @@ public sealed class Wf02MaintenanceJob
     }
 }
 
-public sealed class Wf02RecurringJobRegistrar : IHostedService
+public sealed class CommunityRecurringJobRegistrar : IHostedService
 {
     private readonly IRecurringJobManager _jobs;
     private readonly IConfiguration _configuration;
 
-    public Wf02RecurringJobRegistrar(IRecurringJobManager jobs, IConfiguration configuration)
+    public CommunityRecurringJobRegistrar(IRecurringJobManager jobs, IConfiguration configuration)
     {
         _jobs = jobs;
         _configuration = configuration;
@@ -101,19 +101,19 @@ public sealed class Wf02RecurringJobRegistrar : IHostedService
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }
 
-public sealed class Wf02OutboxDispatcher : BackgroundService
+public sealed class CommunityOutboxDispatcher : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConfiguration _configuration;
     private readonly TimeProvider _clock;
-    private readonly ILogger<Wf02OutboxDispatcher> _logger;
+    private readonly ILogger<CommunityOutboxDispatcher> _logger;
     private FirebaseMessaging? _messaging;
 
-    public Wf02OutboxDispatcher(
+    public CommunityOutboxDispatcher(
         IServiceScopeFactory scopeFactory,
         IConfiguration configuration,
         TimeProvider clock,
-        ILogger<Wf02OutboxDispatcher> logger)
+        ILogger<CommunityOutboxDispatcher> logger)
     {
         _scopeFactory = scopeFactory;
         _configuration = configuration;
@@ -158,7 +158,7 @@ public sealed class Wf02OutboxDispatcher : BackgroundService
             .ToListAsync(cancellationToken);
         foreach (var outbox in messages)
         {
-            Wf02Metrics.OutboxLagSeconds.Record(
+            CommunityMetrics.OutboxLagSeconds.Record(
                 Math.Max(0, (_clock.GetUtcNow() - outbox.OccurredAt).TotalSeconds),
                 new KeyValuePair<string, object?>("event.type", outbox.Type));
             try
@@ -182,7 +182,7 @@ public sealed class Wf02OutboxDispatcher : BackgroundService
             }
             catch (Exception exception)
             {
-                Wf02Metrics.OutboxFailures.Add(1,
+                CommunityMetrics.OutboxFailures.Add(1,
                     new KeyValuePair<string, object?>("event.type", outbox.Type));
                 outbox.Attempts += 1;
                 outbox.LastError = exception.Message.Length > 2000 ? exception.Message[..2000] : exception.Message;

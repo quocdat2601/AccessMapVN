@@ -6,7 +6,7 @@ namespace AccessMapVN.Infrastructure.Services;
 /// Low-cardinality WF-02 operational metrics. Exporters can subscribe to the
 /// AccessMapVN.Wf02 meter through the deployment's OpenTelemetry configuration.
 /// </summary>
-public static class Wf02Metrics
+public static class CommunityMetrics
 {
     private static readonly Meter Meter = new("AccessMapVN.Wf02", "1.0.0");
 

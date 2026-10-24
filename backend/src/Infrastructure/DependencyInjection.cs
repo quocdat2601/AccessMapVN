@@ -1,5 +1,5 @@
 using AccessMapVN.Application.Common.Interfaces;
-using AccessMapVN.Application.Features.Wf02;
+using AccessMapVN.Application.Features.CommunityValidation;
 using AccessMapVN.Infrastructure.Persistence;
 using AccessMapVN.Infrastructure.Services;
 using Hangfire;
@@ -37,11 +37,11 @@ public static class DependencyInjection
         services.AddScoped<ISubmissionRepository, AccessMapVN.Infrastructure.Repositories.SubmissionRepository>();
         services.AddScoped<ApplicationDbContextInitialiser>();
         services.AddSingleton(TimeProvider.System);
-        services.AddScoped<IWf02CommunityService, Wf02CommunityService>();
-        services.AddScoped<IWf02ReportService, Wf02ReportService>();
-        services.AddScoped<IWf02DisputeService, Wf02DisputeService>();
-        services.AddScoped<IWf02TimelineCommentService, Wf02TimelineCommentService>();
-        services.AddScoped<IWf02MediaService, Wf02MediaService>();
+        services.AddScoped<ICommunityValidationService, CommunityValidationService>();
+        services.AddScoped<ICommunityReportService, CommunityReportService>();
+        services.AddScoped<ICommunityDisputeService, CommunityDisputeService>();
+        services.AddScoped<ILocationTimelineCommentService, LocationTimelineCommentService>();
+        services.AddScoped<ICommunityMediaService, CommunityMediaService>();
         services.AddScoped<ILocationFeaturePublicationService, LocationFeaturePublicationService>();
 
         var objectStorageEndpoint = configuration["ObjectStorage:ServiceUrl"];
@@ -74,15 +74,15 @@ public static class DependencyInjection
                 options.Queues = new[] { "wf02-community", "default" };
                 options.WorkerCount = 2;
             });
-            services.AddScoped<IWf02JobScheduler, HangfireWf02JobScheduler>();
-            services.AddHostedService<Wf02RecurringJobRegistrar>();
+            services.AddScoped<ICommunityJobScheduler, HangfireCommunityJobScheduler>();
+            services.AddHostedService<CommunityRecurringJobRegistrar>();
         }
         else
         {
-            services.AddSingleton<IWf02JobScheduler, NoOpWf02JobScheduler>();
+            services.AddSingleton<ICommunityJobScheduler, NoOpCommunityJobScheduler>();
         }
 
-        services.AddHostedService<Wf02OutboxDispatcher>();
+        services.AddHostedService<CommunityOutboxDispatcher>();
 
         return services;
     }

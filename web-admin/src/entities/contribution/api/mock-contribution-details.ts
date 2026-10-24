@@ -43,7 +43,27 @@ function createEvidence(record: ContributionRecord): ContributionEvidence[] {
       description: rejected ? "Góc chụp chéo và bồn cây che khuất điểm bắt đầu của ram dốc." : "Toàn cảnh tuyến tiếp cận từ vỉa hè đến cửa vào phụ.",
       aiFindings: rejected
         ? [{ label: "Góc quan sát không đủ điều kiện đối soát", confidence: 48, tone: "critical" }]
-        : [{ label: "Phát hiện ram dốc tiếp cận", confidence: record.verification.confidence, tone: record.verification.confidence >= 80 ? "positive" : "warning" }, { label: "Có tay vịn hai bên", confidence: 86, tone: "positive" }],
+        : [{ label: "Phát hiện ram dốc tiếp cận (YOLOv8)", confidence: record.verification.confidence, tone: record.verification.confidence >= 80 ? "positive" : "warning" }, { label: "Có tay vịn hai bên", confidence: 86, tone: "positive" }],
+      visualSuggestions: rejected
+        ? []
+        : [
+            {
+              feature: "ramp_present",
+              value: "suggested_present",
+              detectorScore: 0.7487,
+              bboxFormat: "xyxy",
+              coordinateSpace: "normalized",
+              bboxNormalized: [0.1859, 0.2477, 0.7290, 0.6680],
+            },
+            {
+              feature: "stairs_present",
+              value: "suggested_present",
+              detectorScore: 0.6215,
+              bboxFormat: "xyxy",
+              coordinateSpace: "normalized",
+              bboxNormalized: [0.65, 0.45, 0.95, 0.85],
+            },
+          ],
     },
     {
       id: `${record.id}-evidence-2`,
@@ -158,5 +178,12 @@ export function createContributionDetail(record: ContributionRecord): Contributi
     },
     technicalNotes: ["EXIF được kiểm tra độc lập với nội dung do người dùng khai báo.", "AI chỉ gợi ý vùng quan tâm; quyết định thuộc quy trình kiểm duyệt phía máy chủ trong tương lai.", "Không suy diễn toàn bộ công trình đạt chuẩn từ một hạng mục hình ảnh."],
     applicableStandards: ["QCVN 10:2024/BXD · Mục 2.2 Lối vào", "QCVN 10:2024/BXD · Mục 2.3 Đường dốc", "WCAG 2.2 AA · Trình bày dữ liệu quản trị"],
+    userClaims: [
+      {
+        feature: "ramp_present",
+        claim: "reported_present",
+        snippet: "Lối vào có ram dốc đạt chuẩn và bằng phẳng",
+      },
+    ],
   };
 }

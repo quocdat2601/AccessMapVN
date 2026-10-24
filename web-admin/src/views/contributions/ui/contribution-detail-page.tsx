@@ -35,7 +35,7 @@ function DetailContent({ detail, moderation }: { detail: ContributionDetail; mod
     {moderation.error && <div role="alert" className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700"><AlertCircle className="size-4" />{moderation.error}</div>}
 
     <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-      <main className="min-w-0 space-y-4"><LocationIntegrityCard detail={detail} /><EvidenceViewer evidence={detail.evidence} /><ClaimsTable claims={detail.claims} status={detail.status} selectedIds={selectedClaimIds} onSelectionChange={setSelectedClaimIds} /><SecondaryDetails detail={detail} /></main>
+      <main className="min-w-0 space-y-4"><LocationIntegrityCard detail={detail} /><EvidenceViewer evidence={detail.evidence} userClaims={detail.userClaims} /><ClaimsTable claims={detail.claims} status={detail.status} selectedIds={selectedClaimIds} onSelectionChange={setSelectedClaimIds} /><SecondaryDetails detail={detail} /></main>
       <aside className="space-y-4 xl:sticky xl:top-[89px]"><ModerationPanel detail={detail} selectedClaimIds={selectedClaimIds} isMutating={moderation.isMutating} onApprove={moderation.approve} onRequestMoreInfo={moderation.requestMoreInfo} onReject={moderation.reject} onSendReminder={moderation.sendReminder} /><ContributorCard detail={detail} /><TimelineCard events={detail.timeline} /></aside>
     </div>
   </div>;

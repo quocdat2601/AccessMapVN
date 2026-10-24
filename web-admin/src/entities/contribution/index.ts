@@ -28,5 +28,7 @@ export type {
   ModerationDecision,
   RequestMoreInfoInput,
   TimelineEventType,
+  UserClaim,
   VerificationOutcome,
+  VisualSuggestion,
 } from "./model/types";

@@ -134,21 +134,21 @@ export function ScoreMatrixBreakdown({
             </View>
           </View>
 
-          {/* Visually Impaired Persona Card */}
+          {/* Elderly & Stroller Persona Card */}
           <View style={styles.personaCard}>
             <View style={styles.personaHeader}>
               <View style={styles.personaTitleRow}>
-                <View style={[styles.personaIconWrap, { backgroundColor: 'rgba(234, 179, 8, 0.15)' }]}>
-                  <MaterialCommunityIcons name="eye-outline" size={20} color="#eab308" />
+                <View style={[styles.personaIconWrap, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
+                  <MaterialCommunityIcons name="human-cane" size={20} color="#d97706" />
                 </View>
                 <View>
-                  <Text style={styles.personaName}>Người khiếm thị & thị lực kém</Text>
-                  <Text style={styles.personaSub}>Gạch xúc giác, lối đi và âm thanh</Text>
+                  <Text style={styles.personaName}>Người cao tuổi & Xe đẩy trẻ em</Text>
+                  <Text style={styles.personaSub}>Dốc thoải, sàn phẳng, thang máy và gờ cửa</Text>
                 </View>
               </View>
               <View style={styles.scorePill}>
-                <Text style={[styles.scorePillText, { color: '#eab308' }]}>
-                  {personaScores.blindScore}%
+                <Text style={[styles.scorePillText, { color: '#d97706' }]}>
+                  {personaScores.wheelchairScore}%
                 </Text>
               </View>
             </View>
@@ -157,49 +157,26 @@ export function ScoreMatrixBreakdown({
               <View
                 style={[
                   styles.fitBadge,
-                  personaFit.visualImpaired === 'Safe'
+                  !penalties?.stepsWithoutRamp
                     ? styles.badgeSuccess
-                    : personaFit.visualImpaired === 'NeedsCaution'
-                    ? styles.badgeWarning
-                    : styles.badgeDanger,
+                    : styles.badgeWarning,
                 ]}
               >
                 <MaterialCommunityIcons
-                  name={
-                    personaFit.visualImpaired === 'Safe'
-                      ? 'shield-check'
-                      : personaFit.visualImpaired === 'NeedsCaution'
-                      ? 'alert-outline'
-                      : 'alert-octagon'
-                  }
+                  name={!penalties?.stepsWithoutRamp ? 'check-circle' : 'alert-circle-outline'}
                   size={12}
-                  color={
-                    personaFit.visualImpaired === 'Safe'
-                      ? '#10b981'
-                      : personaFit.visualImpaired === 'NeedsCaution'
-                      ? '#f59e0b'
-                      : '#f43f5e'
-                  }
+                  color={!penalties?.stepsWithoutRamp ? '#10b981' : '#f59e0b'}
                 />
                 <Text
                   style={[
                     styles.fitBadgeText,
-                    {
-                      color:
-                        personaFit.visualImpaired === 'Safe'
-                          ? '#10b981'
-                          : personaFit.visualImpaired === 'NeedsCaution'
-                          ? '#f59e0b'
-                          : '#f43f5e',
-                    },
+                    { color: !penalties?.stepsWithoutRamp ? '#10b981' : '#f59e0b' },
                   ]}
                 >
-                  Độ an toàn lối đi:{' '}
-                  {personaFit.visualImpaired === 'Safe'
-                    ? 'Lối đi thông thoáng'
-                    : personaFit.visualImpaired === 'NeedsCaution'
-                    ? 'Cần chú ý cẩn thận'
-                    : 'Cảnh báo nguy hiểm'}
+                  Lối đi cho xe đẩy & người già:{' '}
+                  {!penalties?.stepsWithoutRamp
+                    ? 'Thuận tiện, không vướng bậc'
+                    : 'Có bậc cản, cần nâng/bê'}
                 </Text>
               </View>
             </View>
@@ -212,16 +189,7 @@ export function ScoreMatrixBreakdown({
         <View style={styles.penaltyAlert}>
           <MaterialCommunityIcons name="alert-decagram" size={18} color="#f43f5e" />
           <Text style={styles.penaltyAlertText}>
-            Lưu ý: Có bậc tam cấp cản trở, xe lăn chưa thể tự di chuyển qua.
-          </Text>
-        </View>
-      ) : null}
-
-      {penalties?.tactileBlocked ? (
-        <View style={styles.penaltyAlert}>
-          <MaterialCommunityIcons name="alert-octagon" size={18} color="#f43f5e" />
-          <Text style={styles.penaltyAlertText}>
-            Cảnh báo: Lối đi xúc giác có vật cản, người khiếm thị cần chú ý.
+            Lưu ý: Có bậc tam cấp cản trở, xe lăn và xe đẩy chưa thể tự di chuyển qua.
           </Text>
         </View>
       ) : null}

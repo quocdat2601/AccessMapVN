@@ -122,12 +122,13 @@ async def verify(payload: VerifyRequest) -> VerifyResponse:
         recommendation,
     )
 
+    has_model_detections = any(s.detector_score is not None for s in visual_suggestions)
     return VerifyResponse(
         submission_id=payload.submission_id,
         analysis_status="completed",
-        analysis_method="heuristic",
-        model_id=None,
-        model_version=None,
+        analysis_method="model" if has_model_detections else "heuristic",
+        model_id="yolov8n-accessmap-v1" if has_model_detections else None,
+        model_version="1.0.0" if has_model_detections else None,
         image_reference="exif_corrected_original",
         visual_suggestions=visual_suggestions,
         user_claims=user_claims,

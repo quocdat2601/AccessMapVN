@@ -147,6 +147,42 @@ public class ContributionEvidenceDto
 
     [JsonPropertyName("aiFindings")]
     public List<EvidenceAiFindingDto> AiFindings { get; set; } = new();
+
+    [JsonPropertyName("visualSuggestions")]
+    public List<VisualSuggestionDto> VisualSuggestions { get; set; } = new();
+}
+
+public class VisualSuggestionDto
+{
+    [JsonPropertyName("feature")]
+    public string Feature { get; set; } = string.Empty;
+
+    [JsonPropertyName("value")]
+    public string Value { get; set; } = "unknown";
+
+    [JsonPropertyName("detectorScore")]
+    public double? DetectorScore { get; set; }
+
+    [JsonPropertyName("bboxFormat")]
+    public string? BboxFormat { get; set; }
+
+    [JsonPropertyName("coordinateSpace")]
+    public string? CoordinateSpace { get; set; }
+
+    [JsonPropertyName("bboxNormalized")]
+    public List<double>? BboxNormalized { get; set; }
+}
+
+public class UserClaimDto
+{
+    [JsonPropertyName("feature")]
+    public string Feature { get; set; } = string.Empty;
+
+    [JsonPropertyName("claim")]
+    public string Claim { get; set; } = string.Empty;
+
+    [JsonPropertyName("snippet")]
+    public string? Snippet { get; set; }
 }
 
 public class AiClaimAssessmentDto
@@ -333,6 +369,9 @@ public class ContributionDetailDto : ContributionRecordDto
 
     [JsonPropertyName("applicableStandards")]
     public List<string> ApplicableStandards { get; set; } = new();
+
+    [JsonPropertyName("userClaims")]
+    public List<UserClaimDto> UserClaims { get; set; } = new();
 }
 
 public class ContributionQueueSummaryDto

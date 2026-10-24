@@ -67,6 +67,21 @@ export interface EvidenceAiFinding {
   tone: "positive" | "warning" | "critical" | "neutral";
 }
 
+export interface VisualSuggestion {
+  feature: string;
+  value: string;
+  detectorScore?: number;
+  bboxFormat?: string;
+  coordinateSpace?: string;
+  bboxNormalized?: [number, number, number, number]; // [xmin, ymin, xmax, ymax]
+}
+
+export interface UserClaim {
+  feature: string;
+  claim: string;
+  snippet?: string;
+}
+
 export interface ContributionEvidence {
   id: string;
   type: EvidenceType;
@@ -80,6 +95,7 @@ export interface ContributionEvidence {
   geotagStatus: "valid" | "mismatch" | "missing";
   description: string;
   aiFindings: EvidenceAiFinding[];
+  visualSuggestions?: VisualSuggestion[];
 }
 
 export interface AiClaimAssessment {
@@ -158,6 +174,7 @@ export interface ContributionDetail extends ContributionRecord {
   contributorHistory: ContributorHistorySummary;
   technicalNotes: string[];
   applicableStandards: string[];
+  userClaims?: UserClaim[];
 }
 
 export interface RequestMoreInfoInput {

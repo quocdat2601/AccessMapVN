@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AccessMapVN.Application.Common.Exceptions;
 using AccessMapVN.Application.Common.Utils;
 using AccessMapVN.Application.Features.Submissions.Admin;
@@ -641,6 +642,85 @@ public sealed class AdminSubmissionsController : ControllerBase
             });
         }
 
+        var visualSuggestions = new List<VisualSuggestionDto>();
+        var userClaims = new List<UserClaimDto>();
+        if (!string.IsNullOrWhiteSpace(s.AiObservationsJson))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(s.AiObservationsJson);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("visual_suggestions", out var vsEl) && vsEl.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in vsEl.EnumerateArray())
+                    {
+                        var vs = new VisualSuggestionDto
+                        {
+                            Feature = item.TryGetProperty("feature", out var fEl) ? fEl.GetString() ?? "" : "",
+                            Value = item.TryGetProperty("value", out var vEl) ? vEl.GetString() ?? "unknown" : "unknown",
+                            DetectorScore = item.TryGetProperty("detector_score", out var sEl) && sEl.ValueKind == JsonValueKind.Number ? sEl.GetDouble() : null,
+                            BboxFormat = item.TryGetProperty("bbox_format", out var bfEl) ? bfEl.GetString() : null,
+                            CoordinateSpace = item.TryGetProperty("coordinate_space", out var csEl) ? csEl.GetString() : null,
+                        };
+                        if (item.TryGetProperty("bbox_normalized", out var bnEl) && bnEl.ValueKind == JsonValueKind.Array)
+                        {
+                            var coords = new List<double>();
+                            foreach (var c in bnEl.EnumerateArray())
+                            {
+                                if (c.ValueKind == JsonValueKind.Number) coords.Add(c.GetDouble());
+                            }
+                            if (coords.Count == 4) vs.BboxNormalized = coords;
+                        }
+                        visualSuggestions.Add(vs);
+                    }
+                }
+
+                if (root.TryGetProperty("user_claims", out var ucEl) && ucEl.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in ucEl.EnumerateArray())
+                    {
+                        userClaims.Add(new UserClaimDto
+                        {
+                            Feature = item.TryGetProperty("feature", out var fEl) ? fEl.GetString() ?? "" : "",
+                            Claim = item.TryGetProperty("claim", out var cEl) ? cEl.GetString() ?? "unknown" : "unknown",
+                            Snippet = item.TryGetProperty("snippet", out var snEl) ? snEl.GetString() : null,
+                        });
+                    }
+                }
+            }
+            catch
+            {
+                // Graceful fallback on malformed JSON
+            }
+        }
+
+        if (evidenceList.Count > 0 && visualSuggestions.Count > 0)
+        {
+            evidenceList[0].VisualSuggestions = visualSuggestions;
+
+            var dynamicFindings = new List<EvidenceAiFindingDto>();
+            foreach (var vs in visualSuggestions)
+            {
+                var labelName = vs.Feature switch
+                {
+                    "ramp_present" => "Phát hiện ram dốc (Ramp)",
+                    "stairs_present" => "Phát hiện bậc thang / tam cấp (Stairs)",
+                    _ => vs.Feature
+                };
+                var score = vs.DetectorScore.HasValue ? Math.Round(vs.DetectorScore.Value * 100) : record.Verification.Confidence;
+                dynamicFindings.Add(new EvidenceAiFindingDto
+                {
+                    Label = labelName,
+                    Confidence = score,
+                    Tone = vs.Feature.Contains("stair") ? "warning" : "positive"
+                });
+            }
+            if (dynamicFindings.Count > 0)
+            {
+                evidenceList[0].AiFindings = dynamicFindings;
+            }
+        }
+
         var claims = record.Categories.Select((category, index) =>
         {
             var claimConfidence = Math.Max(40, (int)Math.Round(record.Verification.Confidence - index * 5));
@@ -733,6 +813,7 @@ public sealed class AdminSubmissionsController : ControllerBase
                 "QCVN 10:2014/BXD - Quy chuẩn kỹ thuật quốc gia về Xây dựng công trình đảm bảo người khuyết tật tiếp cận sử dụng",
                 "Tiêu chuẩn khảo sát tiếp cận cộng đồng AccessMapVN 2026"
             },
+            UserClaims = userClaims,
         };
     }
 

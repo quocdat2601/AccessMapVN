@@ -586,9 +586,9 @@ function ActiveCameraContributionScreen() {
             featureTags: confirmedTags,
             textDescription: notes,
             gps: gps ? { latitude: gps.latitude, longitude: gps.longitude } : null,
-            status: 'Auto-Verified',
+            status: 'Pending Moderation',
             confidenceScore: 0.88,
-            pointsAwarded: 50,
+            pointsAwarded: 0,
             createdAt: Date.now(),
           });
           setSavedLocally(true);

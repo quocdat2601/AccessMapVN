@@ -16,7 +16,7 @@ interface FeatureTagSelectorProps {
   onToggleKey: (key: string) => void;
 }
 
-const CATEGORIES: FeatureCategory[] = ['entrance', 'sanitation', 'visual', 'amenity'];
+const CATEGORIES: FeatureCategory[] = ['entrance', 'sanitation', 'amenity'];
 
 export function FeatureTagSelector({
   availableTags = [],

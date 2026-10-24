@@ -133,14 +133,23 @@ def _map_mentions(nlp_result: dict | None) -> dict[str, dict]:
 
 
 def _compute_overall_score(features: FeaturesDict) -> float:
-    """Compute the overall confidence score from key features (kept for legacy client compatibility)."""
-    feature_map = {
-        "exterior_ramp_present": features.exterior_ramp_present,
-        "steps_present":         features.steps_present,
-        "door_detected":         features.door_detected,
-    }
-    scores = [f.confidence for f in feature_map.values()]
-    return round(sum(scores) / len(scores), 4) if scores else 0.0
+    """Compute overall confidence score across active detected features or fallback to max."""
+    observable = [
+        features.exterior_ramp_present,
+        features.steps_present,
+        features.elevator_present,
+        features.door_detected,
+        features.accessible_restroom_sign,
+        features.tactile_paving_present,
+    ]
+    active_scores = [
+        f.confidence
+        for f in observable
+        if f.value == FeatureStatus.present.value or f.confidence >= 0.50
+    ]
+    if active_scores:
+        return round(sum(active_scores) / len(active_scores), 4)
+    return round(max((f.confidence for f in observable), default=0.0), 4)
 
 
 def _to_recommendation(score: float) -> Recommendation:

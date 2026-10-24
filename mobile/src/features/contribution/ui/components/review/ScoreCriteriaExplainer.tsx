@@ -58,7 +58,7 @@ export function ScoreCriteriaExplainer({
                 : cvScore === 0
                 ? 'Ảnh chụp chưa nhận diện được tiện ích rõ ràng hoặc chưa khớp với đặc tính đã chọn.'
                 : overallScore >= 80
-                ? 'Hồ sơ đạt độ tin cậy xuất sắc (trên 80%). Đủ điều kiện để hệ thống tự động xuất bản lên bản đồ.'
+                ? 'Hồ sơ đạt độ tin cậy xuất sắc (trên 80%). Đạt chuẩn xác minh AI, được ưu tiên duyệt và xuất bản lên bản đồ.'
                 : 'Đóng góp đã có thông tin cơ bản và sẽ được kiểm duyệt viên xem xét trên Admin Portal.'}
             </Text>
           </View>
@@ -76,7 +76,7 @@ export function ScoreCriteriaExplainer({
                 <Text style={styles.pillarScore}>{cvScore}%</Text>
               </View>
               <Text style={styles.pillarDesc}>
-                Mô hình AI tự động quét hình ảnh để nhận diện ram dốc, tay vịn, bậc tam cấp, độ rộng cửa, lối xúc giác... Ảnh chụp rõ nét và trực diện tiện ích sẽ đạt điểm tối đa.
+                Mô hình AI tự động quét hình ảnh để nhận diện ram dốc, bậc tam cấp, thang máy, độ rộng cửa... Ảnh chụp rõ nét và trực diện tiện ích sẽ đạt điểm tối đa.
               </Text>
             </View>
           </View>
@@ -118,8 +118,8 @@ export function ScoreCriteriaExplainer({
           <View style={styles.tiersCard}>
             <View style={styles.tierRow}>
               <View style={[styles.tierDot, { backgroundColor: '#10b981' }]} />
-              <Text style={styles.tierName}>≥ 80% (Tự động duyệt):</Text>
-              <Text style={styles.tierDesc}>Duyệt ngay lập tức, xuất bản lên bản đồ, cộng +50 EXP.</Text>
+              <Text style={styles.tierName}>≥ 80% (Độ tin cậy cao):</Text>
+              <Text style={styles.tierDesc}>Đạt chuẩn xác minh AI, ưu tiên duyệt nhanh và nhận +50 EXP sau khi duyệt.</Text>
             </View>
             <View style={styles.tierRow}>
               <View style={[styles.tierDot, { backgroundColor: '#f59e0b' }]} />

@@ -14,6 +14,7 @@ public class CommunityValidationOptions
     public VoteOptions Votes { get; set; } = new();
     public ReputationOptions Reputation { get; set; } = new();
     public FeatureFlagOptions FeatureFlags { get; set; } = new();
+    public ThresholdOptions Thresholds { get; set; } = new();
 
     public bool IsValid() =>
         !string.IsNullOrWhiteSpace(PolicyVersion) &&
@@ -25,6 +26,8 @@ public class CommunityValidationOptions
         Consensus.MinIndependentVotersForReview > 0 &&
         Consensus.MaxReputationWeight > 0 &&
         Consensus.CrowdMinAgreement is >= 0 and <= 1 &&
+        Thresholds.AutoApproveConfidenceThreshold is >= 0.50 and <= 1.0 &&
+        Thresholds.RejectConfidenceThreshold is >= 0.0 and <= 0.60 &&
         Advisory.MaxDurationDays > 0 &&
         Jobs.MaxAttempts > 0 &&
         Jobs.LeaseSeconds > 0 &&
@@ -32,6 +35,14 @@ public class CommunityValidationOptions
         Votes.IdempotencyTtlHours > 0 &&
         Reputation.VoteHoldThreshold >= 0 &&
         Reputation.DefaultReputationScore >= 0;
+
+    public sealed class ThresholdOptions
+    {
+        public double AutoApproveConfidenceThreshold { get; set; } = 0.80;
+        public double RejectConfidenceThreshold { get; set; } = 0.40;
+        public decimal MinReputationScoreForAutoApprove { get; set; } = 10m;
+        public int MinApprovedSubmissionsForAutoApprove { get; set; } = 2;
+    }
 
     public sealed class RecencyOptions
     {

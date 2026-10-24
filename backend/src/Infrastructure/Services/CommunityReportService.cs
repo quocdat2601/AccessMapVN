@@ -1248,7 +1248,7 @@ public sealed class CommunityReportService : ICommunityReportService
         });
     }
 
-    private static void ValidateCreateRequest(CreateInaccurateReportRequest request)
+    private void ValidateCreateRequest(CreateInaccurateReportRequest request)
     {
         if (!Enum.IsDefined(request.Reason) ||
             string.IsNullOrWhiteSpace(request.Description) ||
@@ -1305,6 +1305,31 @@ public sealed class CommunityReportService : ICommunityReportService
              position.Latitude is < -90 or > 90 || position.Longitude is < -180 or > 180))
         {
             throw new CommunityValidationException("INVALID_REPORT", "proposedPosition is outside valid coordinate ranges.", 422);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.AiAnalysisJson))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(request.AiAnalysisJson);
+                if (doc.RootElement.TryGetProperty("aiConfidence", out var confProp) &&
+                    confProp.ValueKind == JsonValueKind.Number)
+                {
+                    var conf = confProp.GetDouble();
+                    if (conf < _options.Thresholds.RejectConfidenceThreshold)
+                    {
+                        var percent = Math.Round(conf * 100);
+                        throw new CommunityValidationException(
+                            "EVIDENCE_CONFIDENCE_TOO_LOW",
+                            $"Minh chứng ảnh có độ nhận diện yếu tố tiếp cận quá thấp ({percent}% < {_options.Thresholds.RejectConfidenceThreshold * 100}%). Vui lòng chụp lại ảnh rõ nét phản ánh đúng thực trạng tiếp cận.",
+                            422);
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+                // ignore parsing failure for non-json descriptions
+            }
         }
     }
 

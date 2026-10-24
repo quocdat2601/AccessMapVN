@@ -303,12 +303,43 @@ export function FinalScorecardScreen({
                   <Text style={styles.errorText}>{submitError}</Text>
                 </View>
               </View>
+            ) : overallScore < 40 ? (
+              <View style={styles.criticalWarningBanner}>
+                <MaterialCommunityIcons name="alert-octagon" size={20} color="#dc2626" />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={styles.criticalWarningTitle}>
+                    Độ tin cậy AI quá thấp ({overallScore}%)
+                  </Text>
+                  <Text style={styles.criticalWarningText}>
+                    {flow === 'report'
+                      ? 'Ảnh minh chứng chưa rõ nét (< 40%). Hệ thống sẽ từ chối khi nộp báo cáo. Vui lòng bấm Chụp lại.'
+                      : 'Ảnh mờ hoặc thiếu chi tiết tiếp cận (< 40%). Hệ thống sẽ từ chối để tránh spam. Bạn nên chụp lại ảnh rõ nét.'}
+                  </Text>
+                </View>
+              </View>
+            ) : overallScore >= 80 ? (
+              <View style={styles.tierFastTrackBanner}>
+                <MaterialCommunityIcons name="lightning-bolt" size={20} color="#047857" />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={styles.tierFastTrackTitle}>
+                    ✨ Đạt tiêu chuẩn xuất bản tức thì ({overallScore}%)
+                  </Text>
+                  <Text style={styles.tierFastTrackText}>
+                    Độ tin cậy xuất sắc! Đóng góp sẽ được xuất bản tự động và cộng ngay +50 EXP vào tài khoản.
+                  </Text>
+                </View>
+              </View>
             ) : (
-              <View style={styles.testStopBanner}>
-                <MaterialCommunityIcons name="cloud-upload-outline" size={15} color="#004e58" />
-                <Text style={styles.testStopText}>
-                  Sẵn sàng gửi lên máy chủ để nhận +50 EXP tích luỹ.
-                </Text>
+              <View style={styles.tierConsensusBanner}>
+                <MaterialCommunityIcons name="account-group" size={20} color="#0284c7" />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={styles.tierConsensusTitle}>
+                    👥 Chuyển tiếp Đồng thuận cộng đồng ({overallScore}%)
+                  </Text>
+                  <Text style={styles.tierConsensusText}>
+                    Hồ sơ sẽ được đưa lên hệ thống Consensus để cộng đồng cùng xác minh trước khi xuất bản bản đồ.
+                  </Text>
+                </View>
               </View>
             )}
           </Animated.View>
@@ -394,15 +425,25 @@ export function FinalScorecardScreen({
           <>
             <Pressable
               style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
-              onPress={onEditTags}
+              onPress={overallScore < 40 ? onRetakeOrReset : onEditTags}
               accessibilityRole="button"
             >
-              <MaterialCommunityIcons name="tag-outline" size={16} color="#334155" />
-              <Text style={styles.secondaryBtnText}>Sửa đặc tính</Text>
+              <MaterialCommunityIcons
+                name={overallScore < 40 ? 'camera-retake' : 'tag-outline'}
+                size={16}
+                color="#334155"
+              />
+              <Text style={styles.secondaryBtnText}>
+                {overallScore < 40 ? 'Chụp lại' : 'Sửa đặc tính'}
+              </Text>
             </Pressable>
 
             <Pressable
-              style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
+              style={({ pressed }) => [
+                styles.primaryBtn,
+                pressed && styles.pressed,
+                overallScore < 40 && { backgroundColor: '#e11d48' },
+              ]}
               onPress={handleAttachToReport}
               accessibilityRole="button"
             >
@@ -430,6 +471,32 @@ export function FinalScorecardScreen({
               <Text style={styles.primaryBtnText}>Hoàn tất</Text>
             </Pressable>
           </>
+        ) : overallScore < 40 ? (
+          <>
+            <Pressable
+              style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
+              onPress={handleSubmit}
+              accessibilityRole="button"
+              disabled={isSubmitting}
+            >
+              <MaterialCommunityIcons name="send-outline" size={16} color="#64748b" />
+              <Text style={styles.secondaryBtnText}>Vẫn gửi thử</Text>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.primaryBtn,
+                pressed && styles.pressed,
+                { backgroundColor: '#e11d48' },
+              ]}
+              onPress={onRetakeOrReset}
+              disabled={isSubmitting}
+              accessibilityRole="button"
+            >
+              <MaterialCommunityIcons name="camera-retake" size={16} color="#ffffff" />
+              <Text style={styles.primaryBtnText}>Chụp lại ảnh nét hơn</Text>
+            </Pressable>
+          </>
         ) : (
           <>
             <Pressable
@@ -447,6 +514,7 @@ export function FinalScorecardScreen({
                 styles.primaryBtn,
                 pressed && styles.pressed,
                 isSubmitting && { opacity: 0.8 },
+                overallScore >= 80 && { backgroundColor: '#059669' },
               ]}
               onPress={handleSubmit}
               disabled={isSubmitting}
@@ -459,8 +527,14 @@ export function FinalScorecardScreen({
                 </>
               ) : (
                 <>
-                  <MaterialCommunityIcons name="send" size={16} color="#ffffff" />
-                  <Text style={styles.primaryBtnText}>Gửi đóng góp</Text>
+                  <MaterialCommunityIcons
+                    name={overallScore >= 80 ? 'check-decagram' : 'send'}
+                    size={16}
+                    color="#ffffff"
+                  />
+                  <Text style={styles.primaryBtnText}>
+                    {overallScore >= 80 ? 'Xuất bản ngay (+50 EXP)' : 'Gửi đóng góp'}
+                  </Text>
                 </>
               )}
             </Pressable>
@@ -622,6 +696,75 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 11,
     color: '#be123c',
+    lineHeight: 15,
+  },
+  criticalWarningBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 10,
+    marginTop: 4,
+    width: '100%',
+  },
+  criticalWarningTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#991b1b',
+  },
+  criticalWarningText: {
+    fontSize: 11,
+    color: '#b91c1c',
+    lineHeight: 15,
+  },
+  tierFastTrackBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 10,
+    marginTop: 4,
+    width: '100%',
+  },
+  tierFastTrackTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#065f46',
+  },
+  tierFastTrackText: {
+    fontSize: 11,
+    color: '#047857',
+    lineHeight: 15,
+  },
+  tierConsensusBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#f0f9ff',
+    borderWidth: 1,
+    borderColor: '#bae6fd',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 10,
+    marginTop: 4,
+    width: '100%',
+  },
+  tierConsensusTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#0369a1',
+  },
+  tierConsensusText: {
+    fontSize: 11,
+    color: '#0284c7',
     lineHeight: 15,
   },
   detailsCard: {

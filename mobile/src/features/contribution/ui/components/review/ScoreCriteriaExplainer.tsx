@@ -118,18 +118,18 @@ export function ScoreCriteriaExplainer({
           <View style={styles.tiersCard}>
             <View style={styles.tierRow}>
               <View style={[styles.tierDot, { backgroundColor: '#10b981' }]} />
-              <Text style={styles.tierName}>≥ 80% (Tự động duyệt):</Text>
-              <Text style={styles.tierDesc}>Duyệt ngay lập tức, xuất bản lên bản đồ, cộng +50 EXP.</Text>
+              <Text style={styles.tierName}>≥ 80% (Xuất bản tự động):</Text>
+              <Text style={styles.tierDesc}>Duyệt ngay lập tức, xuất bản trực tiếp lên bản đồ và cộng +50 EXP.</Text>
             </View>
             <View style={styles.tierRow}>
-              <View style={[styles.tierDot, { backgroundColor: '#f59e0b' }]} />
-              <Text style={styles.tierName}>60% – 79% (Chờ kiểm duyệt):</Text>
-              <Text style={styles.tierDesc}>Chuyển về hàng đợi Admin Portal để người kiểm duyệt duyệt.</Text>
+              <View style={[styles.tierDot, { backgroundColor: '#0284c7' }]} />
+              <Text style={styles.tierName}>40% – 79% (Đồng thuận cộng đồng):</Text>
+              <Text style={styles.tierDesc}>Cộng đồng cùng biểu quyết xác minh (Consensus). Chỉ tranh chấp mới chuyển Admin.</Text>
             </View>
             <View style={styles.tierRow}>
               <View style={[styles.tierDot, { backgroundColor: '#ef4444' }]} />
-              <Text style={styles.tierName}>&lt; 60% (Cần thêm thông tin):</Text>
-              <Text style={styles.tierDesc}>Ảnh chưa đủ chi tiết hoặc thiếu tiêu chí. Cần chụp lại hoặc tick chọn thêm.</Text>
+              <Text style={styles.tierName}>&lt; 40% (Tự động từ chối):</Text>
+              <Text style={styles.tierDesc}>Ảnh mờ hoặc không nhận diện tiện ích. Yêu cầu chụp lại ảnh rõ nét trước khi gửi.</Text>
             </View>
           </View>
         </View>

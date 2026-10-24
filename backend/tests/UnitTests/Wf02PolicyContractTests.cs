@@ -22,6 +22,8 @@ public sealed class Wf02PolicyContractTests
         options.Reputation.DefaultReputationScore.Should().Be(0);
         options.Reputation.VoteHoldThreshold.Should().Be(0);
         options.Reputation.PolicyVersion.Should().Be("wf02-provisional-v1");
+        options.Thresholds.AutoApproveConfidenceThreshold.Should().Be(0.80);
+        options.Thresholds.RejectConfidenceThreshold.Should().Be(0.40);
     }
 
     [Fact]

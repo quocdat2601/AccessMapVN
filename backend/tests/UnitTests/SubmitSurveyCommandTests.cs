@@ -123,4 +123,97 @@ public class SubmitSurveyCommandTests
             It.IsAny<string>(),
             It.IsAny<CancellationToken>()), Times.Never);
     }
+
+    [Fact]
+    public async Task Handle_WhenConfidenceScoreUnder40Percent_ThrowsValidationException()
+    {
+        var place = new Place
+        {
+            Id = Guid.NewGuid(),
+            Name = "Chợ Bến Thành",
+            Lat = 10.7720,
+            Lng = 106.6980,
+        };
+        _mockPlaceRepo.Setup(r => r.GetByIdAsync("ben-thanh", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(place);
+
+        var handler = new SubmitSurveyCommandHandler(_mockPlaceRepo.Object, _mockSubmissionRepo.Object);
+
+        var command = new SubmitSurveyCommand
+        {
+            LocationId = "ben-thanh",
+            UserId = "user-123",
+            MediaUrls = new List<string> { "https://example.com/blurry.jpg" },
+            GpsLat = 10.7720,
+            GpsLng = 106.6980,
+            ConfidenceScore = 0.35, // Below 40% threshold
+        };
+
+        var act = () => handler.Handle(command, CancellationToken.None);
+
+        await act.Should().ThrowAsync<ValidationException>()
+            .WithMessage("*Chất lượng nhận diện yếu tố tiếp cận quá thấp*");
+    }
+
+    [Fact]
+    public async Task Handle_WhenConfidenceScoreOver80PercentAndEligible_AutoVerifiesAndAwardsPoints()
+    {
+        var place = new Place
+        {
+            Id = Guid.NewGuid(),
+            Name = "Chợ Bến Thành",
+            Lat = 10.7720,
+            Lng = 106.6980,
+            HasRamp = false,
+        };
+        _mockPlaceRepo.Setup(r => r.GetByIdAsync("ben-thanh", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(place);
+
+        // User already has 1 prior published contribution
+        var priorSubmission = new Submission
+        {
+            SubmissionCode = "AMV-2026-11111",
+            UserId = "user-vip",
+            PlaceId = "other-place",
+            Status = Domain.Enums.SubmissionStatus.Published,
+        };
+        _mockSubmissionRepo.Setup(r => r.GetByUserIdAsync("user-vip", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Submission> { priorSubmission });
+
+        var handler = new SubmitSurveyCommandHandler(_mockPlaceRepo.Object, _mockSubmissionRepo.Object);
+
+        var command = new SubmitSurveyCommand
+        {
+            LocationId = "ben-thanh",
+            UserId = "user-vip",
+            MediaUrls = new List<string> { "https://example.com/clear_ramp.jpg" },
+            FeatureTags = new List<string> { "exterior_ramp_present" },
+            GpsLat = 10.7720,
+            GpsLng = 106.6980,
+            ConfidenceScore = 0.92, // Over 80%
+            TextDescription = "Ram dốc chuẩn rộng 1.2m",
+        };
+
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        result.Status.Should().Be("AutoVerified");
+        result.PointsAwarded.Should().Be(50);
+        result.Message.Should().Contain("tự động xác minh");
+
+        _mockSubmissionRepo.Verify(r => r.AddPointTransactionAsync(
+            It.Is<PointTransaction>(pt => pt.Points == 50 && pt.UserId == "user-vip"),
+            It.IsAny<CancellationToken>()), Times.Once);
+
+        _mockPlaceRepo.Verify(r => r.UpdateAccessibilityFeaturesAsync(
+            place.Id.ToString(),
+            true, // hasRamp
+            It.IsAny<bool?>(),
+            It.IsAny<bool?>(),
+            It.IsAny<bool?>(),
+            It.IsAny<bool?>(),
+            It.IsAny<decimal?>(),
+            "Ram dốc chuẩn rộng 1.2m",
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
 }
+

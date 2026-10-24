@@ -705,61 +705,110 @@ public sealed class CommunityValidationService : ICommunityValidationService
 
             DisputeCase? dispute = null;
             var disputeOpened = false;
+            var isAutoResolved = false;
+
             if (contradictoryVotes.Count >= _options.Consensus.MinIndependentVotersForReview)
             {
-                dispute = await _db.DisputeCases.SingleOrDefaultAsync(
-                    item => item.LocationFeatureId == feature.Id &&
-                            item.FeatureVersion == feature.Version &&
-                            (item.Status == DisputeStatus.Open ||
-                             item.Status == DisputeStatus.UnderReview ||
-                             item.Status == DisputeStatus.AwaitingMoreInfo ||
-                             item.Status == DisputeStatus.CorrectionPending),
-                    cancellationToken);
-                if (dispute is null)
+                var distinctProposed = contradictoryVotes
+                    .Where(v => v.ProposedStatus.HasValue && v.ProposedStatus.Value != PublishedFeatureStatus.Unknown)
+                    .Select(v => v.ProposedStatus!.Value)
+                    .Distinct()
+                    .ToList();
+
+                var contradictionRatio = totalWeight > 0 ? (totalWeight - agreementWeight) / totalWeight : 1m;
+
+                if (_options.Consensus.CrowdAutoResolveEnabled &&
+                    distinctProposed.Count == 1 &&
+                    contradictionRatio >= _options.Consensus.CrowdMinAgreement)
                 {
-                    dispute = new DisputeCase
+                    // Crowd auto-resolve: The community has clear consensus on the new status
+                    var newStatus = distinctProposed[0];
+                    feature.CurrentStatus = newStatus;
+                    feature.Version += 1;
+                    feature.VerifiedAt = now;
+
+                    _db.LocationFeatureHistories.Add(new LocationFeatureHistory
                     {
                         LocationFeatureId = feature.Id,
                         FeatureVersion = feature.Version,
-                        Status = DisputeStatus.Open,
-                        OpenReason = "Independent eligible observations conflict with the published feature.",
-                        OpenedAt = now,
-                    };
-                    _db.DisputeCases.Add(dispute);
-                    _db.OutboxMessages.Add(new OutboxMessage
-                    {
-                        Type = "DisputeOpened",
-                        PayloadJson = JsonSerializer.Serialize(new { disputeCaseId = dispute.Id, featureId = feature.Id }, JsonOptions),
-                        OccurredAt = now,
+                        Status = newStatus,
+                        Reason = $"Tự động cập nhật qua đồng thuận cộng đồng ({contradictoryVotes.Count} quan sát độc lập).",
+                        EffectiveAt = now,
                     });
-                    disputeOpened = true;
-                }
 
-                var linkedIds = await _db.DisputeCaseVotes
-                    .Where(item => item.DisputeCaseId == dispute.Id)
-                    .Select(item => item.CommunityVoteId)
-                    .ToListAsync(cancellationToken);
-                foreach (var vote in contradictoryVotes.Where(item => !linkedIds.Contains(item.Id)))
-                {
-                    _db.DisputeCaseVotes.Add(new DisputeCaseVote
+                    dispute = await _db.DisputeCases.SingleOrDefaultAsync(
+                        item => item.LocationFeatureId == feature.Id &&
+                                (item.Status == DisputeStatus.Open ||
+                                 item.Status == DisputeStatus.UnderReview ||
+                                 item.Status == DisputeStatus.CorrectionPending),
+                        cancellationToken);
+
+                    if (dispute != null)
                     {
-                        DisputeCaseId = dispute.Id,
-                        CommunityVoteId = vote.Id,
-                    });
+                        dispute.Status = DisputeStatus.ResolvedUpdated;
+                        dispute.ResolvedAt = now;
+                    }
+
+                    isAutoResolved = true;
+                }
+                else
+                {
+                    dispute = await _db.DisputeCases.SingleOrDefaultAsync(
+                        item => item.LocationFeatureId == feature.Id &&
+                                item.FeatureVersion == feature.Version &&
+                                (item.Status == DisputeStatus.Open ||
+                                 item.Status == DisputeStatus.UnderReview ||
+                                 item.Status == DisputeStatus.AwaitingMoreInfo ||
+                                 item.Status == DisputeStatus.CorrectionPending),
+                        cancellationToken);
+                    if (dispute is null)
+                    {
+                        dispute = new DisputeCase
+                        {
+                            LocationFeatureId = feature.Id,
+                            FeatureVersion = feature.Version,
+                            Status = DisputeStatus.Open,
+                            OpenReason = "Independent eligible observations conflict with the published feature.",
+                            OpenedAt = now,
+                        };
+                        _db.DisputeCases.Add(dispute);
+                        _db.OutboxMessages.Add(new OutboxMessage
+                        {
+                            Type = "DisputeOpened",
+                            PayloadJson = JsonSerializer.Serialize(new { disputeCaseId = dispute.Id, featureId = feature.Id }, JsonOptions),
+                            OccurredAt = now,
+                        });
+                        disputeOpened = true;
+                    }
+
+                    var linkedIds = await _db.DisputeCaseVotes
+                        .Where(item => item.DisputeCaseId == dispute.Id)
+                        .Select(item => item.CommunityVoteId)
+                        .ToListAsync(cancellationToken);
+                    foreach (var vote in contradictoryVotes.Where(item => !linkedIds.Contains(item.Id)))
+                    {
+                        _db.DisputeCaseVotes.Add(new DisputeCaseVote
+                        {
+                            DisputeCaseId = dispute.Id,
+                            CommunityVoteId = vote.Id,
+                        });
+                    }
                 }
             }
 
             // Fresh is intentionally not emitted in the initial policy: without an independent
             // corroboration the safe label is Uncorroborated; with one it is Reinforced.
-            var label = dispute is not null
-                ? FeatureCommunityLabel.CommunityUnderReview
-                : contradictoryVotes.Count > 0
-                    ? FeatureCommunityLabel.ConflictReported
-                    : freshnessAgeDays > _options.Freshness.RecheckAfterDays
-                        ? FeatureCommunityLabel.NeedsRecheck
-                        : corroboratingVotes.Count > 0
-                            ? FeatureCommunityLabel.Reinforced
-                            : FeatureCommunityLabel.Uncorroborated;
+            var label = isAutoResolved
+                ? FeatureCommunityLabel.Reinforced
+                : dispute is not null && dispute.Status != DisputeStatus.ResolvedUpdated && dispute.Status != DisputeStatus.ResolvedBaseline
+                    ? FeatureCommunityLabel.CommunityUnderReview
+                    : contradictoryVotes.Count > 0
+                        ? FeatureCommunityLabel.ConflictReported
+                        : freshnessAgeDays > _options.Freshness.RecheckAfterDays
+                            ? FeatureCommunityLabel.NeedsRecheck
+                            : corroboratingVotes.Count > 0
+                                ? FeatureCommunityLabel.Reinforced
+                                : FeatureCommunityLabel.Uncorroborated;
 
             state.FeatureVersion = feature.Version;
             state.Label = label;

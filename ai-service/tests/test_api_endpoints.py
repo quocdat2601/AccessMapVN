@@ -54,6 +54,21 @@ class TestAiServiceEndpoints(unittest.TestCase):
         )
         self.assertEqual(res.status_code, 200)
         data = res.json()
+        
+        # Standardized suggestions contract
+        self.assertEqual(data["analysis_method"], "heuristic")
+        self.assertEqual(data["image_reference"], "exif_corrected_original")
+        self.assertTrue(data["requires_user_confirmation"])
+        
+        visual_suggs = {s["feature"]: s for s in data["visual_suggestions"]}
+        self.assertIn("ramp_present", visual_suggs)
+        self.assertIn("door_detected", visual_suggs)
+        self.assertIn("stairs_present", visual_suggs)
+        for s in visual_suggs.values():
+            self.assertIn(s["value"], ("suggested_present", "unknown"))
+            self.assertNotEqual(s["value"], "suggested_absent")
+
+        # Legacy backward-compatibility
         features = data["features"]
         self.assertIn(features["exterior_ramp_present"]["value"], ("absent", "unknown"))
         self.assertEqual(features["ramp_slope_compliant"]["value"], "unknown")
@@ -63,7 +78,7 @@ class TestAiServiceEndpoints(unittest.TestCase):
         self.assertEqual(features["door_width_ok"]["value"], "unknown")
 
     def test_pre_scan_vietnamese_negation_parsed_as_absent(self):
-        """Phrases like 'không có dốc' must extract exterior_ramp_present as absent."""
+        """Phrases like 'không có dốc' must extract user_claim as reported_absent."""
         valid_img = create_dummy_image_bytes()
         res = self.client.post(
             "/api/v1/ai/pre-scan",
@@ -72,6 +87,14 @@ class TestAiServiceEndpoints(unittest.TestCase):
         )
         self.assertEqual(res.status_code, 200)
         data = res.json()
+        
+        # User claims separation
+        claims = {c["feature"]: c for c in data["user_claims"]}
+        self.assertIn("exterior_ramp_present", claims)
+        self.assertEqual(claims["exterior_ramp_present"]["claim"], "reported_absent")
+        self.assertIn("không có dốc", claims["exterior_ramp_present"]["snippet"])
+
+        # Legacy features
         features = data["features"]
         self.assertEqual(features["exterior_ramp_present"]["value"], "absent")
         self.assertGreater(features["exterior_ramp_present"]["confidence"], 0)

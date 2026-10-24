@@ -13,7 +13,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import pre_scan, verify, blur
+from app.api import pre_scan, verify, blur, video_pre_scan
 from app.config import settings
 from app.core.logging import get_logger
 from app.schemas import HealthResponse
@@ -76,6 +76,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 # ── Routers ───────────────────────────────────────────────────────────────────
 API_PREFIX = "/api/v1/ai"
 app.include_router(pre_scan.router, prefix=API_PREFIX)
+app.include_router(video_pre_scan.router, prefix=API_PREFIX)
 app.include_router(verify.router,   prefix=API_PREFIX)
 app.include_router(blur.router,     prefix=API_PREFIX)
 

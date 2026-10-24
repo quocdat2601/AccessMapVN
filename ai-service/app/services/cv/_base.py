@@ -33,7 +33,8 @@ class DetectionResult:
     """Raw result returned by a single YOLO inference call."""
     detected: bool
     max_confidence: float
-    boxes: list[list[float]] = field(default_factory=list)   # [[x1, y1, x2, y2], ...]
+    boxes: list[list[float]] = field(default_factory=list)            # [[x1, y1, x2, y2], ...] (pixel coordinates)
+    boxes_normalized: list[list[float]] = field(default_factory=list) # [[xmin, ymin, xmax, ymax], ...] in [0, 1]
     class_names: list[str]   = field(default_factory=list)
     count: int               = 0
 
@@ -52,13 +53,20 @@ class BaseYOLODetector:
     weight_path:
         Path to the ``.pt`` weights file.
     target_class:
-        The class label this detector is interested in.
-        If ``None`` the detector considers all classes.
+        Single class label or None.
+    target_classes:
+        Optional set of class labels (e.g. {"stairs", "step"}).
     """
 
-    def __init__(self, weight_path: Path, target_class: str | None = None) -> None:
+    def __init__(
+        self,
+        weight_path: Path,
+        target_class: str | None = None,
+        target_classes: set[str] | tuple[str, ...] | list[str] | None = None,
+    ) -> None:
         self._weight_path  = weight_path
         self._target_class = target_class
+        self._target_classes = {c.lower() for c in target_classes} if target_classes else None
         self._model        = None   # lazy-loaded
 
     # ── Model loading ──────────────────────────────────────────────────────────
@@ -77,6 +85,21 @@ class BaseYOLODetector:
             return self._model
 
         try:
+            import torch
+            try:
+                from ultralytics.nn.tasks import DetectionModel
+                torch.serialization.add_safe_globals([DetectionModel])
+            except Exception:
+                pass
+
+            # Safe monkeypatch for PyTorch 2.6+ which defaults weights_only=True
+            _orig_torch_load = torch.load
+            def _trusted_torch_load(*args, **kwargs):
+                if "weights_only" not in kwargs:
+                    kwargs["weights_only"] = False
+                return _orig_torch_load(*args, **kwargs)
+            torch.load = _trusted_torch_load
+
             from ultralytics import YOLO
             logger.info("Loading YOLO model from %s …", self._weight_path)
             self._model = YOLO(str(self._weight_path))
@@ -127,6 +150,7 @@ class BaseYOLODetector:
             return DetectionResult.empty()
 
         boxes_detected: list[list[float]] = []
+        boxes_norm: list[list[float]]     = []
         names_detected: list[str]         = []
         max_conf: float                   = 0.0
 
@@ -138,11 +162,16 @@ class BaseYOLODetector:
                 cls_name = model.names.get(cls_id, str(cls_id))
                 conf     = float(box.conf[0].item())
 
-                # Filter by target class if specified
-                if self._target_class and cls_name.lower() != self._target_class.lower():
+                # Filter by target class(es) if specified
+                if self._target_classes:
+                    if cls_name.lower() not in self._target_classes:
+                        continue
+                elif self._target_class and cls_name.lower() != self._target_class.lower():
                     continue
 
                 boxes_detected.append(box.xyxy[0].tolist())
+                if hasattr(box, "xyxyn") and box.xyxyn is not None:
+                    boxes_norm.append(box.xyxyn[0].tolist())
                 names_detected.append(cls_name)
                 max_conf = max(max_conf, conf)
 
@@ -151,6 +180,7 @@ class BaseYOLODetector:
             detected=detected,
             max_confidence=max_conf,
             boxes=boxes_detected,
+            boxes_normalized=boxes_norm,
             class_names=names_detected,
             count=len(boxes_detected),
         )

@@ -19,7 +19,7 @@ from app.core.s3_client import download_url
 from app.schemas import VerifyRequest, VerifyResponse
 from app.services.cv.pipeline import CVPipeline
 from app.services.media.image_utils import validate_and_preprocess
-from app.services.media.video_utils import extract_keyframes
+from app.services.media.video_pipeline import select_video_frames
 from app.services.nlp.pipeline import NLPPipeline
 from app.services.scoring.scorer import Scorer
 
@@ -45,12 +45,9 @@ async def _collect_frames(url: str) -> list[bytes]:
     """Download a media URL and return a list of image-byte frames."""
     raw = await download_url(url)
     if _is_video(url):
-        frames = extract_keyframes(
-            raw,
-            fps=settings.keyframe_fps,
-            blur_threshold=settings.blur_laplacian_threshold,
-        )
-        logger.info("Extracted %d usable keyframes from video %s", len(frames), url)
+        selection = await asyncio.to_thread(select_video_frames, raw)
+        frames = [frame.jpeg for frame in selection.selected]
+        logger.info("Selected %d representative frames from video %s", len(frames), url)
         return frames
     # Plain image
     try:
@@ -109,6 +106,10 @@ async def verify(payload: VerifyRequest) -> VerifyResponse:
     )
     cv_result, nlp_result = await asyncio.gather(cv_task, nlp_task)
 
+    # ── Standardized visual suggestions & user claims ────────────────────────
+    visual_suggestions = _scorer.extract_visual_suggestions(cv_result)
+    user_claims        = _scorer.extract_user_claims(nlp_result)
+
     # ── Score ────────────────────────────────────────────────────────────────
     features, overall_score, recommendation = _scorer.compute_verify(cv_result, nlp_result)
 
@@ -123,6 +124,15 @@ async def verify(payload: VerifyRequest) -> VerifyResponse:
 
     return VerifyResponse(
         submission_id=payload.submission_id,
+        analysis_status="completed",
+        analysis_method="heuristic",
+        model_id=None,
+        model_version=None,
+        image_reference="exif_corrected_original",
+        visual_suggestions=visual_suggestions,
+        user_claims=user_claims,
+        requires_user_confirmation=True,
+        warnings=[],
         features=features,
         overall_confidence_score=round(overall_score, 4),
         recommendation=recommendation,

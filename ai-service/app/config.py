@@ -42,6 +42,21 @@ class Settings(BaseSettings):
     keyframe_fps: float = 1.0                  # frames per second to sample
     blur_laplacian_threshold: float = 80.0     # below → too blurry, discard
 
+    # Video pre-scan (proposed starting values; calibrate on real entrance/ramp clips)
+    video_max_bytes: int = 30 * 1024 * 1024
+    video_min_duration_s: float = 4.5          # 5 s policy minus tolerance for container rounding
+    video_max_duration_s: float = 10.5         # 10 s policy plus tolerance
+    video_allowed_codecs: list[str] = ["h264"]
+    video_min_side_px: int = 240
+    video_max_side_px: int = 4096
+    video_max_candidates: int = 10             # frames sampled at keyframe_fps
+    video_max_selected: int = 4                # frames sent to the image pipeline
+    video_min_sharpness: float = 20.0          # Laplacian variance floor (severely blurred only)
+    video_dup_hamming: int = 6                 # dHash distance below which frames are duplicates
+    video_ffmpeg_timeout_s: float = 30.0
+    video_request_timeout_s: float = 60.0
+    video_max_concurrency: int = 2
+
     # ── Privacy ────────────────────────────────────────────────────────────────
     face_blur_kernel: int = 51                 # Gaussian kernel for blurring faces
 
@@ -73,9 +88,12 @@ class Settings(BaseSettings):
     def yolo_weights_path(self) -> dict[str, Path]:
         """Return a mapping of detector name → absolute weight path."""
         base = self.models_dir
+        step_p = base / self.yolo_step_weights
+        if not step_p.exists():
+            step_p = base / self.yolo_ramp_weights
         return {
             "ramp":     base / self.yolo_ramp_weights,
-            "step":     base / self.yolo_step_weights,
+            "step":     step_p,
             "elevator": base / self.yolo_elevator_weights,
             "door":     base / self.yolo_door_weights,
             "signage":  base / self.yolo_signage_weights,

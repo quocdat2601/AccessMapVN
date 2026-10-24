@@ -69,13 +69,65 @@ class FeaturesDict(BaseModel):
     tactile_paving_present:   FeatureResult
 
 
+# ── Standardized visual suggestions & user claims ──────────────────────────────
+
+class VisualSuggestionItem(BaseModel):
+    """Standardized visual candidate suggestion for a single feature."""
+    feature: str                            # "ramp_present" | "door_detected" | "stairs_present"
+    value: str = "unknown"                  # "suggested_present" | "unknown" (never "suggested_absent")
+    detector_score: float | None = None
+    bbox_format: str | None = None          # "xyxy" when bbox is present
+    coordinate_space: str | None = None     # "normalized" (0.0 to 1.0)
+    bbox_normalized: list[float] | None = None # [xmin, ymin, xmax, ymax] on EXIF-oriented image
+
+
+class UserClaimItem(BaseModel):
+    """Structured information extracted from user text description."""
+    feature: str
+    claim: str                              # "reported_present" | "reported_absent" | "unknown"
+    snippet: str | None = None
+
+
 # ── Pre-scan ───────────────────────────────────────────────────────────────────
 
 class PreScanResponse(BaseModel):
     """Response from POST /api/v1/ai/pre-scan"""
-    analysis_status: str = "completed"
-    features: FeaturesDict
-    summary:  str
+    analysis_status:            str = "completed"
+    analysis_method:            str = "heuristic" # "model" | "heuristic"
+    model_id:                   str | None = None
+    model_version:              str | None = None
+    image_reference:            str = "exif_corrected_original"
+    visual_suggestions:         list[VisualSuggestionItem] = Field(default_factory=list)
+    user_claims:                list[UserClaimItem] = Field(default_factory=list)
+    requires_user_confirmation: bool = True
+    warnings:                   list[str] = Field(default_factory=list)
+    # Legacy backward-compatibility for existing mobile screens
+    features:                   FeaturesDict
+    summary:                    str
+
+
+class VideoEvidenceRef(BaseModel):
+    frame_id: str
+    timestamp_seconds: float
+    detector_confidence: float = Field(ge=0.0, le=1.0)
+
+
+class VideoSuggestion(BaseModel):
+    value: str = "unknown"                  # "suggested_present" | "unknown" (never "absent")
+    evidence: list[VideoEvidenceRef] = Field(default_factory=list)
+
+
+class VideoPreScanResponse(BaseModel):
+    """Response from POST /api/v1/ai/pre-scan/video"""
+    processing_status: str                  # "completed" | "insufficient_visual_quality"
+    media_kind: str = "video"
+    frames_sampled: int
+    frames_analyzed: int
+    suggestions: dict[str, VideoSuggestion]
+    measurements: dict[str, dict[str, str]]
+    compliance: dict[str, str]
+    warnings: list[str] = Field(default_factory=list)
+    requires_user_confirmation: bool = True
 
 
 # ── Verify ─────────────────────────────────────────────────────────────────────
@@ -96,11 +148,20 @@ class VerifyRequest(BaseModel):
 
 class VerifyResponse(BaseModel):
     """Response from POST /api/v1/ai/verify"""
-    submission_id:           UUID
-    analysis_status:         str = "completed"
-    features:                FeaturesDict
-    overall_confidence_score: float = Field(ge=0.0, le=1.0)
-    recommendation:          Recommendation
+    submission_id:              UUID
+    analysis_status:            str = "completed"
+    analysis_method:            str = "heuristic" # "model" | "heuristic"
+    model_id:                   str | None = None
+    model_version:              str | None = None
+    image_reference:            str = "exif_corrected_original"
+    visual_suggestions:         list[VisualSuggestionItem] = Field(default_factory=list)
+    user_claims:                list[UserClaimItem] = Field(default_factory=list)
+    requires_user_confirmation: bool = True
+    warnings:                   list[str] = Field(default_factory=list)
+    # Legacy fields
+    features:                   FeaturesDict
+    overall_confidence_score:   float = Field(ge=0.0, le=1.0)
+    recommendation:             Recommendation
 
 
 # ── Blur ───────────────────────────────────────────────────────────────────────

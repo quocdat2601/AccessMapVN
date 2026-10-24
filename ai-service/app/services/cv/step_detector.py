@@ -20,11 +20,11 @@ logger = get_logger(__name__)
 class StepDetector(BaseYOLODetector):
     """Detects staircases / steps and estimates their count."""
 
-    TARGET_CLASS: str = "step"
+    TARGET_CLASSES: tuple[str, ...] = ("step", "steps", "stairs", "staircase", "stair")
 
     def __init__(self) -> None:
         weight_path = settings.yolo_weights_path["step"]
-        super().__init__(weight_path=weight_path, target_class=self.TARGET_CLASS)
+        super().__init__(weight_path=weight_path, target_classes=self.TARGET_CLASSES)
 
     def detect_steps(self, image_bytes: bytes) -> dict:
         """
@@ -33,16 +33,18 @@ class StepDetector(BaseYOLODetector):
         Returns
         -------
         dict
-            ``{"value": bool, "step_count_estimate": int | None, "confidence": float}``
+            ``{"value": bool, "step_count_estimate": int | None, "confidence": float, "bbox_normalized": list | None}``
         """
         result: DetectionResult = self._detect(image_bytes)
 
         # ponytail: step_count_estimate from box count is a rough heuristic;
         # upgrade with segmentation or depth-based counting for production.
         step_count = result.count if result.detected else None
+        bbox = result.boxes_normalized[0] if result.boxes_normalized else None
 
         return {
             "value":               result.detected,
             "step_count_estimate": step_count,
             "confidence":          round(result.max_confidence, 4),
+            "bbox_normalized":     bbox,
         }

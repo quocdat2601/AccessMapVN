@@ -44,7 +44,9 @@ class RampDetector(BaseYOLODetector):
             ``{"value": bool, "confidence": float}``
         """
         result: DetectionResult = self._detect(image_bytes)
+        bbox = result.boxes_normalized[0] if result.boxes_normalized else None
         return {
-            "value":      result.detected,
-            "confidence": round(result.max_confidence, 4),
+            "value":           result.detected,
+            "confidence":      round(result.max_confidence, 4),
+            "bbox_normalized": bbox,
         }

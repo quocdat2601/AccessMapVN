@@ -89,10 +89,26 @@ async def pre_scan(
 
     cv_result, nlp_result = await asyncio.gather(cv_task, nlp_task)
 
-    # ── Fuse & score ─────────────────────────────────────────────────────────
+    # ── Standardized visual suggestions & user claims ────────────────────────
+    visual_suggestions = _scorer.extract_visual_suggestions(cv_result)
+    user_claims        = _scorer.extract_user_claims(nlp_result)
+
+    # ── Fuse & score (for legacy mobile backward-compatibility) ─────────────
     features, summary = _scorer.fuse_pre_scan(cv_result, nlp_result)
 
     elapsed = time.perf_counter() - t0
     logger.info("pre-scan completed in %.3f s", elapsed)
 
-    return PreScanResponse(features=features, summary=summary)
+    return PreScanResponse(
+        analysis_status="completed",
+        analysis_method="heuristic",
+        model_id=None,
+        model_version=None,
+        image_reference="exif_corrected_original",
+        visual_suggestions=visual_suggestions,
+        user_claims=user_claims,
+        requires_user_confirmation=True,
+        warnings=[],
+        features=features,
+        summary=summary,
+    )

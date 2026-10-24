@@ -34,6 +34,8 @@ from app.schemas import (
     FeaturesDict,
     Recommendation,
     StepFeatureResult,
+    UserClaimItem,
+    VisualSuggestionItem,
 )
 
 logger = get_logger(__name__)
@@ -239,3 +241,82 @@ class Scorer:
 
         logger.info("Scorer: overall=%.4f recommendation=%s", overall, rec.value)
         return features, overall, rec
+
+    @staticmethod
+    def extract_visual_suggestions(cv_result: dict) -> list[VisualSuggestionItem]:
+        """
+        Extract standardized visual suggestions for the 3 core MVP features:
+        'ramp_present', 'door_detected', 'stairs_present'.
+
+        Strict rule:
+        - If detector passes threshold (>= 0.5): suggested_present with score and optional bbox.
+        - Otherwise: unknown with detector_score=None, bbox=None (never 'suggested_absent').
+        """
+        suggestions: list[VisualSuggestionItem] = []
+
+        mapping = [
+            ("ramp_present", cv_result.get("exterior_ramp_present", {})),
+            ("door_detected", cv_result.get("door_detected", {})),
+            ("stairs_present", cv_result.get("steps_present", {})),
+        ]
+
+        for feature_name, data in mapping:
+            conf = data.get("confidence", 0.0)
+            val = data.get("value")
+            is_present = val in (True, "present") and conf >= 0.50
+
+            bbox = data.get("bbox_normalized")
+
+            if is_present:
+                suggestions.append(
+                    VisualSuggestionItem(
+                        feature=feature_name,
+                        value="suggested_present",
+                        detector_score=round(conf, 4),
+                        bbox_format="xyxy" if bbox else None,
+                        coordinate_space="normalized" if bbox else None,
+                        bbox_normalized=bbox if bbox else None,
+                    )
+                )
+            else:
+                suggestions.append(
+                    VisualSuggestionItem(
+                        feature=feature_name,
+                        value="unknown",
+                        detector_score=None,
+                        bbox_format=None,
+                        coordinate_space=None,
+                        bbox_normalized=None,
+                    )
+                )
+
+        return suggestions
+
+    @staticmethod
+    def extract_user_claims(nlp_result: dict | None) -> list[UserClaimItem]:
+        """
+        Extract structured user claims from NLP mentions without conflating with visual detection.
+        """
+        claims: list[UserClaimItem] = []
+        if not nlp_result:
+            return claims
+
+        for m in nlp_result.get("mentions", []):
+            feat = m.get("feature", "")
+            val = m.get("value")
+            if val in (True, "present"):
+                claim_type = "reported_present"
+            elif val in (False, "absent"):
+                claim_type = "reported_absent"
+            else:
+                claim_type = "unknown"
+
+            claims.append(
+                UserClaimItem(
+                    feature=feat,
+                    claim=claim_type,
+                    snippet=m.get("snippet"),
+                )
+            )
+
+        return claims

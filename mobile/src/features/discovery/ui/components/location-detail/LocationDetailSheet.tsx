@@ -168,11 +168,6 @@ export function LocationDetailSheet({
     Number(place.accessibility_score) < 0 ||
     isNaN(Number(place.accessibility_score));
 
-  const rawScore = Number(place.accessibility_score);
-  const trustPercent = isUnrated
-    ? 0
-    : Math.round(rawScore > 1 ? Math.min(rawScore, 100) : Math.max(rawScore * 100, 0));
-
   const [currentTimestamp] = useState(() => Date.now());
   const isRecentVerified = useMemo(() => {
     if (!place.last_verified_at) return false;
@@ -180,9 +175,22 @@ export function LocationDetailSheet({
     return diffDays >= 0 && diffDays <= 90;
   }, [place.last_verified_at, currentTimestamp]);
 
+  const rawScore = Number(place.accessibility_score);
+  const trustPercent = isUnrated
+    ? 0
+    : isRecentVerified
+      ? 95
+      : Math.round(
+          rawScore <= 1
+            ? rawScore * 100
+            : rawScore <= 10
+              ? rawScore * 10
+              : Math.min(rawScore, 100)
+        );
+
   const isDemo2 = place.id === '70000000-0000-0000-0000-000000000002';
   const isDemo1 = place.id === '70000000-0000-0000-0000-000000000001';
-  const isFullyVerified = isDemo2 || (!isDemo1 && !isUnrated && trustPercent >= 75 && isRecentVerified);
+  const isFullyVerified = isDemo2 || (!isDemo1 && !isUnrated && isRecentVerified);
 
   const distanceStr = useMemo(
     () => calculateDistance(userLatitude, userLongitude, place.lat, place.lng),
@@ -223,6 +231,16 @@ export function LocationDetailSheet({
   }, [hasDemoCommunityContent, features]);
   const showVerificationSection =
     !isFullyVerified && (hasDemoCommunityContent || (hasPublishedAccessibilityInfo && publishedFeaturesCount > 0));
+
+  const displayAccessibilityNote = useMemo(() => {
+    if (place.accessibility_note && place.accessibility_note !== 'Chưa có dữ liệu khảo sát tiếp cận') {
+      return place.accessibility_note;
+    }
+    if (isFullyVerified && publishedFeaturesCount > 0) {
+      return `Đã xác minh ${publishedFeaturesCount} tiện ích tiếp cận thực tế.`;
+    }
+    return place.accessibility_note;
+  }, [place.accessibility_note, isFullyVerified, publishedFeaturesCount]);
 
   const handleRequestReportFromFeature = useCallback(
     (feature: CommunityFeatureInput, editingData?: SubmittedObservation['reportData']) => {
@@ -297,11 +315,35 @@ export function LocationDetailSheet({
     let isMounted = true;
     function getEvidenceTitle(featureTags?: string[]): string {
       if (!featureTags || featureTags.length === 0) return 'Ảnh khảo sát';
-      if (featureTags.includes('exterior_ramp_present')) return 'Ram dốc';
-      if (featureTags.includes('door_width_ok')) return 'Cửa vào';
-      if (featureTags.includes('elevator_present')) return 'Thang máy';
-      if (featureTags.includes('accessible_restroom')) return 'Nhà vệ sinh';
+      if (featureTags.includes('exterior_ramp_present') || featureTags.includes('ramp_slope_comfortable')) return 'Ram dốc';
+      if (featureTags.includes('door_width_ok') || featureTags.includes('door_threshold_flat')) return 'Cửa vào';
+      if (featureTags.includes('elevator_present') || featureTags.includes('elevator_accessible')) return 'Thang máy';
+      if (featureTags.includes('accessible_restroom') || featureTags.includes('restroom_accessible_stall')) return 'Nhà vệ sinh';
+      if (featureTags.includes('tactile_paving_guiding') || featureTags.includes('tactile_paving_warning')) return 'Lối xúc giác';
       return 'Ảnh khảo sát';
+    }
+
+    function getEvidenceSpec(featureTags?: string[]): { tag: string; icon: string } {
+      if (!featureTags || featureTags.length === 0) return { tag: 'Đặc điểm tiếp cận', icon: 'check-circle-outline' };
+      if (featureTags.includes('exterior_ramp_present') || featureTags.includes('ramp_slope_comfortable')) {
+        return { tag: 'Độ dốc đạt chuẩn QCVN 10', icon: 'slope-uphill' };
+      }
+      if (featureTags.includes('door_width_ok')) {
+        return { tag: 'Cửa thông thủy ≥ 90cm', icon: 'door-open' };
+      }
+      if (featureTags.includes('door_threshold_flat')) {
+        return { tag: 'Sàn phẳng (gờ ≤ 2cm)', icon: 'ray-start-end' };
+      }
+      if (featureTags.includes('elevator_present') || featureTags.includes('elevator_accessible')) {
+        return { tag: 'Thang máy tiếp cận', icon: 'elevator-passenger-outline' };
+      }
+      if (featureTags.includes('accessible_restroom') || featureTags.includes('restroom_accessible_stall')) {
+        return { tag: 'WC có vòng xoay xe lăn', icon: 'wheelchair-accessibility' };
+      }
+      if (featureTags.includes('tactile_paving_guiding') || featureTags.includes('tactile_paving_warning')) {
+        return { tag: 'Gạch dẫn hướng xúc giác', icon: 'dots-grid' };
+      }
+      return { tag: 'Đặc điểm tiếp cận', icon: 'check-circle-outline' };
     }
 
     async function loadEvidence() {
@@ -314,12 +356,15 @@ export function LocationDetailSheet({
           const resolved = resolveEvidenceImageUrl(r.imageUrl);
           if (resolved && !seenUrls.has(resolved)) {
             seenUrls.add(resolved);
+            const spec = getEvidenceSpec(r.featureTags);
             items.push({
               id: r.id,
               title: r.title || getEvidenceTitle(r.featureTags),
               subtitle: r.createdAt ? new Date(r.createdAt).toLocaleDateString('vi-VN') : (r.subtitle ?? 'Đã công bố'),
               badge: r.badge || 'Đã xác thực',
               imageUrl: resolved,
+              specTag: spec.tag,
+              specIcon: spec.icon,
             });
           }
         });
@@ -333,16 +378,20 @@ export function LocationDetailSheet({
             const resolved = resolveEvidenceImageUrl(r.mediaUri);
             if (resolved && !seenUrls.has(resolved)) {
               seenUrls.add(resolved);
+              const spec = getEvidenceSpec(r.featureTags);
               items.push({
                 id: r.id,
                 title: getEvidenceTitle(r.featureTags),
                 subtitle: new Date(r.createdAt).toLocaleDateString('vi-VN'),
                 badge: 'Đã gửi từ máy này',
                 imageUrl: resolved,
+                specTag: spec.tag,
+                specIcon: spec.icon,
               });
             }
           });
       } catch {}
+
 
       // Fake demo evidence for the 2 demo venues only
       if (items.length === 0) {
@@ -529,7 +578,7 @@ export function LocationDetailSheet({
           isUnrated={isUnrated}
           trustPercent={trustPercent}
           features={features}
-          note={place.accessibility_note}
+          note={displayAccessibilityNote}
           hasRamp={Boolean(place.has_ramp)}
           doorWidthOk={Boolean(place.door_width_ok)}
           hasTactile={Boolean(place.has_tactile_paving)}

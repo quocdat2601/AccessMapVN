@@ -103,9 +103,24 @@ export function AccessibilitySummary({
             const isAvailable = feature.publishedStatus === 'Available';
             const isLimited = feature.publishedStatus === 'Limited';
             const isUnavailable = feature.publishedStatus === 'NotAvailable';
+            const isUnknown = !isAvailable && !isLimited && !isUnavailable;
 
             const tileIcon = (feature.icon || 'check-circle-outline') as keyof typeof MaterialCommunityIcons.glyphMap;
             const shortLabel = getShortLabel(feature.label);
+            const statusIcon = isAvailable
+              ? 'check'
+              : isLimited
+                ? 'alert-circle-outline'
+                : isUnavailable
+                  ? 'close'
+                  : 'minus';
+            const statusText = isAvailable
+              ? 'Có sẵn'
+              : isLimited
+                ? 'Hạn chế'
+                : isUnavailable
+                  ? 'Chưa có'
+                  : 'Chưa rõ';
 
             return (
               <View
@@ -115,6 +130,7 @@ export function AccessibilitySummary({
                   isAvailable && styles.tileAvailable,
                   isLimited && styles.tileLimited,
                   isUnavailable && styles.tileUnavailable,
+                  isUnknown && styles.tileUnknown,
                 ]}
               >
                 <View
@@ -123,6 +139,7 @@ export function AccessibilitySummary({
                     isAvailable && styles.tileIconBoxAvailable,
                     isLimited && styles.tileIconBoxLimited,
                     isUnavailable && styles.tileIconBoxUnavailable,
+                    isUnknown && styles.tileIconBoxUnavailable,
                   ]}
                 >
                   <MaterialCommunityIcons
@@ -138,7 +155,7 @@ export function AccessibilitySummary({
 
                 <View style={styles.tileStatusRow}>
                   <MaterialCommunityIcons
-                    name={isAvailable ? 'check' : isLimited ? 'alert-circle-outline' : 'close'}
+                    name={statusIcon}
                     size={11}
                     color={isAvailable ? '#007D78' : isLimited ? '#B45309' : '#94A3B8'}
                   />
@@ -148,9 +165,10 @@ export function AccessibilitySummary({
                       isAvailable && styles.statusTextAvailable,
                       isLimited && styles.statusTextLimited,
                       isUnavailable && styles.statusTextUnavailable,
+                      isUnknown && styles.statusTextUnknown,
                     ]}
                   >
-                    {isAvailable ? 'Có sẵn' : isLimited ? 'Hạn chế' : 'Chưa có'}
+                    {statusText}
                   </Text>
                 </View>
               </View>
@@ -295,6 +313,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
+    borderColor: '#E2E8F0',
     minHeight: 82,
   },
   tileAvailable: {
@@ -306,6 +325,10 @@ const styles = StyleSheet.create({
     borderColor: '#FDE68A',
   },
   tileUnavailable: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+  },
+  tileUnknown: {
     backgroundColor: '#F8FAFC',
     borderColor: '#E2E8F0',
   },
@@ -350,6 +373,9 @@ const styles = StyleSheet.create({
     color: '#B45309',
   },
   statusTextUnavailable: {
+    color: '#94A3B8',
+  },
+  statusTextUnknown: {
     color: '#94A3B8',
   },
   noteBox: {

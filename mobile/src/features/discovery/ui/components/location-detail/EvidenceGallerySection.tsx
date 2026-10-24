@@ -1,5 +1,5 @@
-import React from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState } from 'react';
+import { Image, Modal, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { EvidenceItem } from './types';
@@ -37,8 +37,20 @@ export function EvidenceGallerySection({
   showDemoContent = false,
   isVerified = false,
 }: EvidenceGallerySectionProps) {
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const hasItems = evidence.length > 0 || showDemoContent;
   const firstItem = evidence[0];
+  const currentPreviewItem = previewIndex !== null ? evidence[previewIndex] ?? firstItem : null;
+
+  const handleOpenPreview = () => {
+    if (onViewAll) {
+      onViewAll();
+    } else if (evidence.length > 0) {
+      setPreviewIndex(0);
+    } else if (onAddEvidence) {
+      onAddEvidence();
+    }
+  };
 
   return (
     <View style={styles.section}>
@@ -57,7 +69,7 @@ export function EvidenceGallerySection({
 
         {hasItems ? (
           <TouchableOpacity
-            onPress={onViewAll ?? onAddEvidence}
+            onPress={handleOpenPreview}
             hitSlop={8}
             style={styles.viewAllBtn}
           >
@@ -88,7 +100,17 @@ export function EvidenceGallerySection({
         </View>
       ) : (
         /* Featured Big Photo Banner */
-        <View style={styles.featuredCard}>
+        <TouchableOpacity
+          style={styles.featuredCard}
+          activeOpacity={firstItem?.imageUrl ? 0.88 : 1}
+          onPress={() => {
+            if (firstItem?.imageUrl) {
+              setPreviewIndex(0);
+            } else {
+              handleOpenPreview();
+            }
+          }}
+        >
           <View style={styles.imageWrapper}>
             {firstItem?.imageUrl ? (
               <Image
@@ -101,17 +123,41 @@ export function EvidenceGallerySection({
             )}
 
             {/* Badges on the image */}
-            <View style={styles.blurTag}>
-              <MaterialCommunityIcons name="eye-off-outline" size={11} color="#FFFFFF" />
-              <Text style={styles.blurTagText}>Mặt đã làm mờ</Text>
-            </View>
+            {firstItem?.isFaceBlurred ? (
+              <View style={styles.blurTag}>
+                <MaterialCommunityIcons name="eye-off-outline" size={11} color="#FFFFFF" />
+                <Text style={styles.blurTagText}>Mặt đã làm mờ</Text>
+              </View>
+            ) : null}
 
-            <View style={styles.specTag}>
-              <MaterialCommunityIcons name="slope-uphill" size={11} color="#FFFFFF" />
-              <Text style={styles.specTagText}>
-                {isVerified ? 'Độ dốc 1:12 đạt chuẩn QCVN 10' : 'Độ dốc 1:12 đạt chuẩn'}
-              </Text>
-            </View>
+            {firstItem?.specTag ? (
+              <View style={styles.specTag}>
+                <MaterialCommunityIcons name={(firstItem.specIcon as any) || 'check-circle-outline'} size={11} color="#FFFFFF" />
+                <Text style={styles.specTagText}>{firstItem.specTag}</Text>
+              </View>
+            ) : firstItem ? (
+              firstItem.title === 'Cửa vào' ? (
+                <View style={styles.specTag}>
+                  <MaterialCommunityIcons name="door-open" size={11} color="#FFFFFF" />
+                  <Text style={styles.specTagText}>Cửa thông thủy ≥ 90cm</Text>
+                </View>
+              ) : firstItem.title === 'Ram dốc' ? (
+                <View style={styles.specTag}>
+                  <MaterialCommunityIcons name="slope-uphill" size={11} color="#FFFFFF" />
+                  <Text style={styles.specTagText}>
+                    {isVerified ? 'Độ dốc 1:12 đạt chuẩn QCVN 10' : 'Độ dốc 1:12 đạt chuẩn'}
+                  </Text>
+                </View>
+              ) : null
+            ) : (
+              <View style={styles.specTag}>
+                <MaterialCommunityIcons name="slope-uphill" size={11} color="#FFFFFF" />
+                <Text style={styles.specTagText}>
+                  {isVerified ? 'Độ dốc 1:12 đạt chuẩn QCVN 10' : 'Độ dốc 1:12 đạt chuẩn'}
+                </Text>
+              </View>
+            )}
+
           </View>
 
           {/* Info below image */}
@@ -139,7 +185,111 @@ export function EvidenceGallerySection({
               </Text>
             </View>
           </View>
-        </View>
+        </TouchableOpacity>
+      )}
+
+      {/* Fullscreen Photo Lightbox Modal */}
+      {currentPreviewItem?.imageUrl && (
+        <Modal
+          visible={previewIndex !== null}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setPreviewIndex(null)}
+          statusBarTranslucent
+        >
+          <View style={styles.modalBackdrop}>
+            {/* Top Bar */}
+            <SafeAreaView style={styles.modalHeader}>
+              <View style={styles.modalHeaderContent}>
+                <View style={styles.modalTitleBox}>
+                  <Text style={styles.modalTitle} numberOfLines={1}>
+                    {currentPreviewItem.title || 'Ảnh bằng chứng tiếp cận'}
+                  </Text>
+                  <Text style={styles.modalSubtitle}>
+                    {evidence.length > 1
+                      ? `${(previewIndex ?? 0) + 1}/${evidence.length} • ${currentPreviewItem.subtitle || 'Đã xác thực'}`
+                      : currentPreviewItem.subtitle || 'Đã xác thực'}
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.modalCloseBtn}
+                  onPress={() => setPreviewIndex(null)}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel="Đóng xem ảnh"
+                >
+                  <MaterialCommunityIcons name="close" size={22} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            </SafeAreaView>
+
+            {/* Central Photo View */}
+            <View style={styles.modalBody}>
+              {evidence.length > 1 && (previewIndex ?? 0) > 0 && (
+                <TouchableOpacity
+                  style={[styles.navArrow, styles.navArrowLeft]}
+                  onPress={() => setPreviewIndex((prev) => (prev !== null && prev > 0 ? prev - 1 : 0))}
+                  hitSlop={8}
+                >
+                  <MaterialCommunityIcons name="chevron-left" size={32} color="#FFFFFF" />
+                </TouchableOpacity>
+              )}
+
+              <Image
+                source={{ uri: currentPreviewItem.imageUrl }}
+                style={styles.modalImage}
+                resizeMode="contain"
+              />
+
+              {evidence.length > 1 && (previewIndex ?? 0) < evidence.length - 1 && (
+                <TouchableOpacity
+                  style={[styles.navArrow, styles.navArrowRight]}
+                  onPress={() =>
+                    setPreviewIndex((prev) =>
+                      prev !== null && prev < evidence.length - 1 ? prev + 1 : prev
+                    )
+                  }
+                  hitSlop={8}
+                >
+                  <MaterialCommunityIcons name="chevron-right" size={32} color="#FFFFFF" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Bottom info & actions */}
+            <SafeAreaView style={styles.modalFooter}>
+              <View style={styles.modalFooterContent}>
+                {currentPreviewItem.specTag ? (
+                  <View style={styles.modalSpecBadge}>
+                    <MaterialCommunityIcons
+                      name={(currentPreviewItem.specIcon as any) || 'check-circle-outline'}
+                      size={14}
+                      color="#2DD4BF"
+                    />
+                    <Text style={styles.modalSpecText}>{currentPreviewItem.specTag}</Text>
+                  </View>
+                ) : (
+                  <View style={{ flex: 1 }} />
+                )}
+
+                {onAddEvidence && (
+                  <TouchableOpacity
+                    style={styles.modalAddBtn}
+                    onPress={() => {
+                      setPreviewIndex(null);
+                      onAddEvidence();
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialCommunityIcons name="camera-plus-outline" size={15} color="#FFFFFF" />
+                    <Text style={styles.modalAddBtnText}>Đóng góp thêm ảnh</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </SafeAreaView>
+          </View>
+        </Modal>
       )}
     </View>
   );
@@ -310,5 +460,113 @@ const styles = StyleSheet.create({
   },
   ageBadgeTextVerified: {
     color: '#007D78',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(2, 6, 23, 0.96)',
+    justifyContent: 'space-between',
+  },
+  modalHeader: {
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+  },
+  modalHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  modalTitleBox: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  modalTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  modalSubtitle: {
+    color: '#94A3B8',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  modalCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalBody: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    paddingHorizontal: 8,
+  },
+  modalImage: {
+    width: '100%',
+    height: '100%',
+  },
+  navArrow: {
+    position: 'absolute',
+    zIndex: 10,
+    top: '50%',
+    marginTop: -24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navArrowLeft: {
+    left: 12,
+  },
+  navArrowRight: {
+    right: 12,
+  },
+  modalFooter: {
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+  },
+  modalFooterContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  modalSpecBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(45, 212, 191, 0.15)',
+    borderColor: 'rgba(45, 212, 191, 0.3)',
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    flexShrink: 1,
+  },
+  modalSpecText: {
+    color: '#2DD4BF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  modalAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#007D78',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  modalAddBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

@@ -3,7 +3,6 @@ import { spawn } from 'node:child_process';
 import net from 'node:net';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import net from 'node:net';
 
 const repositoryRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const environmentPath = join(repositoryRoot, 'infra', '.env');
@@ -94,6 +93,7 @@ if (alreadyListening) {
       clearInterval(keepAlive);
       process.exit(0);
     });
+  }
 } else {
   const child = spawn('dotnet', ['run', '--project', 'backend/src/WebApi/AccessMapVN.WebApi.csproj'], {
     cwd: repositoryRoot,

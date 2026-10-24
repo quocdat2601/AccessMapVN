@@ -7,8 +7,8 @@ import { addContributionRecord, type CapturedContributionMedia } from '@/entitie
 import { apiClient } from '@/shared/api/client';
 import { uploadMediaToBackend } from '../../api/mediaUploadService';
 import type { VerificationMatrixResult } from '../../lib/verificationEngine';
-import { getReportDraft, setActiveUploadPromise, setReportEvidence } from '@/features/reports';
 import { ScoreMatrixBreakdown } from '../components/review/ScoreMatrixBreakdown';
+import { ScoreMeterRing } from '../components/review/ScoreMeterRing';
 import {
   saveSurveyDraft,
   loadSurveyDraft,
@@ -17,6 +17,11 @@ import {
   defaultFileExistenceChecker,
   type SurveyDraftMedia,
 } from '../../model/surveyDraftStore';
+import {
+  getReportDraft,
+  setReportEvidence,
+  setActiveUploadPromise,
+} from '@/features/reports/model/reportDraftStore';
 import { ScoreCriteriaExplainer } from '../components/review/ScoreCriteriaExplainer';
 
 

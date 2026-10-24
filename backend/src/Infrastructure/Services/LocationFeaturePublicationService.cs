@@ -60,7 +60,7 @@ public sealed class LocationFeaturePublicationService : ILocationFeaturePublicat
             throw new Wf02Exception("PUBLICATION_LOCATION_MISMATCH", "The submission does not belong to this location.", 409);
         }
 
-        if (submission.Status is not (SubmissionStatus.AutoVerified or SubmissionStatus.PendingModeration or SubmissionStatus.Published))
+        if (submission.Status is not (SubmissionStatus.AutoVerified or SubmissionStatus.PendingModeration or SubmissionStatus.NeedsSupplement or SubmissionStatus.Published))
         {
             throw new Wf02Exception("SUBMISSION_NOT_VERIFIED", "Only a verified submission can be published.", 409);
         }

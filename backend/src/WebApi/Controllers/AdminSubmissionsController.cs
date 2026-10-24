@@ -189,7 +189,11 @@ public sealed class AdminSubmissionsController : ControllerBase
             if (place.HasAccessibleRestroom == true) featureCount++;
             if (place.HasTactilePaving == true) featureCount++;
 
-            place.AccessibilityScore = Math.Round((decimal)featureCount / 5.0m * 10.0m, 1);
+            var confidencePercent = (decimal)Math.Round(submission.ConfidenceScore <= 1.0 ? submission.ConfidenceScore * 100 : submission.ConfidenceScore);
+            place.AccessibilityScore = confidencePercent >= 50 ? confidencePercent : Math.Round((decimal)featureCount / 5.0m * 100.0m, 1);
+            place.AccessibilityNote = !string.IsNullOrWhiteSpace(submission.TextDescription) && !submission.TextDescription.Contains("file:")
+                ? submission.TextDescription
+                : $"Đã kiểm định tiện ích tiếp cận thực tế ({featureCount} hạng mục).";
             place.LastVerifiedAt = submission.CreatedAt.UtcDateTime;
             await _db.SaveChangesAsync(cancellationToken);
         }
@@ -300,7 +304,11 @@ public sealed class AdminSubmissionsController : ControllerBase
         if (place.HasAccessibleRestroom == true) featureCount++;
         if (place.HasTactilePaving == true) featureCount++;
 
-        place.AccessibilityScore = Math.Round((decimal)featureCount / 5.0m * 10.0m, 1);
+        var confidencePercent = (decimal)Math.Round(submission.ConfidenceScore <= 1.0 ? submission.ConfidenceScore * 100 : submission.ConfidenceScore);
+        place.AccessibilityScore = confidencePercent >= 50 ? confidencePercent : Math.Round((decimal)featureCount / 5.0m * 100.0m, 1);
+        place.AccessibilityNote = !string.IsNullOrWhiteSpace(submission.TextDescription) && !submission.TextDescription.Contains("file:")
+            ? submission.TextDescription
+            : $"Đã kiểm định tiện ích tiếp cận thực tế ({featureCount} hạng mục).";
         place.LastVerifiedAt = now;
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -379,7 +387,7 @@ public sealed class AdminSubmissionsController : ControllerBase
         var place = await FindPlaceAsync(submission.PlaceId, cancellationToken);
         var appUser = await FindAppUserAsync(submission.UserId, cancellationToken);
 
-        submission.Status = SubmissionStatus.PendingModeration;
+        submission.Status = SubmissionStatus.NeedsSupplement;
         await _db.SaveChangesAsync(cancellationToken);
 
         var now = DateTimeOffset.UtcNow;
@@ -501,7 +509,7 @@ public sealed class AdminSubmissionsController : ControllerBase
         {
             SubmissionStatus.Published => "published",
             SubmissionStatus.Rejected => "rejected",
-            SubmissionStatus.PendingModeration => "needs_supplement",
+            SubmissionStatus.NeedsSupplement => "needs_supplement",
             _ => "pending",
         };
 

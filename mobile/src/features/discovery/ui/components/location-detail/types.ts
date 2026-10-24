@@ -31,7 +31,10 @@ export interface EvidenceItem {
   badge: string;
   isFaceBlurred?: boolean;
   imageUrl?: string;
+  specTag?: string;
+  specIcon?: string;
 }
+
 
 export interface CommunityReview {
   id: string;

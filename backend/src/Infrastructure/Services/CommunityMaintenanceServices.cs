@@ -77,14 +77,45 @@ public sealed class CommunityRecurringJobRegistrar : IHostedService
 {
     private readonly IRecurringJobManager _jobs;
     private readonly IConfiguration _configuration;
+    private readonly ILogger<CommunityRecurringJobRegistrar> _logger;
 
-    public CommunityRecurringJobRegistrar(IRecurringJobManager jobs, IConfiguration configuration)
+    public CommunityRecurringJobRegistrar(
+        IRecurringJobManager jobs,
+        IConfiguration configuration,
+        ILogger<CommunityRecurringJobRegistrar> logger)
     {
         _jobs = jobs;
         _configuration = configuration;
+        _logger = logger;
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            RegisterJobs();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not acquire distributed lock for Hangfire recurring jobs on startup (lock contention). Scheduling background retry.");
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(TimeSpan.FromSeconds(15), cancellationToken);
+                try
+                {
+                    RegisterJobs();
+                    _logger.LogInformation("Successfully registered Hangfire recurring jobs on retry.");
+                }
+                catch (Exception retryEx)
+                {
+                    _logger.LogWarning(retryEx, "Retry registering Hangfire recurring jobs failed. Will rely on subsequent maintenance runs.");
+                }
+            }, cancellationToken);
+        }
+        return Task.CompletedTask;
+    }
+
+    private void RegisterJobs()
     {
         var freshnessCron = _configuration["Wf02:Freshness:Cron"] ?? "0 2 * * *";
         var reconciliationCron = _configuration["Wf02:Jobs:ReconciliationCron"] ?? "* * * * *";
@@ -95,7 +126,6 @@ public sealed class CommunityRecurringJobRegistrar : IHostedService
             "wf02-reconcile", job => job.ReconcileAssessmentsAsync(CancellationToken.None), reconciliationCron, options);
         _jobs.AddOrUpdate<Wf02MaintenanceJob>(
             "wf02-advisories", job => job.MaintainAdvisoriesAsync(CancellationToken.None), "* * * * *", options);
-        return Task.CompletedTask;
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

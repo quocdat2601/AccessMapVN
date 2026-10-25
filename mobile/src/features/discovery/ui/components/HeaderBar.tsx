@@ -1,9 +1,11 @@
 import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { branding } from '@/shared/config/branding';
 import { Colors } from '@/shared/theme';
+import { useAuth } from '@/features/auth';
 
 interface HeaderBarProps {
   onNotificationPress?: () => void;
@@ -12,6 +14,27 @@ interface HeaderBarProps {
 
 export function HeaderBar({ onNotificationPress, onProfilePress }: HeaderBarProps) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { isGuest, userProfile } = useAuth();
+
+  const handleProfilePress = () => {
+    if (onProfilePress) {
+      onProfilePress();
+      return;
+    }
+    if (isGuest) {
+      router.push('/login' as any);
+    } else {
+      router.push('/profile' as any);
+    }
+  };
+
+  const getInitials = (name: string) => {
+    if (!name) return 'U';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -47,15 +70,20 @@ export function HeaderBar({ onNotificationPress, onProfilePress }: HeaderBarProp
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.avatarButton}
-            onPress={onProfilePress}
+            style={[styles.avatarButton, !isGuest && styles.avatarButtonActive]}
+            onPress={handleProfilePress}
             accessibilityRole="button"
-            accessibilityLabel="Hồ sơ cá nhân"
+            accessibilityLabel={isGuest ? 'Đăng nhập / Đăng ký' : 'Hồ sơ cá nhân'}
             activeOpacity={0.7}
           >
-            <View style={styles.avatarInner}>
-              <Ionicons name="person" size={18} color={Colors.primary} />
+            <View style={[styles.avatarInner, !isGuest && styles.avatarInnerActive]}>
+              {!isGuest ? (
+                <Text style={styles.avatarInitialsText}>{getInitials(userProfile.fullName)}</Text>
+              ) : (
+                <Ionicons name="person-outline" size={18} color="#64748B" />
+              )}
             </View>
+            {!isGuest && <View style={styles.userActiveDot} />}
           </TouchableOpacity>
         </View>
       </View>
@@ -149,20 +177,44 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.poiHospital,
   },
   avatarButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     borderWidth: 1.5,
-    borderColor: Colors.primaryLight,
+    borderColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    position: 'relative',
+  },
+  avatarButtonActive: {
+    borderColor: '#007D78',
   },
   avatarInner: {
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: Colors.primaryUltraLight,
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  avatarInnerActive: {
+    backgroundColor: '#E6F7F6',
+  },
+  avatarInitialsText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#007D78',
+  },
+  userActiveDot: {
+    position: 'absolute',
+    bottom: -1,
+    right: -1,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#10B981',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
   },
 });

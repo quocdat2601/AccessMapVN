@@ -250,12 +250,12 @@ export default function IntroScreen() {
   const navigateNext = useCallback(() => {
     if (hasNavigated.current) return;
     hasNavigated.current = true;
-    router.replace(session ? '/map' : '/login');
-  }, [router, session]);
+    router.replace('/map');
+  }, [router]);
 
-  // Leave only when both the intro has played and the auth state is known.
+  // Leave when the intro animation has completed.
   useEffect(() => {
-    if (!isIntroDone || isLoading || hasNavigated.current) return;
+    if (!isIntroDone || hasNavigated.current) return;
 
     const exit = Animated.parallel([
       Animated.timing(exitOpacity, {

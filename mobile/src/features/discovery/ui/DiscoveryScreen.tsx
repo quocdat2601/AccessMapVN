@@ -1,6 +1,6 @@
 import { Colors } from '@/shared/theme';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   BackHandler,
@@ -18,10 +18,19 @@ import { MapControls } from './components/MapControls';
 import { MapView, type MapViewHandle } from './components/MapView';
 import { LocationDetailSheet } from './components/location-detail';
 import { SearchBar } from './components/SearchBar';
+import {
+  FilterChipBar,
+  AccessibilityFilterModal,
+  FILTER_CATEGORIES,
+  DEFAULT_ACCESSIBILITY_FILTERS,
+  type AccessibilityFilterState,
+} from './components';
 import { useMapRegion } from '../model/hooks/useMapRegion';
 import { useNearbyPlaces } from '../model/hooks/useNearbyPlaces';
 import { useUserLocation } from '../model/hooks/useUserLocation';
 import { unifiedSearch, type GeocodeResult, type PlaceDto } from '@/entities/place';
+import { useAuth } from '@/features/auth';
+import { LoginRequiredModal } from '@/shared/ui/LoginRequiredModal';
 
 interface DiscoveryScreenProps {
   onNavigateToContribute?: (place: { id: string; name: string; latitude?: number; longitude?: number }) => void;
@@ -47,6 +56,8 @@ export function DiscoveryScreen({ onNavigateToContribute }: DiscoveryScreenProps
   const [showAccessibilityLayer, setShowAccessibilityLayer] = useState(true);
   const [osmPlace, setOsmPlace] = useState<PlaceDto | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const { user } = useAuth();
   const { location, loading: locationLoading } = useUserLocation();
   const { bbox, isZoomedOut, onRegionDidChange, initialRegion } = useMapRegion(location);
   const {
@@ -56,6 +67,49 @@ export function DiscoveryScreen({ onNavigateToContribute }: DiscoveryScreenProps
     selectPlace,
     refresh,
   } = useNearbyPlaces(bbox);
+
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [accessibilityFilters, setAccessibilityFilters] =
+    useState<AccessibilityFilterState>(DEFAULT_ACCESSIBILITY_FILTERS);
+  const [showAccessibilityModal, setShowAccessibilityModal] = useState<boolean>(false);
+  const [showLegend, setShowLegend] = useState<boolean>(false);
+
+  const activeAccessibilityCount = useMemo(() => {
+    return Object.values(accessibilityFilters).filter(Boolean).length;
+  }, [accessibilityFilters]);
+
+  const filteredPlaces = useMemo(() => {
+    return places.filter((p) => {
+      // 1. Category Filter
+      if (selectedCategory !== 'all') {
+        const catConfig = FILTER_CATEGORIES.find((c) => c.id === selectedCategory);
+        if (catConfig && catConfig.categoryKeys.length > 0) {
+          const pCat = p.category?.toLowerCase() || '';
+          const matches = catConfig.categoryKeys.some((k) => pCat.includes(k));
+          if (!matches) return false;
+        }
+      }
+
+      // 2. Accessibility Filters
+      if (accessibilityFilters.wheelchair) {
+        if (!p.has_ramp && !p.door_width_ok) return false;
+      }
+      if (accessibilityFilters.elevator) {
+        if (!p.has_elevator) return false;
+      }
+      if (accessibilityFilters.restroom) {
+        if (!p.has_accessible_restroom) return false;
+      }
+      if (accessibilityFilters.tactilePaving) {
+        if (!p.has_tactile_paving) return false;
+      }
+      if (accessibilityFilters.highVerified) {
+        if (p.accessibility_score < 0.8) return false;
+      }
+
+      return true;
+    });
+  }, [places, selectedCategory, accessibilityFilters]);
 
   useFocusEffect(
     useCallback(() => {
@@ -159,20 +213,11 @@ export function DiscoveryScreen({ onNavigateToContribute }: DiscoveryScreenProps
     });
   };
 
-  if (locationLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-        <Text style={styles.loadingText}>Đang xác định vị trí...</Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
       <MapView
         ref={mapViewRef}
-        places={places}
+        places={filteredPlaces}
         userLatitude={location?.latitude ?? null}
         userLongitude={location?.longitude ?? null}
         initialRegion={initialRegion}
@@ -197,7 +242,7 @@ export function DiscoveryScreen({ onNavigateToContribute }: DiscoveryScreenProps
 
       {/* UI Overlays */}
       <View style={styles.overlayTop}>
-        <HeaderBar onProfilePress={() => router.push('/reports' as never)} />
+        <HeaderBar />
         <View style={styles.searchWrapper}>
           <SearchBar
             value={searchQuery}
@@ -296,6 +341,39 @@ export function DiscoveryScreen({ onNavigateToContribute }: DiscoveryScreenProps
             </ScrollView>
           )}
         </View>
+
+        {!isSearchFocused && !showResults && (
+          <>
+            <FilterChipBar
+              selectedCategory={selectedCategory}
+              onSelectCategory={setSelectedCategory}
+              onOpenAccessibilityFilter={() => setShowAccessibilityModal(true)}
+              activeAccessibilityCount={activeAccessibilityCount}
+            />
+
+            {/* Active filter count / Empty state banner - positioned directly under FilterChipBar without overlap */}
+            {(selectedCategory !== 'all' || activeAccessibilityCount > 0) && !isZoomedOut && (
+              <View style={styles.filterStatsBadge}>
+                <Text style={styles.filterStatsText}>
+                  {filteredPlaces.length > 0
+                    ? `🎯 ${filteredPlaces.length} địa điểm tiếp cận phù hợp`
+                    : '⚠️ Không có địa điểm nào phù hợp'}
+                </Text>
+                {filteredPlaces.length === 0 && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setSelectedCategory('all');
+                      setAccessibilityFilters(DEFAULT_ACCESSIBILITY_FILTERS);
+                    }}
+                    style={styles.resetFilterMiniBtn}
+                  >
+                    <Text style={styles.resetFilterMiniText}>Đặt lại</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+          </>
+        )}
       </View>
 
       <MapControls
@@ -305,7 +383,40 @@ export function DiscoveryScreen({ onNavigateToContribute }: DiscoveryScreenProps
         onZoomOut={() => mapViewRef.current?.zoomOut()}
         onToggleLayer={() => setShowAccessibilityLayer((prev) => !prev)}
         isLayerActive={showAccessibilityLayer}
+        onToggleLegend={() => setShowLegend((prev) => !prev)}
+        isLegendActive={showLegend}
       />
+
+      {/* Map Legend Card */}
+      {showLegend && (
+        <View style={styles.legendCard}>
+          <View style={styles.legendHeader}>
+            <View style={styles.legendHeaderTitleRow}>
+              <Ionicons name="information-circle" size={16} color={Colors.primary} />
+              <Text style={styles.legendTitle}>Mức độ tiếp cận</Text>
+            </View>
+            <TouchableOpacity onPress={() => setShowLegend(false)} hitSlop={10}>
+              <Ionicons name="close" size={16} color="#64748b" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: '#10b981', borderColor: '#059669' }]} />
+            <Text style={styles.legendLabel}>Tiếp cận tốt (đạt chuẩn QCVN 10)</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: '#f59e0b', borderColor: '#d97706' }]} />
+            <Text style={styles.legendLabel}>Tiếp cận một phần (cần hỗ trợ)</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: '#ef4444', borderColor: '#dc2626' }]} />
+            <Text style={styles.legendLabel}>Khó tiếp cận / có chướng ngại</Text>
+          </View>
+          <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: '#94a3b8', borderColor: '#64748b' }]} />
+            <Text style={styles.legendLabel}>Địa điểm chưa khảo sát</Text>
+          </View>
+        </View>
+      )}
 
       {isZoomedOut && (
         <View style={styles.zoomHintBanner}>
@@ -326,14 +437,18 @@ export function DiscoveryScreen({ onNavigateToContribute }: DiscoveryScreenProps
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.contributeFab}
-            onPress={() =>
+            onPress={() => {
+              if (!user) {
+                setShowLoginModal(true);
+                return;
+              }
               onNavigateToContribute?.({
                 id: 'new-location',
                 name: 'Địa điểm mới gần bạn',
                 latitude: location?.latitude,
                 longitude: location?.longitude,
-              })
-            }
+              });
+            }}
             accessibilityRole="button"
             accessibilityLabel="Đóng góp tiện ích tiếp cận mới"
             activeOpacity={0.88}
@@ -365,6 +480,19 @@ export function DiscoveryScreen({ onNavigateToContribute }: DiscoveryScreenProps
       <ContributionHistorySheet
         visible={showHistory}
         onClose={() => setShowHistory(false)}
+      />
+
+      <LoginRequiredModal
+        visible={showLoginModal}
+        featureName="đóng góp tiếp cận mới"
+        onClose={() => setShowLoginModal(false)}
+      />
+
+      <AccessibilityFilterModal
+        visible={showAccessibilityModal}
+        currentFilters={accessibilityFilters}
+        onApply={(newFilters) => setAccessibilityFilters(newFilters)}
+        onClose={() => setShowAccessibilityModal(false)}
       />
     </View>
   );
@@ -558,5 +686,91 @@ const styles = StyleSheet.create({
     color: '#8ee9dc',
     fontSize: 11,
     fontWeight: '800',
+  },
+  filterStatsBadge: {
+    alignSelf: 'center',
+    marginTop: 2,
+    backgroundColor: 'rgba(15, 23, 42, 0.92)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  filterStatsText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  resetFilterMiniBtn: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  resetFilterMiniText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  legendCard: {
+    position: 'absolute',
+    top: 195,
+    right: 68,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 12,
+    width: 230,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.16,
+    shadowRadius: 8,
+    elevation: 6,
+    zIndex: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  legendHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  legendHeaderTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  legendTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 3,
+  },
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 1.5,
+  },
+  legendLabel: {
+    fontSize: 11,
+    color: '#334155',
+    fontWeight: '500',
+    flex: 1,
   },
 });

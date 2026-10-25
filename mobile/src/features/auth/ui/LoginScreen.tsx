@@ -25,9 +25,15 @@ export default function LoginScreen() {
   const router = useRouter();
   const { isConfigured, session, signIn, signUp, sendPasswordReset } = useAuth();
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
   const [mode, setMode] = useState<AuthMode>('signIn');
+  
+  // Form fields
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -36,19 +42,31 @@ export default function LoginScreen() {
   }, [router, session]);
 
   const continueToMap = () => {
-    // Auth state is supplied by Supabase; keep navigation local to this screen.
     router.replace('/map');
   };
 
   const handleSubmit = async () => {
     const normalizedEmail = email.trim().toLowerCase();
+    const trimmedName = fullName.trim();
+
     if (!normalizedEmail || !password) {
-      setErrorMessage('Vui lòng nhập email và mật khẩu.');
+      setErrorMessage('Vui lòng nhập đầy đủ email và mật khẩu.');
       return;
     }
     if (password.length < 6) {
       setErrorMessage('Mật khẩu cần có ít nhất 6 ký tự.');
       return;
+    }
+
+    if (mode === 'signUp') {
+      if (!trimmedName) {
+        setErrorMessage('Vui lòng nhập Họ và tên của bạn.');
+        return;
+      }
+      if (password !== confirmPassword) {
+        setErrorMessage('Mật khẩu xác nhận không trùng khớp.');
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -58,14 +76,14 @@ export default function LoginScreen() {
         await signIn(normalizedEmail, password);
         router.replace('/map');
       } else {
-        const signedIn = await signUp(normalizedEmail, password);
+        const signedIn = await signUp(normalizedEmail, password, trimmedName);
         if (signedIn) {
           router.replace('/map');
         } else {
           setMode('signIn');
           Alert.alert(
-            'Kiểm tra email',
-            'Tài khoản đã được tạo. Hãy xác nhận email rồi đăng nhập.'
+            'Đăng ký thành công',
+            'Tài khoản đã được tạo. Hãy kiểm tra hộp thư email (nếu cần xác nhận) rồi đăng nhập.'
           );
         }
       }
@@ -97,6 +115,7 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      {/* Background Map Decoration */}
       <View
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
@@ -109,6 +128,29 @@ export default function LoginScreen() {
         <View style={[styles.mapBlock, styles.mapBlockRight]} />
       </View>
 
+      {/* Top Header Navigation */}
+      <View style={styles.topBar}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => {
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace('/map');
+            }
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Quay lại bản đồ"
+          activeOpacity={0.7}
+        >
+          <Ionicons name="arrow-back" size={22} color={branding.colors.primary} />
+        </TouchableOpacity>
+        <Text style={styles.topBarTitle}>
+          {mode === 'signIn' ? 'Đăng nhập AccessMap' : 'Tạo tài khoản mới'}
+        </Text>
+        <View style={{ width: 38 }} />
+      </View>
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardArea}
@@ -119,6 +161,7 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.content}>
+            {/* Branding Logo & Header */}
             <View style={styles.brandSection}>
               <View style={styles.logoFrame}>
                 <Image
@@ -129,21 +172,71 @@ export default function LoginScreen() {
               </View>
               <Text style={styles.appName}>{branding.appName}</Text>
               <Text style={styles.supportingText}>
-                Khám phá địa điểm phù hợp với nhu cầu tiếp cận của bạn
+                {mode === 'signIn'
+                  ? 'Đăng nhập để lưu điểm EXP và vinh danh đóng góp'
+                  : 'Tham gia cộng đồng xây dựng bản đồ tiếp cận Việt Nam'}
               </Text>
             </View>
 
+            {/* Segmented Tab Switch */}
+            <View style={styles.tabContainer}>
+              <TouchableOpacity
+                style={[styles.tabButton, mode === 'signIn' && styles.tabButtonActive]}
+                onPress={() => {
+                  setMode('signIn');
+                  setErrorMessage(null);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.tabText, mode === 'signIn' && styles.tabTextActive]}>
+                  Đăng nhập
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tabButton, mode === 'signUp' && styles.tabButtonActive]}
+                onPress={() => {
+                  setMode('signUp');
+                  setErrorMessage(null);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.tabText, mode === 'signUp' && styles.tabTextActive]}>
+                  Đăng ký
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Form Card */}
             <View style={styles.formCard}>
+              {mode === 'signUp' && (
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.label}>Họ và tên</Text>
+                  <View style={styles.inputShell}>
+                    <Ionicons name="person-outline" size={20} color={branding.colors.mutedText} />
+                    <TextInput
+                      autoCapitalize="words"
+                      autoComplete="name"
+                      onChangeText={setFullName}
+                      placeholder="Nhập họ và tên đầy đủ"
+                      placeholderTextColor="#8A9695"
+                      selectionColor={branding.colors.primary}
+                      style={styles.input}
+                      value={fullName}
+                    />
+                  </View>
+                </View>
+              )}
+
               <View style={styles.fieldGroup}>
                 <Text style={styles.label}>Email</Text>
                 <View style={styles.inputShell}>
-                  <Ionicons name="person-outline" size={20} color={branding.colors.mutedText} />
+                  <Ionicons name="mail-outline" size={20} color={branding.colors.mutedText} />
                   <TextInput
                     autoCapitalize="none"
                     autoComplete="email"
                     keyboardType="email-address"
                     onChangeText={setEmail}
-                    placeholder="Nhập email"
+                    placeholder="Nhập địa chỉ email"
                     placeholderTextColor="#8A9695"
                     selectionColor={branding.colors.primary}
                     style={styles.input}
@@ -160,7 +253,7 @@ export default function LoginScreen() {
                     autoCapitalize="none"
                     autoComplete={mode === 'signIn' ? 'current-password' : 'new-password'}
                     onChangeText={setPassword}
-                    placeholder="Nhập mật khẩu"
+                    placeholder="Nhập mật khẩu (tối thiểu 6 ký tự)"
                     placeholderTextColor="#8A9695"
                     secureTextEntry={!isPasswordVisible}
                     selectionColor={branding.colors.primary}
@@ -179,21 +272,57 @@ export default function LoginScreen() {
                     <Ionicons
                       color={branding.colors.mutedText}
                       name={isPasswordVisible ? 'eye-off-outline' : 'eye-outline'}
-                      size={21}
+                      size={20}
                     />
                   </TouchableOpacity>
                 </View>
               </View>
 
-              <TouchableOpacity
-                accessibilityRole="button"
-                activeOpacity={0.7}
-                disabled={isSubmitting}
-                onPress={() => void handlePasswordReset()}
-                style={styles.forgotButton}
-              >
-                <Text style={styles.linkText}>Quên mật khẩu?</Text>
-              </TouchableOpacity>
+              {mode === 'signUp' && (
+                <View style={styles.fieldGroup}>
+                  <Text style={styles.label}>Xác nhận mật khẩu</Text>
+                  <View style={styles.inputShell}>
+                    <Ionicons name="shield-checkmark-outline" size={20} color={branding.colors.mutedText} />
+                    <TextInput
+                      autoCapitalize="none"
+                      onChangeText={setConfirmPassword}
+                      placeholder="Nhập lại mật khẩu"
+                      placeholderTextColor="#8A9695"
+                      secureTextEntry={!isConfirmPasswordVisible}
+                      selectionColor={branding.colors.primary}
+                      style={styles.input}
+                      textContentType="password"
+                      value={confirmPassword}
+                    />
+                    <TouchableOpacity
+                      accessibilityLabel={isConfirmPasswordVisible ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                      accessibilityRole="button"
+                      activeOpacity={0.7}
+                      hitSlop={8}
+                      onPress={() => setIsConfirmPasswordVisible((visible) => !visible)}
+                      style={styles.visibilityButton}
+                    >
+                      <Ionicons
+                        color={branding.colors.mutedText}
+                        name={isConfirmPasswordVisible ? 'eye-off-outline' : 'eye-outline'}
+                        size={20}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {mode === 'signIn' && (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  activeOpacity={0.7}
+                  disabled={isSubmitting}
+                  onPress={() => void handlePasswordReset()}
+                  style={styles.forgotButton}
+                >
+                  <Text style={styles.linkText}>Quên mật khẩu?</Text>
+                </TouchableOpacity>
+              )}
 
               <TouchableOpacity
                 accessibilityHint={mode === 'signIn' ? 'Đăng nhập vào AccessMapVN' : 'Tạo tài khoản AccessMapVN'}
@@ -207,7 +336,7 @@ export default function LoginScreen() {
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
                   <Text style={styles.primaryButtonText}>
-                    {mode === 'signIn' ? 'Đăng nhập' : 'Tạo tài khoản'}
+                    {mode === 'signIn' ? 'Đăng nhập ngay' : 'Đăng ký tài khoản'}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -219,26 +348,9 @@ export default function LoginScreen() {
                 </Text>
               ) : null}
               {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
-
-              <TouchableOpacity
-                accessibilityRole="button"
-                activeOpacity={0.7}
-                disabled={isSubmitting}
-                onPress={() => {
-                  setMode((current) => (current === 'signIn' ? 'signUp' : 'signIn'));
-                  setErrorMessage(null);
-                }}
-                style={styles.registrationButton}
-              >
-                <Text style={styles.registrationText}>
-                  {mode === 'signIn' ? 'Chưa có tài khoản? ' : 'Đã có tài khoản? '}
-                  <Text style={styles.linkText}>
-                    {mode === 'signIn' ? 'Đăng ký' : 'Đăng nhập'}
-                  </Text>
-                </Text>
-              </TouchableOpacity>
             </View>
 
+            {/* Guest Action Button */}
             <TouchableOpacity
               accessibilityHint="Bỏ qua đăng nhập và mở bản đồ"
               accessibilityRole="button"
@@ -246,8 +358,8 @@ export default function LoginScreen() {
               onPress={continueToMap}
               style={styles.guestButton}
             >
-              <Text style={styles.guestButtonText}>Vào thử ứng dụng</Text>
-              <Ionicons name="arrow-forward" size={18} color={branding.colors.primary} />
+              <Text style={styles.guestButtonText}>Vào trải nghiệm chế độ Khách</Text>
+              <Ionicons name="arrow-forward" size={17} color={branding.colors.primary} />
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -261,6 +373,29 @@ const styles = StyleSheet.create({
     backgroundColor: branding.colors.background,
     flex: 1,
   },
+  topBar: {
+    height: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    zIndex: 10,
+  },
+  backButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  topBarTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
   keyboardArea: {
     flex: 1,
   },
@@ -268,8 +403,8 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     paddingBottom: 28,
-    paddingHorizontal: 22,
-    paddingTop: 24,
+    paddingHorizontal: 20,
+    paddingTop: 12,
   },
   content: {
     alignSelf: 'center',
@@ -278,224 +413,206 @@ const styles = StyleSheet.create({
   },
   mapDecoration: {
     ...StyleSheet.absoluteFill,
-    overflow: 'hidden',
   },
   mapRoad: {
-    backgroundColor: '#FFFFFF',
-    borderColor: branding.colors.grid,
-    borderRadius: 99,
-    borderWidth: 1,
-    opacity: 0.48,
+    backgroundColor: '#E5EEED',
     position: 'absolute',
   },
   mapRoadHorizontal: {
     height: 18,
-    left: -24,
-    right: '26%',
-    top: '17%',
+    left: 0,
+    right: 0,
+    top: '32%',
   },
   mapRoadVertical: {
-    bottom: '8%',
-    right: '10%',
-    top: -30,
+    bottom: 0,
+    left: '28%',
+    top: 0,
     width: 18,
   },
   mapBlock: {
-    backgroundColor: branding.colors.primarySoft,
-    borderColor: branding.colors.grid,
+    backgroundColor: '#EFF6F5',
     borderRadius: 24,
-    borderWidth: 1,
-    opacity: 0.35,
+    opacity: 0.85,
     position: 'absolute',
   },
   mapBlockLeft: {
-    height: 120,
-    left: -46,
-    top: '24%',
-    width: 140,
+    bottom: 40,
+    height: 140,
+    left: -20,
+    width: 160,
   },
   mapBlockRight: {
-    bottom: '5%',
-    height: 130,
-    right: -58,
-    width: 160,
+    height: 180,
+    right: -30,
+    top: 40,
+    width: 170,
   },
   brandSection: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   logoFrame: {
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderColor: branding.colors.primarySoft,
-    borderRadius: 26,
+    borderColor: '#E2E8F0',
+    borderRadius: 24,
     borderWidth: 1,
-    height: 90,
-    justifyContent: 'center',
-    shadowColor: branding.colors.primaryDark,
-    shadowOffset: { height: 5, width: 0 },
-    shadowOpacity: 0.1,
-    shadowRadius: 14,
-    width: 90,
     elevation: 3,
+    height: 72,
+    justifyContent: 'center',
+    marginBottom: 12,
+    shadowColor: '#004E58',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    width: 72,
   },
   logo: {
-    height: 116,
+    height: 48,
     resizeMode: 'contain',
-    width: 116,
+    width: 48,
   },
   appName: {
-    color: branding.colors.text,
-    fontSize: 28,
-    fontWeight: '700',
-    letterSpacing: -0.7,
-    marginTop: 14,
+    color: '#004E58',
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+    marginBottom: 4,
   },
   supportingText: {
-    color: branding.colors.mutedText,
-    fontSize: 15,
-    lineHeight: 22,
-    marginTop: 7,
-    maxWidth: 340,
+    color: '#596264',
+    fontSize: 13,
+    lineHeight: 18,
+    maxWidth: 320,
     textAlign: 'center',
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#E2E8F0',
+    borderRadius: 14,
+    padding: 4,
+    marginBottom: 16,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 10,
+  },
+  tabButtonActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  tabText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  tabTextActive: {
+    color: branding.colors.primary,
   },
   formCard: {
     backgroundColor: '#FFFFFF',
-    borderColor: '#E4EBE9',
-    borderRadius: 28,
+    borderColor: '#E2E8F0',
+    borderRadius: 20,
     borderWidth: 1,
-    padding: 22,
-    shadowColor: branding.colors.primaryDark,
-    shadowOffset: { height: 8, width: 0 },
-    shadowOpacity: 0.08,
-    shadowRadius: 20,
     elevation: 4,
+    padding: 20,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    width: '100%',
   },
   fieldGroup: {
-    marginBottom: 16,
+    marginBottom: 14,
   },
   label: {
-    color: branding.colors.text,
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
+    color: '#334155',
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 6,
   },
   inputShell: {
     alignItems: 'center',
     backgroundColor: '#F8FAF9',
-    borderColor: '#D9E2E0',
-    borderRadius: 16,
+    borderColor: '#E2E8F0',
+    borderRadius: 14,
     borderWidth: 1,
     flexDirection: 'row',
-    minHeight: 52,
-    paddingHorizontal: 15,
+    minHeight: 48,
+    paddingHorizontal: 12,
   },
   input: {
-    color: branding.colors.text,
+    color: '#0F172A',
     flex: 1,
-    fontSize: 15,
-    minHeight: 50,
-    paddingHorizontal: 11,
-    paddingVertical: 0,
+    fontSize: 14,
+    paddingLeft: 10,
+    paddingVertical: 10,
   },
   visibilityButton: {
-    alignItems: 'center',
-    height: 44,
-    justifyContent: 'center',
-    width: 38,
+    padding: 6,
   },
   forgotButton: {
     alignSelf: 'flex-end',
-    marginBottom: 18,
+    marginBottom: 16,
     marginTop: -4,
-    paddingVertical: 4,
   },
   linkText: {
     color: branding.colors.primary,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
   },
   primaryButton: {
     alignItems: 'center',
     backgroundColor: branding.colors.primary,
-    borderRadius: 16,
+    borderRadius: 14,
+    elevation: 2,
     justifyContent: 'center',
-    minHeight: 54,
-    shadowColor: branding.colors.primaryDark,
-    shadowOffset: { height: 4, width: 0 },
-    shadowOpacity: 0.18,
-    shadowRadius: 10,
-    elevation: 3,
+    minHeight: 48,
+    paddingHorizontal: 16,
+    shadowColor: branding.colors.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22,
+    shadowRadius: 6,
+    marginTop: 4,
+  },
+  disabledButton: {
+    opacity: 0.65,
   },
   primaryButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
   },
-  disabledButton: {
-    opacity: 0.55,
-  },
   errorText: {
-    color: '#B91C1C',
-    fontSize: 12.5,
+    color: '#E11D48',
+    fontSize: 12,
     lineHeight: 18,
-    marginTop: 12,
-    textAlign: 'center',
-  },
-  dividerRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    marginVertical: 17,
-  },
-  divider: {
-    backgroundColor: '#E2E9E7',
-    flex: 1,
-    height: 1,
-  },
-  dividerText: {
-    color: branding.colors.mutedText,
-    fontSize: 13,
-    marginHorizontal: 12,
-  },
-  googleButton: {
-    alignItems: 'center',
-    borderColor: '#D7E1DF',
-    borderRadius: 16,
-    borderWidth: 1,
-    flexDirection: 'row',
-    gap: 10,
-    justifyContent: 'center',
-    minHeight: 52,
-  },
-  googleButtonText: {
-    color: branding.colors.text,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  registrationButton: {
-    alignItems: 'center',
-    minHeight: 44,
-    justifyContent: 'center',
-    marginTop: 12,
-  },
-  registrationText: {
-    color: branding.colors.mutedText,
-    fontSize: 14,
+    marginTop: 10,
     textAlign: 'center',
   },
   guestButton: {
     alignItems: 'center',
     alignSelf: 'center',
     flexDirection: 'row',
-    gap: 6,
-    justifyContent: 'center',
-    marginTop: 17,
-    minHeight: 48,
-    paddingHorizontal: 18,
+    gap: 8,
+    marginTop: 18,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   guestButtonText: {
     color: branding.colors.primary,
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '700',
   },
 });

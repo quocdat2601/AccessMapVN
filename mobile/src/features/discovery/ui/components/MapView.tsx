@@ -143,6 +143,10 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     cameraRef.current?.flyTo({ center: [lng, targetLat], zoom, duration: 750 });
   };
 
+  const handleClusterPress = (lng: number, lat: number) => {
+    cameraRef.current?.flyTo({ center: [lng, lat], zoom: 16, duration: 600 });
+  };
+
   useImperativeHandle(ref, () => ({
     recenter: () => {
       if (userLatitude == null || userLongitude == null) return;
@@ -332,14 +336,31 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         return;
       }
 
+      const immediateAddress = extractImmediateAddress(features || []);
+
+      // Priority 0.5: Spatial Proximity Snapping - If tapped near any known app place (<= 32m), select it directly
+      if (tapCoords) {
+        let closestAppPlace: PlaceDto | null = null;
+        let closestDistance = Infinity;
+        for (const p of places) {
+          const d = getDistanceMeters(p.lat, p.lng, tapCoords[1], tapCoords[0]);
+          if (d <= 32 && d < closestDistance) {
+            closestDistance = d;
+            closestAppPlace = p;
+          }
+        }
+        if (closestAppPlace) {
+          await handleSelectAppPlace(closestAppPlace.id, immediateAddress);
+          return;
+        }
+      }
+
       if (!features || features.length === 0) {
         setActiveTapPoint(null);
         onSelectPlace?.(null);
         onSelectOsmPlace?.(null);
         return;
       }
-
-      const immediateAddress = extractImmediateAddress(features);
 
       // Priority 1: Check if user tapped directly on an AccessMapVN place marker
       const appFeature = features.find(
@@ -521,6 +542,16 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     );
   }
 
+  const selectedScore = selectedPlace ? Number(selectedPlace.accessibility_score) : -1;
+  const isSelectedRated = !isNaN(selectedScore) && selectedScore >= 0;
+  let selectedAccentColor = '#006874';
+  if (isSelectedRated) {
+    const norm = selectedScore > 5 ? selectedScore / 100 : selectedScore > 1 ? selectedScore / 5 : selectedScore;
+    if (norm >= 0.7) selectedAccentColor = '#10b981';
+    else if (norm >= 0.4) selectedAccentColor = '#f59e0b';
+    else selectedAccentColor = '#ef4444';
+  }
+
   return (
     <View style={styles.container}>
       <MapLibreGL.Map
@@ -554,6 +585,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
             MapLibreGL={MapLibreGL}
             places={places}
             onSelectPlace={handleSelectAppPlace}
+            onClusterPress={handleClusterPress}
             selectedPlaceId={selectedPlaceId}
           />
         )}
@@ -579,7 +611,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
               id="selected-place-pulse"
               paint={{
                 circleRadius: 22,
-                circleColor: '#ef4444',
+                circleColor: selectedAccentColor,
                 circleOpacity: 0.25,
                 circleStrokeWidth: 0,
               }}
@@ -589,7 +621,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
               id="selected-place-dot"
               paint={{
                 circleRadius: 9,
-                circleColor: '#ef4444',
+                circleColor: selectedAccentColor,
                 circleStrokeWidth: 3,
                 circleStrokeColor: '#ffffff',
               }}
@@ -604,6 +636,8 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
                 textOffset: [0, 1.8],
                 textAnchor: 'top',
                 textMaxWidth: 10,
+                textAllowOverlap: true,
+                textIgnorePlacement: true,
               }}
               paint={{
                 textColor: '#0f172a',

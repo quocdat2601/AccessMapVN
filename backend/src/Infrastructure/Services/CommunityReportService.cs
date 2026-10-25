@@ -357,6 +357,21 @@ public sealed class CommunityReportService : ICommunityReportService
             throw new CommunityValidationException("INVALID_EVIDENCE", "The evidence description is too long.", 422);
         }
 
+        if (!string.IsNullOrWhiteSpace(description))
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(
+                description,
+                @"(?:Điểm tin cậy AI|Score|Confidence):\s*(\d{1,3})/100",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (match.Success && int.TryParse(match.Groups[1].Value, out var score) && score < 60)
+            {
+                throw new CommunityValidationException(
+                    "LOW_CONFIDENCE_EVIDENCE",
+                    $"Ảnh minh chứng có độ tin cậy AI thấp ({score}% < 60%). Báo cáo WF-02 yêu cầu độ tin cậy tối thiểu 60%.",
+                    422);
+            }
+        }
+
         var endpoint = $"/api/v1/me/reports/{reportId:D}/evidence";
         var requestHash = Hash(request);
         var now = _clock.GetUtcNow();
@@ -1268,6 +1283,21 @@ public sealed class CommunityReportService : ICommunityReportService
         if (request.ObservedFeatureVersion is <= 0)
         {
             throw new CommunityValidationException("INVALID_REPORT", "observedFeatureVersion must be positive.", 422);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.EvidenceMediaUrl) && !string.IsNullOrWhiteSpace(request.AiAnalysisJson))
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(
+                request.AiAnalysisJson,
+                @"(?:Điểm tin cậy AI|Score|Confidence):\s*(\d{1,3})/100",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (match.Success && int.TryParse(match.Groups[1].Value, out var score) && score < 60)
+            {
+                throw new CommunityValidationException(
+                    "LOW_CONFIDENCE_EVIDENCE",
+                    $"Ảnh minh chứng có độ tin cậy AI thấp ({score}% < 60%). Báo cáo WF-02 yêu cầu độ tin cậy tối thiểu 60%.",
+                    422);
+            }
         }
 
         if (request.ObservedFeatureVersion is not null && request.FeatureType is null)

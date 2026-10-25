@@ -68,6 +68,7 @@ public static class DependencyInjection
                     new PostgreSqlStorageOptions
                     {
                         PrepareSchemaIfNecessary = true,
+                        DistributedLockTimeout = TimeSpan.FromSeconds(20),
                     }));
             services.AddHangfireServer(options =>
             {

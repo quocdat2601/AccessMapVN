@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,6 +11,8 @@ import { getReportDraft, setActiveUploadPromise, setReportEvidence } from '@/fea
 import { ScoreMatrixBreakdown } from '../components/review/ScoreMatrixBreakdown';
 import { ScoreMeterRing } from '../components/review/ScoreMeterRing';
 import { ScoreCriteriaExplainer } from '../components/review/ScoreCriteriaExplainer';
+import { useAuth } from '@/features/auth';
+import { LoginRequiredModal } from '@/shared/ui/LoginRequiredModal';
 
 interface FinalScorecardScreenProps {
   media: CapturedContributionMedia;
@@ -48,6 +50,8 @@ export function FinalScorecardScreen({
   const contentOpacity = useRef(new Animated.Value(0)).current;
   const contentTranslateY = useRef(new Animated.Value(12)).current;
 
+  const { user } = useAuth();
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedResult, setSubmittedResult] = useState<{
     submissionId: string;
@@ -57,6 +61,10 @@ export function FinalScorecardScreen({
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const handleSubmit = async () => {
+    if (!user) {
+      setShowLoginModal(true);
+      return;
+    }
     setIsSubmitting(true);
     setSubmitError(null);
     try {
@@ -166,6 +174,18 @@ export function FinalScorecardScreen({
   }
 
   const handleAttachToReport = () => {
+    if (overallScore < 60) {
+      Alert.alert(
+        'Độ tin cậy quá thấp',
+        `Ảnh minh chứng chỉ đạt ${overallScore}% độ tin cậy AI (yêu cầu tối thiểu 60%).\n\nBáo cáo mâu thuẫn WF-02 không chấp nhận ảnh độ tin cậy thấp để bảo vệ chất lượng dữ liệu tiếp cận. Vui lòng chụp lại ảnh rõ góc ram dốc hoặc lối vào.`,
+        [
+          { text: 'Chụp lại ngay', onPress: onRetakeOrReset, style: 'default' },
+          { text: 'Đóng', style: 'cancel' },
+        ]
+      );
+      return;
+    }
+
     // Start background upload immediately so it's ready before user finishes typing
     let uploadPromise: Promise<string> | null = null;
     if (media.uri && !media.uri.startsWith('http')) {
@@ -303,17 +323,19 @@ export function FinalScorecardScreen({
                   <Text style={styles.errorText}>{submitError}</Text>
                 </View>
               </View>
-            ) : overallScore < 40 ? (
+            ) : overallScore < 60 ? (
               <View style={styles.criticalWarningBanner}>
                 <MaterialCommunityIcons name="alert-octagon" size={20} color="#dc2626" />
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text style={styles.criticalWarningTitle}>
-                    Độ tin cậy AI quá thấp ({overallScore}%)
+                    {flow === 'report'
+                      ? `Độ tin cậy AI thấp (${overallScore}%) - Chưa đạt chuẩn minh chứng`
+                      : `Độ tin cậy AI quá thấp (${overallScore}%)`}
                   </Text>
                   <Text style={styles.criticalWarningText}>
                     {flow === 'report'
-                      ? 'Ảnh minh chứng chưa rõ nét (< 40%). Hệ thống sẽ từ chối khi nộp báo cáo. Vui lòng bấm Chụp lại.'
-                      : 'Ảnh mờ hoặc thiếu chi tiết tiếp cận (< 40%). Hệ thống sẽ từ chối để tránh spam. Bạn nên chụp lại ảnh rõ nét.'}
+                      ? 'Ảnh minh chứng chưa rõ nét hoặc thiếu đặc tính tiếp cận (< 60%). Báo cáo mâu thuẫn (WF-02) yêu cầu minh chứng đạt từ 60% trở lên để đảm bảo tính xác thực. Vui lòng bấm Chụp lại.'
+                      : 'Ảnh mờ hoặc thiếu chi tiết tiếp cận (< 60%). Hệ thống sẽ từ chối để tránh spam. Bạn nên chụp lại ảnh rõ nét.'}
                   </Text>
                 </View>
               </View>
@@ -422,35 +444,51 @@ export function FinalScorecardScreen({
       {/* Bottom Actions */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 14) + 6 }]}>
         {flow === 'report' ? (
-          <>
-            <Pressable
-              style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
-              onPress={overallScore < 40 ? onRetakeOrReset : onEditTags}
-              accessibilityRole="button"
-            >
-              <MaterialCommunityIcons
-                name={overallScore < 40 ? 'camera-retake' : 'tag-outline'}
-                size={16}
-                color="#334155"
-              />
-              <Text style={styles.secondaryBtnText}>
-                {overallScore < 40 ? 'Chụp lại' : 'Sửa đặc tính'}
-              </Text>
-            </Pressable>
+          overallScore < 60 ? (
+            <>
+              <Pressable
+                style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
+                onPress={onEditTags}
+                accessibilityRole="button"
+              >
+                <MaterialCommunityIcons name="tag-outline" size={16} color="#334155" />
+                <Text style={styles.secondaryBtnText}>Sửa đặc tính</Text>
+              </Pressable>
 
-            <Pressable
-              style={({ pressed }) => [
-                styles.primaryBtn,
-                pressed && styles.pressed,
-                overallScore < 40 && { backgroundColor: '#e11d48' },
-              ]}
-              onPress={handleAttachToReport}
-              accessibilityRole="button"
-            >
-              <MaterialCommunityIcons name="clipboard-check-outline" size={18} color="#ffffff" />
-              <Text style={styles.primaryBtnText}>Đính kèm vào báo cáo</Text>
-            </Pressable>
-          </>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryBtn,
+                  pressed && styles.pressed,
+                  { backgroundColor: '#e11d48' },
+                ]}
+                onPress={onRetakeOrReset}
+                accessibilityRole="button"
+              >
+                <MaterialCommunityIcons name="camera-retake" size={16} color="#ffffff" />
+                <Text style={styles.primaryBtnText}>Chụp lại ảnh nét hơn (Cần ≥60%)</Text>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <Pressable
+                style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
+                onPress={onEditTags}
+                accessibilityRole="button"
+              >
+                <MaterialCommunityIcons name="tag-outline" size={16} color="#334155" />
+                <Text style={styles.secondaryBtnText}>Sửa đặc tính</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
+                onPress={handleAttachToReport}
+                accessibilityRole="button"
+              >
+                <MaterialCommunityIcons name="clipboard-check-outline" size={18} color="#ffffff" />
+                <Text style={styles.primaryBtnText}>Đính kèm vào báo cáo</Text>
+              </Pressable>
+            </>
+          )
         ) : submittedResult ? (
           <>
             <Pressable
@@ -541,6 +579,12 @@ export function FinalScorecardScreen({
           </>
         )}
       </View>
+
+      <LoginRequiredModal
+        visible={showLoginModal}
+        featureName="xuất bản dữ liệu tiếp cận và nhận +50 EXP"
+        onClose={() => setShowLoginModal(false)}
+      />
     </View>
   );
 }

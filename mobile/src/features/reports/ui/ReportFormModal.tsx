@@ -24,6 +24,7 @@ import type {
   CommunityFeatureState,
 } from '@/features/community';
 import { fetchCommunityState } from '@/features/community';
+import { runAiPreScan } from '@/features/contribution/api/aiPreScanService';
 import { uploadMediaToBackend } from '@/features/contribution/api/mediaUploadService';
 import { ApiError } from '@/shared/api/client';
 import { createReport } from '../api/reportsApi';
@@ -153,7 +154,12 @@ export function ReportFormModal({
   const [evidence, setEvidence] = useState<ReportEvidenceDraft | null>(null);
   const [pickedUploadedUrl, setPickedUploadedUrl] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const isEvidenceLowConfidence = Boolean(
+    evidence && evidence.aiScore != null && evidence.aiScore < 60
+  );
 
   useEffect(() => {
     if (!visible) return;
@@ -234,15 +240,54 @@ export function ReportFormModal({
     });
     if (!result.canceled && result.assets && result.assets.length > 0) {
       const asset = result.assets[0];
-      setPickedAsset(asset);
-      setEvidence(null);
-      // Pre-upload in background immediately
-      if (asset.uri && !asset.uri.startsWith('http')) {
-        const promise = uploadMediaToBackend(asset.uri, asset.base64 ?? undefined);
-        setActiveUploadPromise(promise);
-        promise.then((url) => {
-          setPickedUploadedUrl(url);
-        }).catch(() => {});
+      setIsAnalyzingImage(true);
+      try {
+        const scanResult = await runAiPreScan(asset.uri);
+        const detected = scanResult.features.filter((f) => f.detected && f.confidence > 0);
+        const maxConf = detected.length > 0 ? Math.max(...detected.map((f) => f.confidence)) : 0;
+        const aiScore = Math.round(maxConf * 100);
+
+        if (detected.length === 0 || aiScore < 60) {
+          Alert.alert(
+            'Độ tin cậy quá thấp',
+            `Ảnh được chọn không phát hiện rõ đặc điểm tiếp cận nào hoặc độ tin cậy AI quá thấp (${aiScore}% < 60%).\n\nBáo cáo mâu thuẫn (WF-02) yêu cầu minh chứng đạt tối thiểu 60% độ tin cậy AI. Vui lòng chọn ảnh chụp rõ góc lối vào, ram dốc hoặc bậc thang.`,
+            [{ text: 'Đồng ý', style: 'default' }]
+          );
+          setPickedAsset(null);
+          setEvidence(null);
+          return;
+        }
+
+        const evidenceObj: ReportEvidenceDraft = {
+          uri: asset.uri,
+          base64: asset.base64 ?? undefined,
+          aiScore,
+          confidenceScore: maxConf,
+          featureTags: detected.map((f) => f.label),
+          aiSummary: `Ảnh từ thư viện: ${scanResult.summary}\nĐiểm tin cậy AI: ${aiScore}/100`,
+          uploadedUrl: undefined,
+          isUploading: true,
+        };
+        setEvidence(evidenceObj);
+        setPickedAsset(null);
+
+        // Pre-upload in background immediately
+        if (asset.uri && !asset.uri.startsWith('http')) {
+          const promise = uploadMediaToBackend(asset.uri, asset.base64 ?? undefined);
+          setActiveUploadPromise(promise);
+          promise
+            .then((url) => {
+              setEvidence((prev) => (prev ? { ...prev, uploadedUrl: url, isUploading: false } : null));
+            })
+            .catch(() => {
+              setEvidence((prev) => (prev ? { ...prev, isUploading: false } : null));
+            });
+        }
+      } catch (err) {
+        console.warn('AI analysis failed for picked image', err);
+        setErrorMessage('Không thể phân tích ảnh đã chọn. Vui lòng thử lại.');
+      } finally {
+        setIsAnalyzingImage(false);
       }
     }
   };
@@ -288,6 +333,10 @@ export function ReportFormModal({
     }
     if (description.trim().length < 5) {
       setErrorMessage('Vui lòng nhập mô tả chi tiết quan sát (tối thiểu 5 ký tự).');
+      return;
+    }
+    if (isEvidenceLowConfidence) {
+      setErrorMessage('Ảnh minh chứng có độ tin cậy AI quá thấp (< 60%). Vui lòng bấm Chụp lại hoặc gỡ bỏ ảnh để tiếp tục.');
       return;
     }
 
@@ -545,22 +594,42 @@ export function ReportFormModal({
                 <Text style={styles.evidenceActionText}>Thư viện</Text>
               </TouchableOpacity>
             </View>
+            {isAnalyzingImage && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, backgroundColor: '#f0fdfa', borderRadius: 8, marginBottom: 12 }}>
+                <ActivityIndicator size="small" color="#006874" />
+                <Text style={{ fontSize: 13, color: '#006874', fontWeight: '500' }}>AI đang phân tích và kiểm tra độ tin cậy ảnh...</Text>
+              </View>
+            )}
 
             {/* Attached AI Evidence or Picked Asset */}
             {evidence ? (
-              <View style={styles.aiEvidenceCard}>
+              <View style={[styles.aiEvidenceCard, isEvidenceLowConfidence && { borderColor: '#fca5a5', backgroundColor: '#fef2f2' }]}>
                 <View style={styles.aiEvidenceHeader}>
                   <View style={styles.aiBadgeGroup}>
-                    <View style={styles.aiScoreBadge}>
-                      <MaterialCommunityIcons name="robot" size={14} color="#0D9488" />
-                      <Text style={styles.aiScoreText}>
-                        AI Duyệt: {evidence.aiScore ?? 90}/100
-                      </Text>
-                    </View>
+                    {isEvidenceLowConfidence ? (
+                      <View style={[styles.aiScoreBadge, { backgroundColor: '#fee2e2', borderColor: '#fca5a5' }]}>
+                        <MaterialCommunityIcons name="alert-circle" size={14} color="#dc2626" />
+                        <Text style={[styles.aiScoreText, { color: '#dc2626' }]}>
+                          Độ tin cậy thấp: {evidence.aiScore ?? 0}/100 {'(< 60%)'}
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={styles.aiScoreBadge}>
+                        <MaterialCommunityIcons name="robot" size={14} color="#0D9488" />
+                        <Text style={styles.aiScoreText}>
+                          AI Duyệt: {evidence.aiScore ?? 90}/100
+                        </Text>
+                      </View>
+                    )}
                     {evidence.isUploading ? (
                       <View style={styles.uploadingBadge}>
                         <ActivityIndicator size="small" color="#0284C7" style={{ transform: [{ scale: 0.7 }] }} />
                         <Text style={styles.uploadingText}>Đang tải lên...</Text>
+                      </View>
+                    ) : isEvidenceLowConfidence ? (
+                      <View style={[styles.readyBadge, { backgroundColor: '#fee2e2' }]}>
+                        <MaterialCommunityIcons name="close-circle-outline" size={13} color="#dc2626" />
+                        <Text style={[styles.readyText, { color: '#dc2626' }]}>Không hợp lệ</Text>
                       </View>
                     ) : (
                       <View style={styles.readyBadge}>
@@ -588,6 +657,15 @@ export function ReportFormModal({
                     </TouchableOpacity>
                   </View>
                 </View>
+
+                {isEvidenceLowConfidence && (
+                  <View style={{ marginTop: 8, marginHorizontal: 12, padding: 8, backgroundColor: '#ffffff', borderRadius: 6, borderWidth: 1, borderColor: '#fca5a5', flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <MaterialCommunityIcons name="alert-octagon" size={16} color="#dc2626" />
+                    <Text style={{ fontSize: 12, color: '#dc2626', flex: 1, fontWeight: '500' }}>
+                      Ảnh minh chứng có độ tin cậy AI thấp {'(< 60%)'}. Bạn cần bấm "Chụp lại" ảnh rõ nét hơn hoặc gỡ ảnh trước khi gửi báo cáo.
+                    </Text>
+                  </View>
+                )}
 
                 <View style={styles.aiEvidenceBody}>
                   <Image source={{ uri: evidence.uri }} style={styles.aiEvidenceThumb} resizeMode="cover" />
@@ -650,9 +728,9 @@ export function ReportFormModal({
               <Text style={styles.cancelBtnText}>Hủy</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              disabled={submitting}
+              disabled={submitting || isEvidenceLowConfidence || isAnalyzingImage}
               onPress={() => void submit()}
-              style={[styles.submitBtn, submitting && styles.disabled]}
+              style={[styles.submitBtn, (submitting || isEvidenceLowConfidence || isAnalyzingImage) && styles.disabled]}
               activeOpacity={0.88}
             >
               {submitting ? (

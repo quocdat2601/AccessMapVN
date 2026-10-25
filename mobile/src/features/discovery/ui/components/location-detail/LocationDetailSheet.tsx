@@ -25,6 +25,7 @@ import { loadContributionRecords } from '@/entities/contribution';
 import { fetchPlaceEvidence } from '@/entities/place';
 import { resolveServiceUrl } from '@/shared/api/client';
 import { useAuth } from '@/features/auth';
+import { LoginRequiredModal } from '@/shared/ui/LoginRequiredModal';
 import {
   castCommunityVote,
   FeatureVerificationModal,
@@ -150,6 +151,8 @@ export function LocationDetailSheet({
   const [snap, setSnap] = useState<SheetSnap>('collapsed');
   const [showReportForm, setShowReportForm] = useState(false);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loginModalFeature, setLoginModalFeature] = useState('đóng góp dữ liệu tiếp cận');
   const [reportInitialFeature, setReportInitialFeature] = useState<AccessibilityFeatureType | undefined>(undefined);
   const [reportInitialData, setReportInitialData] = useState<ReportFormData | undefined>(undefined);
   const [verificationRefreshKey, setVerificationRefreshKey] = useState(0);
@@ -530,7 +533,14 @@ export function LocationDetailSheet({
           hasTactile={Boolean(place.has_tactile_paving)}
           lastVerifiedAt={place.last_verified_at}
           isFullyVerified={isFullyVerified}
-          onHelpConfirmPress={() => setShowVerificationModal(true)}
+          onHelpConfirmPress={() => {
+            if (!user) {
+              setLoginModalFeature('xác nhận tiện ích tiếp cận');
+              setShowLoginModal(true);
+              return;
+            }
+            setShowVerificationModal(true);
+          }}
         />
 
         <View style={styles.sectionInset}>
@@ -542,7 +552,14 @@ export function LocationDetailSheet({
 
           <EvidenceGallerySection
             evidence={evidenceList}
-            onAddEvidence={() => onContribute?.(place)}
+            onAddEvidence={() => {
+              if (!user) {
+                setLoginModalFeature('đóng góp ảnh minh chứng');
+                setShowLoginModal(true);
+                return;
+              }
+              onContribute?.(place);
+            }}
             showDemoContent={hasDemoCommunityContent}
             isVerified={isFullyVerified}
           />
@@ -550,7 +567,14 @@ export function LocationDetailSheet({
           {showVerificationSection && (
             <TouchableOpacity
               style={styles.verificationCard}
-              onPress={() => setShowVerificationModal(true)}
+              onPress={() => {
+                if (!user) {
+                  setLoginModalFeature('xác nhận tiện ích tiếp cận');
+                  setShowLoginModal(true);
+                  return;
+                }
+                setShowVerificationModal(true);
+              }}
               accessibilityRole="button"
               accessibilityLabel="Mở danh sách xác nhận thông tin tiếp cận"
               activeOpacity={0.82}
@@ -578,11 +602,19 @@ export function LocationDetailSheet({
           <ContributionCTA
             locationId={place.id}
             locationName={place.name}
-            onPress={() => onContribute?.(place)}
+            onPress={() => {
+              if (!user) {
+                setLoginModalFeature('đóng góp dữ liệu tiếp cận');
+                setShowLoginModal(true);
+                return;
+              }
+              onContribute?.(place);
+            }}
             showReportIssue={hasPublishedAccessibilityInfo}
             onReportIssue={() => {
               if (!user) {
-                router.push('/login');
+                setLoginModalFeature('báo thay đổi thông tin tiếp cận');
+                setShowLoginModal(true);
                 return;
               }
               onReportIssue?.(place);
@@ -616,6 +648,11 @@ export function LocationDetailSheet({
         onRequestReport={handleRequestReportFromFeature}
         refreshTrigger={verificationRefreshKey}
         onClose={() => setShowVerificationModal(false)}
+      />
+      <LoginRequiredModal
+        visible={showLoginModal}
+        featureName={loginModalFeature}
+        onClose={() => setShowLoginModal(false)}
       />
     </Animated.View>
   );

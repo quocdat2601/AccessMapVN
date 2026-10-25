@@ -110,6 +110,28 @@ export function runVerificationEngineTests() {
     console.log(`  ✅ Test Case 4B: Distance ${distance}m with ±15m accuracy margin -> spatialValid = true (PASSED)`);
   }
 
+  // Test Case 4C: Large Venue (Mall/Supermarket) with distance = 75m & indoor drift allowance
+  {
+    const coordUser = { latitude: 10.7736, longitude: 106.7011, accuracy: 15 };
+    const coordPoi = { latitude: 10.7743, longitude: 106.7011 }; // ~78m
+
+    const distance = calculateHaversineDistanceMeters(coordUser, coordPoi);
+    assert.ok(distance >= 70 && distance <= 85, `Expected distance ~78m, got ${distance}m`);
+
+    const input: VerificationMatrixInput = {
+      cvConfidence: 0.95,
+      textDescription: 'Khảo sát lối vào TTTM lớn',
+      contributorCoords: coordUser,
+      poiCoords: coordPoi,
+      selectedTags: ['exterior_ramp_present'],
+      venueCategory: 'mall',
+    };
+
+    const result = evaluateVerificationMatrix(input);
+    assert.strictEqual(result.spatialValid, true);
+    console.log(`  ✅ Test Case 4C: Distance ${distance}m in large mall with 35m indoor allowance -> spatialValid = true (PASSED)`);
+  }
+
   // Test Case 5: Bậc tam cấp không có ram dốc -> Phạt -40% điểm xe lăn & Inaccessible
   {
     const input: VerificationMatrixInput = {

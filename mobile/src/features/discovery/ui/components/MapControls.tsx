@@ -8,6 +8,8 @@ interface MapControlsProps {
   onResetNorth?: () => void;
   onToggleLayer?: () => void;
   isLayerActive?: boolean;
+  onToggleLegend?: () => void;
+  isLegendActive?: boolean;
   onZoomIn?: () => void;
   onZoomOut?: () => void;
   onMyLocation?: () => void;
@@ -17,6 +19,8 @@ export function MapControls({
   onResetNorth,
   onToggleLayer,
   isLayerActive = true,
+  onToggleLegend,
+  isLegendActive = false,
   onZoomIn,
   onZoomOut,
   onMyLocation,
@@ -48,6 +52,21 @@ export function MapControls({
           name="layers-outline"
           size={22}
           color={isLayerActive ? Colors.primary : Colors.textSecondary}
+        />
+      </TouchableOpacity>
+
+      {/* 2.5. Accessibility Legend Toggle */}
+      <TouchableOpacity
+        style={[styles.circleButton, isLegendActive && styles.activeLayerButton]}
+        onPress={onToggleLegend}
+        accessibilityRole="button"
+        accessibilityLabel="Xem chú giải mức độ tiếp cận"
+        activeOpacity={0.8}
+      >
+        <Ionicons
+          name="information-circle-outline"
+          size={22}
+          color={isLegendActive ? Colors.primary : Colors.textSecondary}
         />
       </TouchableOpacity>
 

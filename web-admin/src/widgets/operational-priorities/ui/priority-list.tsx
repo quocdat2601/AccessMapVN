@@ -21,7 +21,9 @@ export function PriorityList({ items, workflow, isLoading }: { items?: PriorityI
         <div><CardTitle>Ưu tiên vận hành</CardTitle><CardDescription className="mt-2 flex flex-wrap gap-1.5">
           {workflow?.map((item, index) => <span key={item.name} className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${index === 0 ? "bg-teal-50 text-teal-700" : index === 1 ? "bg-sky-50 text-sky-700" : "bg-red-50 text-red-700"}`}>{item.value} {item.name.toLowerCase()}</span>)}
         </CardDescription></div>
-        <Badge variant="red" className="shrink-0">4 cần xử lý</Badge>
+        <Badge variant={items && items.length > 0 ? "red" : "teal"} className="shrink-0">
+          {items?.length ?? 0} cần xử lý
+        </Badge>
       </CardHeader>
       <CardContent className="p-2">
         {isLoading || !items ? (

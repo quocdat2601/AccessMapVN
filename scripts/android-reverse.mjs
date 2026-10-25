@@ -51,24 +51,28 @@ for (const port of [8081, 5256, 8000]) {
 
 console.log(`[device:ports] ${serial}: 8081 (Metro), 5256 (API), 8000 (AI) đã được nối về máy tính.`);
 
-// Auto-launch the Development Client app on the connected device
-const launchPackages = ['com.qd2601.AccessMapVN', 'com.anonymous.AccessMapVN'];
-for (const pkg of launchPackages) {
-  const check = runAdb(['-s', serial, 'shell', 'pm', 'path', pkg], true);
-  if (check.stdout && check.stdout.includes('package:')) {
-    const launchResult = runAdb([
-      '-s', serial, 'shell', 'am', 'start',
-      '-a', 'android.intent.action.VIEW',
-      '-d', 'accessmapvn://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081',
-      pkg,
-    ], true);
-    if (launchResult.status === 0) {
-      console.log(`[device:launch] Đã tự động mở ứng dụng ${pkg} trên điện thoại.`);
-    } else {
-      runAdb(['-s', serial, 'shell', 'am', 'start', '-n', `${pkg}/.MainActivity`], true);
-      console.log(`[device:launch] Đã mở màn hình chính ${pkg} trên điện thoại.`);
+// Only launch if explicitly requested with --launch.
+// Automatic launching when servers are ready is handled by launch-when-ready.mjs.
+if (process.argv.includes('--launch')) {
+  const launchPackages = ['com.qd2601.AccessMapVN', 'com.anonymous.AccessMapVN'];
+  for (const pkg of launchPackages) {
+    const check = runAdb(['-s', serial, 'shell', 'pm', 'path', pkg], true);
+    if (check.stdout && check.stdout.includes('package:')) {
+      const launchResult = runAdb([
+        '-s', serial, 'shell', 'am', 'start',
+        '-a', 'android.intent.action.VIEW',
+        '-d', 'accessmapvn://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081',
+        pkg,
+      ], true);
+      if (launchResult.status === 0) {
+        console.log(`[device:launch] Đã tự động mở ứng dụng ${pkg} trên điện thoại.`);
+      } else {
+        runAdb(['-s', serial, 'shell', 'am', 'start', '-n', `${pkg}/.MainActivity`], true);
+        console.log(`[device:launch] Đã mở màn hình chính ${pkg} trên điện thoại.`);
+      }
+      break;
     }
-    break;
   }
 }
+
 

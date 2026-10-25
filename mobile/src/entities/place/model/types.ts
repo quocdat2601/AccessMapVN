@@ -1,4 +1,17 @@
-export type PoiCategory = 'mall' | 'hotel' | 'hospital' | 'transit' | 'market' | 'other';
+export type PoiCategory =
+  | 'mall'
+  | 'supermarket'
+  | 'restaurant'
+  | 'cafe'
+  | 'hotel'
+  | 'hospital'
+  | 'clinic'
+  | 'pharmacy'
+  | 'transit'
+  | 'market'
+  | 'park'
+  | 'other'
+  | (string & {});
 
 export interface PlaceDto {
   id: string;

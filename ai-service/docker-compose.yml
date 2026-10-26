@@ -13,6 +13,8 @@ services:
     volumes:
       # Mount model weights directory (pre-download weights here)
       - ./models:/service/models:ro
+      - ./app:/service/app:ro
+      - ./tests:/service/tests:ro
     depends_on:
       minio:
         condition: service_healthy

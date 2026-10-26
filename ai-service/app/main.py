@@ -9,14 +9,14 @@ from __future__ import annotations
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api import pre_scan, verify, blur, video_pre_scan
 from app.config import settings
 from app.core.logging import get_logger
-from app.schemas import HealthResponse
+from app.schemas import HealthResponse, ReadinessResponse
 
 logger = get_logger(__name__)
 
@@ -86,3 +86,32 @@ app.include_router(blur.router,     prefix=API_PREFIX)
 async def health() -> HealthResponse:
     """Liveness probe – returns 200 when the service is up."""
     return HealthResponse()
+
+
+@app.get("/health/ready", response_model=ReadinessResponse, tags=["health"])
+async def health_ready(response: Response) -> ReadinessResponse:
+    """
+    Readiness probe – returns 200 when required AI models (ramp, step, door)
+    are successfully loaded into memory and ready to serve inference.
+    Returns 503 if any required model is unavailable or failed to load.
+    """
+    try:
+        from app.api.pre_scan import _cv_pipeline
+        readiness = _cv_pipeline.get_readiness()
+    except Exception as exc:
+        logger.error("Readiness check encountered an error: %s", exc)
+        readiness = {
+            "status": "not_ready",
+            "required_models_loaded": False,
+            "detectors": {},
+        }
+
+    if not readiness.get("required_models_loaded", False):
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+
+    return ReadinessResponse(
+        status=readiness.get("status", "not_ready"),
+        version="1.0.0",
+        required_models_loaded=readiness.get("required_models_loaded", False),
+        detectors=readiness.get("detectors", {}),
+    )

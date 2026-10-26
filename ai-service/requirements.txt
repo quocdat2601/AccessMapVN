@@ -20,6 +20,7 @@ pydantic-settings==2.2.1
 
 # ── Computer vision ───────────────────────────────────────────────────────────
 ultralytics==8.2.18
+dill>=0.3.8
 # torch is NOT listed here; it is pre-installed via the CPU wheel index in
 # the Dockerfile before this file is processed, so ultralytics finds it already.
 

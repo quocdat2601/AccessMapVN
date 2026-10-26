@@ -29,7 +29,7 @@ class RampDetector(BaseYOLODetector):
         weight_path = settings.yolo_weights_path["ramp"]
         super().__init__(weight_path=weight_path, target_class=self.TARGET_CLASS)
 
-    def detect_ramp(self, image_bytes: bytes) -> dict:
+    def detect_ramp(self, image_input: bytes | np.ndarray) -> dict:
         """
         Run ramp detection on a single image.
 
@@ -43,10 +43,13 @@ class RampDetector(BaseYOLODetector):
         dict
             ``{"value": bool, "confidence": float}``
         """
-        result: DetectionResult = self._detect(image_bytes)
+        result: DetectionResult = self._detect(image_input)
         bbox = result.boxes_normalized[0] if result.boxes_normalized else None
         return {
             "value":           result.detected,
             "confidence":      round(result.max_confidence, 4),
             "bbox_normalized": bbox,
+            "engine":          result.engine,
+            "status":          result.status,
+            "error_code":      result.error_code,
         }

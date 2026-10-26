@@ -99,17 +99,24 @@ async def pre_scan(
     elapsed = time.perf_counter() - t0
     logger.info("pre-scan completed in %.3f s", elapsed)
 
-    has_model_detections = any(s.detector_score is not None for s in visual_suggestions)
+    engines = set(cv_result.get("_engines_used", []))
+    analysis_method = "model" if "yolo" in engines else "unavailable"
+
+    analysis_status = cv_result.get("_analysis_status", "completed")
+    detector_results = cv_result.get("_detector_results", {})
+    warnings = list(cv_result.get("_warnings", []))
+
     return PreScanResponse(
-        analysis_status="completed",
-        analysis_method="model" if has_model_detections else "heuristic",
-        model_id="yolov8n-accessmap-v1" if has_model_detections else None,
-        model_version="1.0.0" if has_model_detections else None,
+        analysis_status=analysis_status,
+        analysis_method=analysis_method,
+        model_id="yolov8n-accessmap-v1" if analysis_method == "model" else None,
+        model_version="1.0.0" if analysis_method == "model" else None,
         image_reference="exif_corrected_original",
         visual_suggestions=visual_suggestions,
         user_claims=user_claims,
         requires_user_confirmation=True,
-        warnings=[],
+        warnings=warnings,
+        detector_results=detector_results,
         features=features,
         summary=summary,
     )

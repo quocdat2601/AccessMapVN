@@ -67,8 +67,18 @@ def _build_feature_result(
     """
     Build a typed ``FeatureResult`` by fusing CV detection with any NLP mention.
     """
+    # Strict rule: unsupported features must unconditionally be unknown and unsupported
+    is_unsupported = feature_key in ("elevator_present", "accessible_restroom_sign", "tactile_paving_present")
+    if is_unsupported:
+        return FeatureResult(
+            value=FeatureStatus.unknown.value,
+            confidence=0.0,
+            method="unsupported",
+            reason="Chưa hỗ trợ nhận diện đặc tính này trong ảnh",
+        )
+
     cv_conf = cv_data.get("confidence", 0.0)
-    cv_val  = cv_data.get("value", False)
+    cv_val  = cv_data.get("value", "unknown")
 
     # If NLP has a mention, check for contradiction or boost/temper confidence
     nlp_m   = nlp_mentions.get(feature_key)
@@ -95,32 +105,38 @@ def _build_feature_result(
         fused_conf = cv_conf
         value = cv_val
 
+    if fused_conf < settings.yolo_conf_threshold and value in (True, "present"):
+        value = FeatureStatus.unknown.value
+
     val_str = _normalize_val(value)
+    method = cv_data.get("method", "detector")
 
     if feature_key == "steps_present":
         reason_step = "Phát hiện mâu thuẫn giữa phân tích hình ảnh và mô tả văn bản" if has_conflict else (
-            "Phát hiện bậc thang" if val_str == "present" else None
+            "Phát hiện bậc thang trong ảnh" if val_str == "present" else "Chưa đủ dữ liệu để kết luận từ ảnh này"
         )
         return StepFeatureResult(
             value=val_str,
             confidence=fused_conf,
             method="detector",
             reason=reason_step,
-            step_count_estimate=cv_data.get("step_count_estimate"),
+            step_count_estimate=None,
         )
 
     reason = None
     if has_conflict:
         reason = "Phát hiện mâu thuẫn giữa phân tích hình ảnh và mô tả văn bản"
     elif val_str == "present":
-        reason = f"Phát hiện đặc tính {feature_key}"
+        reason = f"Phát hiện đặc tính {feature_key} trong ảnh"
     elif val_str == "unknown":
-        reason = "Chưa đủ dữ liệu để kết luận"
+        reason = cv_data.get("reason") or "Chưa đủ dữ liệu để kết luận từ ảnh này"
+    elif val_str == "absent":
+        reason = "Không phát hiện trong ảnh hoặc người dùng xác nhận không có"
 
     return FeatureResult(
         value=val_str,
         confidence=fused_conf,
-        method="detector",
+        method=method,
         reason=reason,
     )
 
@@ -162,27 +178,36 @@ def _to_recommendation(score: float) -> Recommendation:
 
 
 def _build_summary(features: FeaturesDict, nlp_result: dict | None) -> str:
-    """Build a Vietnamese summary sentence from fused features."""
-    if nlp_result and nlp_result.get("summary"):
-        return nlp_result["summary"]
+    """Build a natural Vietnamese summary sentence clearly separating visual observations and user claims."""
+    items: list[str] = []
+    unmeasured: list[str] = []
 
-    parts: list[str] = []
     if features.exterior_ramp_present.value == "present":
-        parts.append("có ram dốc tiếp cận")
+        items.append("ram dốc")
+        unmeasured.append("độ dốc")
     if features.steps_present.value == "present":
-        parts.append("có bậc thang")
-    if features.elevator_present.value == "present":
-        parts.append("có thang máy")
+        items.append("bậc thang")
     if features.door_detected.value == "present":
-        parts.append("có cửa ra vào")
-    if features.tactile_paving_present.value == "present":
-        parts.append("có gạch xúc giác")
-    if features.accessible_restroom_sign.value == "present":
-        parts.append("có nhà vệ sinh tiếp cận")
+        items.append("cửa ra vào")
+        unmeasured.append("chiều rộng cửa")
 
-    if not parts:
-        return "Chưa phát hiện tiện ích tiếp cận nào trong ảnh."
-    return "Địa điểm " + ", ".join(parts) + ". Cần đo đạc thực địa để xác nhận đạt chuẩn QCVN 10:2014."
+    if items:
+        joined_items = " và ".join(items) if len(items) <= 2 else (", ".join(items[:-1]) + f" và {items[-1]}")
+        if unmeasured:
+            unmeasured_str = " và ".join(unmeasured) if len(unmeasured) <= 2 else (", ".join(unmeasured[:-1]) + f" và {unmeasured[-1]}")
+            measure_clause = f"; {unmeasured_str} chưa được đo"
+        else:
+            measure_clause = ""
+        visual_summary = f"AI nhận diện khả năng có {joined_items}. Người khảo sát cần xác nhận thực tế{measure_clause}."
+    else:
+        visual_summary = "Không phát hiện tiện ích tiếp cận nào rõ ràng trong ảnh. Vui lòng quan sát và tự chọn bên dưới nếu có."
+
+    # If contributor provided text description, append it as unverified user claim, never overwriting visual summary
+    if nlp_result and nlp_result.get("summary"):
+        contributor_text = nlp_result["summary"].strip()
+        return f"{visual_summary}\n\nNgười đóng góp mô tả: \"{contributor_text}\" (lời khai chưa được kiểm chứng độc lập)."
+
+    return visual_summary
 
 
 class Scorer:
@@ -258,7 +283,7 @@ class Scorer:
         'ramp_present', 'door_detected', 'stairs_present'.
 
         Strict rule:
-        - If detector passes threshold (>= 0.5): suggested_present with score and optional bbox.
+        - If detector passes threshold (>= settings.yolo_conf_threshold): suggested_present with score and optional bbox.
         - Otherwise: unknown with detector_score=None, bbox=None (never 'suggested_absent').
         """
         suggestions: list[VisualSuggestionItem] = []
@@ -272,7 +297,7 @@ class Scorer:
         for feature_name, data in mapping:
             conf = data.get("confidence", 0.0)
             val = data.get("value")
-            is_present = val in (True, "present") and conf >= 0.50
+            is_present = val in (True, "present") and conf >= settings.yolo_conf_threshold
 
             bbox = data.get("bbox_normalized")
 

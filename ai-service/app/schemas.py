@@ -9,7 +9,7 @@ from enum import Enum
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
 
 # ── Shared feature structures ──────────────────────────────────────────────────
@@ -92,6 +92,7 @@ class UserClaimItem(BaseModel):
 
 class PreScanResponse(BaseModel):
     """Response from POST /api/v1/ai/pre-scan"""
+    model_config = ConfigDict(protected_namespaces=())
     analysis_status:            str = "completed"
     analysis_method:            str = "heuristic" # "model" | "heuristic"
     model_id:                   str | None = None
@@ -101,6 +102,7 @@ class PreScanResponse(BaseModel):
     user_claims:                list[UserClaimItem] = Field(default_factory=list)
     requires_user_confirmation: bool = True
     warnings:                   list[str] = Field(default_factory=list)
+    detector_results:           dict[str, Any] = Field(default_factory=dict)
     # Legacy backward-compatibility for existing mobile screens
     features:                   FeaturesDict
     summary:                    str
@@ -141,13 +143,14 @@ class Recommendation(str, Enum):
 class VerifyRequest(BaseModel):
     """Request body for POST /api/v1/ai/verify"""
     submission_id:    UUID
-    location_id:      UUID
+    location_id:      UUID | str | None = None
     media_urls:       list[str] = Field(..., min_length=1)
     text_description: str | None = None
 
 
 class VerifyResponse(BaseModel):
     """Response from POST /api/v1/ai/verify"""
+    model_config = ConfigDict(protected_namespaces=())
     submission_id:              UUID
     analysis_status:            str = "completed"
     analysis_method:            str = "heuristic" # "model" | "heuristic"
@@ -158,6 +161,7 @@ class VerifyResponse(BaseModel):
     user_claims:                list[UserClaimItem] = Field(default_factory=list)
     requires_user_confirmation: bool = True
     warnings:                   list[str] = Field(default_factory=list)
+    detector_results:           dict[str, Any] = Field(default_factory=dict)
     # Legacy fields
     features:                   FeaturesDict
     overall_confidence_score:   float = Field(ge=0.0, le=1.0)
@@ -178,3 +182,16 @@ class BlurResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str = "ok"
     version: str = "1.0.0"
+
+
+class ReadinessDetectorStatus(BaseModel):
+    loaded: bool
+    engine: str
+    weights_sha256: str | None = None
+
+
+class ReadinessResponse(BaseModel):
+    status: str                     # "ready" | "not_ready"
+    version: str = "1.0.0"
+    required_models_loaded: bool
+    detectors: dict[str, ReadinessDetectorStatus] = Field(default_factory=dict)

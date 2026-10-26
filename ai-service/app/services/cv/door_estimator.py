@@ -33,7 +33,7 @@ class DoorEstimator(BaseYOLODetector):
         weight_path = settings.yolo_weights_path["door"]
         super().__init__(weight_path=weight_path, target_class=self.TARGET_CLASS)
 
-    def detect_door(self, image_bytes: bytes) -> dict:
+    def detect_door(self, image_input: bytes | np.ndarray) -> dict:
         """
         Detect door presence in the image.
         Compliance (clear width >= 900mm per QCVN 10:2014) is decoupled and marked unmeasured.
@@ -43,12 +43,24 @@ class DoorEstimator(BaseYOLODetector):
         dict
             ``{"value": "present" | "unknown", "confidence": float}``
         """
-        result: DetectionResult = self._detect(image_bytes)
+        result: DetectionResult = self._detect(image_input)
 
-        if not result.detected:
-            return {"value": "unknown", "confidence": round(result.max_confidence, 4)}
+        if not result.detected or result.status != "completed":
+            return {
+                "value":           "unknown",
+                "confidence":      round(result.max_confidence, 4),
+                "bbox_normalized": None,
+                "engine":          result.engine,
+                "status":          result.status,
+                "error_code":      result.error_code,
+            }
 
+        bbox = result.boxes_normalized[0] if result.boxes_normalized else None
         return {
-            "value":      "present",
-            "confidence": round(result.max_confidence, 4),
+            "value":           "present",
+            "confidence":      round(result.max_confidence, 4),
+            "bbox_normalized": bbox,
+            "engine":          result.engine,
+            "status":          result.status,
+            "error_code":      result.error_code,
         }

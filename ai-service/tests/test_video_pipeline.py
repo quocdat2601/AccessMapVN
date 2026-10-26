@@ -133,6 +133,17 @@ class TestVideoEndpoint(unittest.TestCase):
             )
         self.assertEqual(res.status_code, 503)
 
+    def test_model_only_mode_on_video(self):
+        """Video analysis running through real CVPipeline runs model-only without heuristics."""
+        from app.api.pre_scan import _cv_pipeline
+        frame = make_frame(0, pattern=1)
+        with patch("app.services.media.video_pipeline.select_video_frames") as mock_select:
+            mock_select.return_value = vp.FrameSelection(frames_sampled=1, selected=[frame], warnings=[])
+            result = vp.analyze_video(b"fake_video", _cv_pipeline)
+            self.assertEqual(result["processing_status"], "completed")
+            self.assertIn("ramp_present", result["suggestions"])
+
+
 
 if __name__ == "__main__":
     unittest.main()

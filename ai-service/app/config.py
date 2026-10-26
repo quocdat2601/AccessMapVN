@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     phobert_classifier_labels: list[str] = ["not_accessibility", "accessibility"]
 
     # ── CV pipeline ────────────────────────────────────────────────────────────
-    yolo_conf_threshold: float = 0.45          # minimum detection confidence
+    yolo_conf_threshold: float = 0.28          # minimum detection confidence for YOLOv8 (calibrated for real-world entrance/door/stair detection)
     yolo_img_size: int = 640                   # inference resolution
 
     # Video / keyframe extraction

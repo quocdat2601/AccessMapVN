@@ -228,9 +228,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
   },
   pillarTitle: {
-    fontSize: 13,
+    flex: 1,
+    fontSize: 12.5,
     fontWeight: '700',
     color: '#0f172a',
   },
@@ -238,6 +240,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#006874',
+    flexShrink: 0,
   },
   pillarDesc: {
     fontSize: 11,

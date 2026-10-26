@@ -17,7 +17,21 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { CapturedContributionMedia } from '@/entities/contribution';
 import type { PreScanFeatureTag } from '../../api/aiPreScanService';
 import { FeatureTagSelector } from '../components/review/FeatureTagSelector';
-import { toggleFeatureTagKey, updateFieldNotes } from '../../model/tagReviewModel';
+import {
+  initializeObservationsFromKeys,
+  observationMapToConfirmedKeys,
+  observationMapToConfirmedObservations,
+  type ObservationMap,
+  type ObservationState,
+  setObservationState,
+  updateFieldNotes,
+} from '../../model/tagReviewModel';
+
+export interface UserMeasurementsInput {
+  doorClearWidthCm?: number;
+  rampHeightCm?: number;
+  rampLengthCm?: number;
+}
 
 interface TagReviewScreenProps {
   media: CapturedContributionMedia;
@@ -26,8 +40,14 @@ interface TagReviewScreenProps {
   isPreScanning: boolean;
   locationName?: string;
   locationAddress?: string | null;
+  initialObservations?: ObservationMap;
   onChangeLocation?: () => void;
-  onProceedToVerification: (confirmedTagKeys: string[], notes: string) => void;
+  onProceedToVerification: (
+    confirmedTagKeys: string[],
+    notes: string,
+    measurements?: UserMeasurementsInput,
+    confirmedObservations?: Record<string, 'present' | 'absent'>
+  ) => void;
   onRetake: () => void;
   onBack: () => void;
 }
@@ -36,19 +56,20 @@ const AI_TO_QCVN_MAP: Record<string, string[]> = {
   exterior_ramp_present: ['exterior_ramp_present'],
   steps_present: ['steps_present'],
   elevator_present: ['elevator_accessible'],
-  door_detected: ['door_width_ok'],
-  door_width_ok: ['door_width_ok'],
-  door_width_compliant: ['door_width_ok'],
   accessible_restroom_sign: ['restroom_accessible_stall'],
   tactile_paving_present: ['tactile_paving_guiding'],
+  door_detected: ['door_width_ok'],
+  door_width_compliant: ['door_width_ok'],
 };
 
 function mapDetectedToQcvn(tags: PreScanFeatureTag[]): string[] {
   const result: string[] = [];
   for (const t of tags) {
     if (t.detected) {
-      const mapped = AI_TO_QCVN_MAP[t.key] || [t.key];
-      result.push(...mapped);
+      const mapped = AI_TO_QCVN_MAP[t.key];
+      if (mapped) {
+        result.push(...mapped);
+      }
     }
   }
   return result;
@@ -61,40 +82,104 @@ export function TagReviewScreen({
   isPreScanning,
   locationName,
   locationAddress,
+  initialObservations,
   onChangeLocation,
   onProceedToVerification,
   onRetake,
   onBack,
 }: TagReviewScreenProps) {
   const insets = useSafeAreaInsets();
-  const [selectedKeys, setSelectedKeys] = useState<string[]>(() =>
-    mapDetectedToQcvn(availableTags)
-  );
+  // Khởi tạo: nếu có draft thì khôi phục draft; nếu không thì tự động chọn Có cho các tag AI phát hiện được
+  const [observations, setObservations] = useState<ObservationMap>(() => {
+    if (initialObservations && Object.keys(initialObservations).length > 0) {
+      return { ...initialObservations };
+    }
+    const detectedKeys = mapDetectedToQcvn(availableTags);
+    return initializeObservationsFromKeys(detectedKeys);
+  });
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Auto-fill tags detected by AI pre-scan once scanning completes
+  // Tự động chọn Có cho các tag AI phát hiện được khi scan hoàn tất
   React.useEffect(() => {
     if (!isPreScanning && availableTags.length > 0) {
       const detectedKeys = mapDetectedToQcvn(availableTags);
       if (detectedKeys.length > 0) {
-        setSelectedKeys((prev) => {
-          const merged = new Set([...prev, ...detectedKeys]);
-          return Array.from(merged);
+        setObservations((prev) => {
+          let updated = { ...prev };
+          let changed = false;
+          for (const k of detectedKeys) {
+            if (updated[k] !== 'absent' && updated[k] !== 'present') {
+              updated = setObservationState(updated, k, 'present');
+              changed = true;
+            }
+          }
+          return changed ? updated : prev;
         });
       }
     }
   }, [availableTags, isPreScanning]);
 
-  const handleToggle = (key: string) => {
-    setSelectedKeys((prev) => toggleFeatureTagKey(prev, key));
+  // Derived list of confirmed present keys for scoring, rules, and legacy publication
+  const selectedKeys = React.useMemo(
+    () => observationMapToConfirmedKeys(observations),
+    [observations]
+  );
+
+  // Explicit tri-state observations (both present and absent, unknown excluded)
+  const confirmedObservations = React.useMemo(
+    () => observationMapToConfirmedObservations(observations),
+    [observations]
+  );
+
+  // Optional technical measurement states
+  const [doorClearWidthStr, setDoorClearWidthStr] = useState('');
+  const [rampHeightStr, setRampHeightStr] = useState('');
+  const [rampLengthStr, setRampLengthStr] = useState('');
+
+  // AI suggestions are purely informational badges; they do not overwrite user observations.
+  const handleObservationChange = (key: string, state: ObservationState) => {
+    setObservations((prev) => setObservationState(prev, key, state));
   };
+
+  const hasRampSelected = selectedKeys.some((k) => k.toLowerCase().includes('ramp'));
+  const hasDoorSelected = selectedKeys.some(
+    (k) =>
+      k.toLowerCase().includes('door') ||
+      k.toLowerCase().includes('entrance') ||
+      k.toLowerCase().includes('step_free')
+  );
+
+  const parsedRampH = parseFloat(rampHeightStr.replace(',', '.'));
+  const parsedRampL = parseFloat(rampLengthStr.replace(',', '.'));
+  const calculatedSlopePercent =
+    !isNaN(parsedRampH) && !isNaN(parsedRampL) && parsedRampL > 0 && parsedRampH >= 0
+      ? Math.round((parsedRampH / parsedRampL) * 1000) / 10
+      : null;
+
+  const parsedDoorW = parseFloat(doorClearWidthStr.replace(',', '.'));
+  const validDoorWidthCm = !isNaN(parsedDoorW) && parsedDoorW > 0 ? parsedDoorW : null;
 
   const handleProceed = () => {
     if (isSubmitting) return;
     setIsSubmitting(true);
+
+    const measurements: UserMeasurementsInput = {};
+    if (validDoorWidthCm) {
+      measurements.doorClearWidthCm = validDoorWidthCm;
+    }
+    if (calculatedSlopePercent !== null && parsedRampH >= 0 && parsedRampL > 0) {
+      measurements.rampHeightCm = parsedRampH;
+      measurements.rampLengthCm = parsedRampL;
+    }
+
     setTimeout(() => {
-      onProceedToVerification(selectedKeys, updateFieldNotes('', notes));
+      onProceedToVerification(
+        selectedKeys,
+        updateFieldNotes('', notes),
+        Object.keys(measurements).length > 0 ? measurements : undefined,
+        confirmedObservations
+      );
     }, 600);
   };
 
@@ -180,7 +265,7 @@ export function TagReviewScreen({
             <Text style={styles.aiBannerBody}>
               {isPreScanning
                 ? 'Đang phân tích nhanh hình ảnh...'
-                : aiSummary || 'AI đã nhận diện đặc tính tiếp cận. Bạn có thể chọn hoặc chỉnh sửa thêm bên dưới.'}
+                : aiSummary || 'Không phát hiện tiện ích tiếp cận nào rõ ràng trong ảnh. Vui lòng tự chọn đặc điểm bên dưới nếu có.'}
             </Text>
           </View>
 
@@ -188,10 +273,132 @@ export function TagReviewScreen({
           <View style={styles.card}>
             <FeatureTagSelector
               availableTags={availableTags}
+              observations={observations}
               selectedKeys={selectedKeys}
-              onToggleKey={handleToggle}
+              onChangeObservation={handleObservationChange}
             />
           </View>
+
+          {/* Optional Technical Measurements */}
+          {(hasRampSelected || hasDoorSelected) && (
+            <View style={styles.card}>
+              <View style={styles.inputHeader}>
+                <MaterialCommunityIcons name="ruler-square" size={17} color="#004e58" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputTitle}>Kích thước kỹ thuật thực tế (Tùy chọn)</Text>
+                  <Text style={styles.measurementSubtitle}>
+                    Nếu có thước đo, hãy nhập số đo để hệ thống thẩm định đạt chuẩn QCVN 10
+                  </Text>
+                </View>
+              </View>
+
+              {hasRampSelected && (
+                <View style={styles.measurementSection}>
+                  <Text style={styles.measurementFieldLabel}>
+                    Độ dốc ram (Chiều cao H & Chiều dài mặt dốc L)
+                  </Text>
+                  <View style={styles.measurementRow}>
+                    <View style={styles.measurementInputWrapper}>
+                      <TextInput
+                        style={styles.measurementTextInput}
+                        value={rampHeightStr}
+                        onChangeText={setRampHeightStr}
+                        placeholder="Cao H (cm)"
+                        placeholderTextColor="#94a3b8"
+                        keyboardType="numeric"
+                        accessibilityLabel="Chiều cao dốc tính bằng cm"
+                      />
+                    </View>
+                    <Text style={styles.measurementDivideText}>/</Text>
+                    <View style={styles.measurementInputWrapper}>
+                      <TextInput
+                        style={styles.measurementTextInput}
+                        value={rampLengthStr}
+                        onChangeText={setRampLengthStr}
+                        placeholder="Dài L (cm)"
+                        placeholderTextColor="#94a3b8"
+                        keyboardType="numeric"
+                        accessibilityLabel="Chiều dài mặt dốc tính bằng cm"
+                      />
+                    </View>
+                  </View>
+                  {calculatedSlopePercent !== null && (
+                    <View
+                      style={[
+                        styles.measurementBadge,
+                        calculatedSlopePercent <= 8.33
+                          ? styles.measurementBadgeSuccess
+                          : styles.measurementBadgeWarning,
+                      ]}
+                    >
+                      <MaterialCommunityIcons
+                        name={calculatedSlopePercent <= 8.33 ? 'check-decagram' : 'alert-circle-outline'}
+                        size={14}
+                        color={calculatedSlopePercent <= 8.33 ? '#007D78' : '#B45309'}
+                      />
+                      <Text
+                        style={[
+                          styles.measurementBadgeText,
+                          calculatedSlopePercent <= 8.33
+                            ? styles.measurementBadgeTextSuccess
+                            : styles.measurementBadgeTextWarning,
+                        ]}
+                      >
+                        {calculatedSlopePercent <= 8.33
+                          ? `Độ dốc ${calculatedSlopePercent}% (≤ 8.33% · Đạt chuẩn QCVN 10)`
+                          : `Độ dốc ${calculatedSlopePercent}% (> 8.33% · Vượt quá độ dốc an toàn xe lăn)`}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {hasDoorSelected && (
+                <View style={[styles.measurementSection, hasRampSelected && { marginTop: 12 }]}>
+                  <Text style={styles.measurementFieldLabel}>
+                    Độ rộng lọt lòng cửa ra vào (Chuẩn QCVN 10: ≥ 90 cm)
+                  </Text>
+                  <TextInput
+                    style={styles.measurementTextInput}
+                    value={doorClearWidthStr}
+                    onChangeText={setDoorClearWidthStr}
+                    placeholder="Ví dụ: 95 (cm)"
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="numeric"
+                    accessibilityLabel="Độ rộng lọt lòng cửa tính bằng cm"
+                  />
+                  {validDoorWidthCm !== null && (
+                    <View
+                      style={[
+                        styles.measurementBadge,
+                        validDoorWidthCm >= 90
+                          ? styles.measurementBadgeSuccess
+                          : styles.measurementBadgeWarning,
+                      ]}
+                    >
+                      <MaterialCommunityIcons
+                        name={validDoorWidthCm >= 90 ? 'check-decagram' : 'alert-circle-outline'}
+                        size={14}
+                        color={validDoorWidthCm >= 90 ? '#007D78' : '#B45309'}
+                      />
+                      <Text
+                        style={[
+                          styles.measurementBadgeText,
+                          validDoorWidthCm >= 90
+                            ? styles.measurementBadgeTextSuccess
+                            : styles.measurementBadgeTextWarning,
+                        ]}
+                      >
+                        {validDoorWidthCm >= 90
+                          ? `Độ rộng ${validDoorWidthCm} cm (≥ 90 cm · Đạt chuẩn QCVN 10)`
+                          : `Độ rộng ${validDoorWidthCm} cm (< 90 cm · Hẹp so với xe lăn tiêu chuẩn)`}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
+          )}
 
           {/* Optional Field Notes */}
           <View style={styles.card}>
@@ -404,6 +611,76 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#0f172a',
+  },
+  measurementSubtitle: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  measurementSection: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+  },
+  measurementFieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+    marginBottom: 6,
+  },
+  measurementRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  measurementInputWrapper: {
+    flex: 1,
+  },
+  measurementDivideText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#94a3b8',
+  },
+  measurementTextInput: {
+    backgroundColor: '#f8faf9',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    color: '#0f172a',
+    fontSize: 13,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  measurementBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  measurementBadgeSuccess: {
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+  },
+  measurementBadgeWarning: {
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+  },
+  measurementBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  measurementBadgeTextSuccess: {
+    color: '#007D78',
+  },
+  measurementBadgeTextWarning: {
+    color: '#b45309',
   },
   textInput: {
     backgroundColor: '#f8faf9',

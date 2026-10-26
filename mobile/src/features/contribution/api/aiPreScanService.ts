@@ -31,13 +31,13 @@ interface AiPreScanPayload {
 }
 
 const FEATURE_LABEL_MAP: Record<string, string> = {
-  exterior_ramp_present: 'Ram dốc ngoài trời',
-  ramp_slope_compliant: 'Độ dốc đạt chuẩn (≤ 1/12)',
+  exterior_ramp_present: 'Ram dốc',
+  ramp_slope_compliant: 'Dốc thoải',
   steps_present: 'Bậc thang',
   elevator_present: 'Thang máy tiếp cận',
-  door_detected: 'Có cửa ra vào',
-  door_width_compliant: 'Cửa thông thủy ≥90cm',
-  door_width_ok: 'Cửa rộng ≥80cm (Legacy)',
+  door_detected: 'Cửa ra vào',
+  door_width_compliant: 'Cửa ra vào',
+  door_width_ok: 'Cửa ra vào',
   accessible_restroom_sign: 'WC tiếp cận',
   tactile_paving_present: 'Lối đi xúc giác',
 };

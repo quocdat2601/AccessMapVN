@@ -38,9 +38,9 @@ export function ScoreMatrixBreakdown({
                 <View style={[styles.personaIconWrap, { backgroundColor: 'rgba(56, 189, 248, 0.15)' }]}>
                   <MaterialCommunityIcons name="wheelchair-accessibility" size={20} color="#38bdf8" />
                 </View>
-                <View>
-                  <Text style={styles.personaName}>Người dùng xe lăn & vận động</Text>
-                  <Text style={styles.personaSub}>Ram dốc, cửa lọt lòng, không gian vệ sinh</Text>
+                <View style={styles.personaTextCol}>
+                  <Text style={styles.personaName} numberOfLines={1}>Người dùng xe lăn & vận động</Text>
+                  <Text style={styles.personaSub} numberOfLines={1}>Ram dốc, cửa lọt lòng, không gian vệ sinh</Text>
                 </View>
               </View>
               <View style={styles.scorePill}>
@@ -141,9 +141,9 @@ export function ScoreMatrixBreakdown({
                 <View style={[styles.personaIconWrap, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
                   <MaterialCommunityIcons name="human-cane" size={20} color="#d97706" />
                 </View>
-                <View>
-                  <Text style={styles.personaName}>Người cao tuổi & Xe đẩy trẻ em</Text>
-                  <Text style={styles.personaSub}>Dốc thoải, sàn phẳng, thang máy và gờ cửa</Text>
+                <View style={styles.personaTextCol}>
+                  <Text style={styles.personaName} numberOfLines={1}>Người cao tuổi & Xe đẩy trẻ em</Text>
+                  <Text style={styles.personaSub} numberOfLines={1}>Dốc thoải, sàn phẳng, thang máy và gờ cửa</Text>
                 </View>
               </View>
               <View style={styles.scorePill}>
@@ -154,31 +154,33 @@ export function ScoreMatrixBreakdown({
             </View>
 
             <View style={styles.badgesRow}>
-              <View
-                style={[
-                  styles.fitBadge,
-                  !penalties?.stepsWithoutRamp
-                    ? styles.badgeSuccess
-                    : styles.badgeWarning,
-                ]}
-              >
-                <MaterialCommunityIcons
-                  name={!penalties?.stepsWithoutRamp ? 'check-circle' : 'alert-circle-outline'}
-                  size={12}
-                  color={!penalties?.stepsWithoutRamp ? '#10b981' : '#f59e0b'}
-                />
-                <Text
-                  style={[
-                    styles.fitBadgeText,
-                    { color: !penalties?.stepsWithoutRamp ? '#10b981' : '#f59e0b' },
-                  ]}
-                >
-                  Lối đi cho xe đẩy & người già:{' '}
-                  {!penalties?.stepsWithoutRamp
-                    ? 'Thuận tiện, không vướng bậc'
-                    : 'Có bậc cản, cần nâng/bê'}
-                </Text>
-              </View>
+              {(() => {
+                const isLowConfidence = (matrixResult?.overallScore ?? 0) < 60;
+                if (isLowConfidence) {
+                  return (
+                    <View style={[styles.fitBadge, styles.badgeWarning]}>
+                      <MaterialCommunityIcons name="help-circle-outline" size={12} color="#f59e0b" />
+                      <Text style={[styles.fitBadgeText, { color: '#f59e0b' }]}>
+                        Lối đi cho xe đẩy & người già: Chưa đủ dữ liệu ảnh để kết luận
+                      </Text>
+                    </View>
+                  );
+                }
+                const isStepFree = !penalties?.stepsWithoutRamp;
+                return (
+                  <View style={[styles.fitBadge, isStepFree ? styles.badgeSuccess : styles.badgeWarning]}>
+                    <MaterialCommunityIcons
+                      name={isStepFree ? 'check-circle' : 'alert-circle-outline'}
+                      size={12}
+                      color={isStepFree ? '#10b981' : '#f59e0b'}
+                    />
+                    <Text style={[styles.fitBadgeText, { color: isStepFree ? '#10b981' : '#f59e0b' }]}>
+                      Lối đi cho xe đẩy & người già:{' '}
+                      {isStepFree ? 'Thuận tiện, không vướng bậc' : 'Có bậc cản, cần nâng/bê'}
+                    </Text>
+                  </View>
+                );
+              })()}
             </View>
           </View>
         </View>
@@ -378,6 +380,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     flex: 1,
+    marginRight: 8,
   },
   personaIconWrap: {
     width: 32,
@@ -385,16 +388,23 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
+  },
+  personaTextCol: {
+    flex: 1,
+    justifyContent: 'center',
   },
   personaName: {
     fontSize: 13,
     fontWeight: '700',
     color: '#0f172a',
+    flexShrink: 1,
   },
   personaSub: {
     fontSize: 11,
     color: '#64748b',
     marginTop: 1,
+    flexShrink: 1,
   },
   scorePill: {
     backgroundColor: '#f1f5f9',
@@ -403,6 +413,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    flexShrink: 0,
+    alignSelf: 'center',
   },
   scorePillText: {
     fontSize: 13,
@@ -418,9 +430,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: 8,
     borderWidth: 1,
+    maxWidth: '100%',
   },
   badgeSuccess: {
     backgroundColor: '#ecfdf5',
@@ -441,6 +454,8 @@ const styles = StyleSheet.create({
   fitBadgeText: {
     fontSize: 11,
     fontWeight: '600',
+    flexShrink: 1,
+    lineHeight: 15,
   },
   penaltyAlert: {
     flexDirection: 'row',

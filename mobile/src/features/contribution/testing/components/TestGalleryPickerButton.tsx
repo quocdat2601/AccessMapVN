@@ -69,7 +69,7 @@ export function TestGalleryPickerButton({
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: false,
-        quality: 0.8,
+        quality: 0.7,
         base64: true,
       });
 

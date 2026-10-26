@@ -275,63 +275,76 @@ async function postIdempotent<T>(
 export async function postMultipart<T = unknown>(
   url: string,
   formData: FormData,
-  timeoutMs = 15_000
+  timeoutMs = 15_000,
+  retries = 1
 ): Promise<T> {
-  // Use standard fetch first (native OkHttp streaming on Android, handles FormData reliably)
-  if (typeof fetch === 'function') {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-        },
-        body: formData,
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-      if (response.ok) {
-        try {
-          return (await response.json()) as T;
-        } catch {
-          return (await response.text()) as unknown as T;
+  const attempt = async (): Promise<T> => {
+    // Use standard fetch first (native OkHttp streaming on Android, handles FormData reliably)
+    if (typeof fetch === 'function') {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+          },
+          body: formData,
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        if (response.ok) {
+          try {
+            return (await response.json()) as T;
+          } catch {
+            return (await response.text()) as unknown as T;
+          }
         }
-      }
-      const errText = await response.text().catch(() => '');
-      throw new Error(`Server responded with status ${response.status}: ${errText}`);
-    } catch (fetchErr: any) {
-      clearTimeout(timeoutId);
-      if (controller.signal.aborted) {
-        throw new Error(`Request timed out after ${timeoutMs}ms`);
-      }
-      // If server returned a 4xx/5xx HTTP error, do not retry with XHR
-      if (fetchErr.message?.startsWith('Server responded with status')) {
-        throw fetchErr;
+        const errText = await response.text().catch(() => '');
+        throw new Error(`Server responded with status ${response.status}: ${errText}`);
+      } catch (fetchErr: any) {
+        clearTimeout(timeoutId);
+        if (controller.signal.aborted) {
+          throw new Error(`Request timed out after ${timeoutMs}ms`);
+        }
+        // If server returned a 4xx/5xx HTTP error, do not retry with XHR
+        if (fetchErr.message?.startsWith('Server responded with status')) {
+          throw fetchErr;
+        }
       }
     }
-  }
 
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', url);
-    xhr.timeout = timeoutMs;
-    xhr.setRequestHeader('Accept', 'application/json');
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          resolve(JSON.parse(xhr.responseText));
-        } catch {
-          resolve(xhr.responseText as T);
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', url);
+      xhr.timeout = timeoutMs;
+      xhr.setRequestHeader('Accept', 'application/json');
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            resolve(JSON.parse(xhr.responseText));
+          } catch {
+            resolve(xhr.responseText as T);
+          }
+        } else {
+          reject(new Error(`Server responded with status ${xhr.status}: ${xhr.responseText}`));
         }
-      } else {
-        reject(new Error(`Server responded with status ${xhr.status}: ${xhr.responseText}`));
-      }
-    };
-    xhr.onerror = () => reject(new Error(`Network request failed to ${url} (status: ${xhr.status || 'aborted/offline'})`));
-    xhr.ontimeout = () => reject(new Error(`Request timed out after ${timeoutMs}ms`));
-    xhr.send(formData as any);
-  });
+      };
+      xhr.onerror = () => reject(new Error(`Network request failed to ${url} (status: ${xhr.status || 'aborted/offline'})`));
+      xhr.ontimeout = () => reject(new Error(`Request timed out after ${timeoutMs}ms`));
+      xhr.send(formData as any);
+    });
+  };
+
+  try {
+    return await attempt();
+  } catch (err: any) {
+    if (retries > 0 && !err?.message?.startsWith('Server responded with status')) {
+      await new Promise((r) => setTimeout(r, 400));
+      return postMultipart(url, formData, timeoutMs, retries - 1);
+    }
+    throw err;
+  }
 }
 
 export const apiClient = {

@@ -3,13 +3,28 @@
  */
 
 export type FeatureCategory = 'entrance' | 'sanitation' | 'visual' | 'amenity';
+export type FeatureGroup = 'door' | 'ramp' | 'steps' | 'restroom' | 'elevator' | 'visual' | 'amenity';
+export type ObservationState = 'present' | 'absent' | 'unknown' | 'not_applicable';
+export type ObservationMap = Record<string, ObservationState>;
 
 export interface QcvnTagDefinition {
   key: string;
   label: string;
   category: FeatureCategory;
+  group: FeatureGroup;
+  parentKey?: string;
   targetProfile: 'wheelchair' | 'blind' | 'both';
   icon: string;
+}
+
+export interface EntityGroupDefinition {
+  id: FeatureGroup;
+  title: string;
+  icon: string;
+  category: FeatureCategory;
+  primaryKey?: string;
+  parentKey?: string;
+  description?: string;
 }
 
 export const CATEGORY_CONFIG: Record<
@@ -38,47 +53,113 @@ export const CATEGORY_CONFIG: Record<
   },
 };
 
+export const ENTITY_GROUPS: EntityGroupDefinition[] = [
+  {
+    id: 'door',
+    title: 'Cửa ra vào',
+    icon: 'door-open',
+    category: 'entrance',
+    primaryKey: 'door_width_ok',
+    description: 'Quan sát cửa và lối qua lại',
+  },
+  {
+    id: 'ramp',
+    title: 'Ram dốc',
+    icon: 'slope-uphill',
+    category: 'entrance',
+    primaryKey: 'exterior_ramp_present',
+    description: 'Đường dốc cho người đi xe lăn',
+  },
+  {
+    id: 'steps',
+    title: 'Bậc tam cấp / Cầu thang',
+    icon: 'stairs',
+    category: 'entrance',
+    primaryKey: 'steps_present',
+    description: 'Bậc tam cấp hoặc cầu thang lối vào',
+  },
+  {
+    id: 'restroom',
+    title: 'Nhà vệ sinh',
+    icon: 'toilet',
+    category: 'sanitation',
+    primaryKey: 'restroom_accessible_stall',
+    description: 'Khu vệ sinh và tiện ích hỗ trợ',
+  },
+  {
+    id: 'elevator',
+    title: 'Thang máy',
+    icon: 'elevator-passenger-outline',
+    category: 'sanitation',
+    primaryKey: 'elevator_accessible',
+    description: 'Thang máy di chuyển giữa các tầng',
+  },
+  {
+    id: 'amenity',
+    title: 'Tiện ích hỗ trợ',
+    icon: 'dots-horizontal-circle-outline',
+    category: 'amenity',
+    description: 'Đỗ xe ưu tiên và quầy giao dịch',
+  },
+  {
+    id: 'visual',
+    title: 'Hỗ trợ thị giác & xúc giác',
+    icon: 'eye-outline',
+    category: 'visual',
+    description: 'Gạch dẫn hướng và chỉ dẫn nổi',
+  },
+];
+
 export const QCVN_FEATURE_TAGS: QcvnTagDefinition[] = [
   // 1. Nhóm Lối vào & Mặt phẳng di chuyển (Entrances & Paths)
   {
-    key: 'exterior_ramp_present',
-    label: 'Có ram dốc ngoài trời',
-    category: 'entrance',
-    targetProfile: 'wheelchair',
-    icon: 'slope-uphill',
-  },
-  {
-    key: 'ramp_slope_comfortable',
-    label: 'Dốc thoải (≤ 1/16 - 1/20)',
-    category: 'entrance',
-    targetProfile: 'wheelchair',
-    icon: 'check-circle-outline',
-  },
-  {
     key: 'door_width_ok',
-    label: 'Cửa thông thủy ≥ 90cm',
+    label: 'Cửa ra vào',
     category: 'entrance',
+    group: 'door',
     targetProfile: 'wheelchair',
     icon: 'door-open',
   },
   {
     key: 'door_threshold_flat',
-    label: 'Sàn phẳng (gờ cửa ≤ 2cm)',
+    label: 'Ngạch cửa phẳng',
     category: 'entrance',
+    group: 'door',
+    parentKey: 'door_width_ok',
     targetProfile: 'wheelchair',
     icon: 'ray-start-end',
   },
   {
     key: 'door_lever_handle',
-    label: 'Tay nắm gạt / Cửa tự động',
+    label: 'Cửa tự động / tay gạt',
     category: 'entrance',
+    group: 'door',
+    parentKey: 'door_width_ok',
     targetProfile: 'wheelchair',
     icon: 'hand-back-right-outline',
   },
   {
-    key: 'steps_present',
-    label: 'Có bậc tam cấp / Bậc cản',
+    key: 'exterior_ramp_present',
+    label: 'Ram dốc',
     category: 'entrance',
+    group: 'ramp',
+    targetProfile: 'wheelchair',
+    icon: 'slope-uphill',
+  },
+  {
+    key: 'ramp_slope_comfortable',
+    label: 'Độ dốc thoải',
+    category: 'entrance',
+    group: 'ramp',
+    parentKey: 'exterior_ramp_present',
+    targetProfile: 'wheelchair',
+    icon: 'check-circle-outline',
+  },
+  {
+    key: 'steps_present',
+    label: 'Bậc tam cấp / Cầu thang',
+    category: 'entrance',
+    group: 'steps',
     targetProfile: 'wheelchair',
     icon: 'stairs',
   },
@@ -86,29 +167,35 @@ export const QCVN_FEATURE_TAGS: QcvnTagDefinition[] = [
   // 2. Nhóm Vận động đứng & Vệ sinh (Sanitation & Vertical)
   {
     key: 'elevator_accessible',
-    label: 'Thang máy có nút thấp & tay vịn',
+    label: 'Thang máy',
     category: 'sanitation',
+    group: 'elevator',
     targetProfile: 'both',
     icon: 'elevator-passenger-outline',
   },
   {
     key: 'restroom_accessible_stall',
-    label: 'WC có vòng xoay xe lăn ≥ 150cm',
+    label: 'Nhà vệ sinh',
     category: 'sanitation',
+    group: 'restroom',
     targetProfile: 'wheelchair',
     icon: 'wheelchair-accessibility',
   },
   {
     key: 'restroom_grab_bars',
-    label: 'Có thanh vịn chịu lực bồn cầu',
+    label: 'Tay vịn bồn cầu',
     category: 'sanitation',
+    group: 'restroom',
+    parentKey: 'restroom_accessible_stall',
     targetProfile: 'wheelchair',
     icon: 'gesture-tap-button',
   },
   {
     key: 'restroom_sink_clearance',
-    label: 'Gầm bồn rửa trống chân (sâu ≥ 30cm)',
+    label: 'Khoảng trống gầm bồn rửa',
     category: 'sanitation',
+    group: 'restroom',
+    parentKey: 'restroom_accessible_stall',
     targetProfile: 'wheelchair',
     icon: 'water-pump',
   },
@@ -116,43 +203,49 @@ export const QCVN_FEATURE_TAGS: QcvnTagDefinition[] = [
   // 3. Nhóm Hỗ trợ Khiếm thị & Định hướng (Visual Impairment & Tactile)
   {
     key: 'tactile_paving_guiding',
-    label: 'Gạch sọc dẫn hướng đi thẳng',
+    label: 'Gạch dẫn hướng (sọc)',
     category: 'visual',
+    group: 'visual',
     targetProfile: 'blind',
     icon: 'reorder-horizontal',
   },
   {
     key: 'tactile_paving_warning',
-    label: 'Gạch chấm bi cảnh báo dừng/bậc',
+    label: 'Gạch cảnh báo (chấm)',
     category: 'visual',
+    group: 'visual',
     targetProfile: 'blind',
     icon: 'dots-grid',
   },
   {
     key: 'tactile_paving_blocked',
-    label: 'Gạch xúc giác bị vật cản đè lên',
+    label: 'Lối xúc giác bị chặn',
     category: 'visual',
+    group: 'visual',
     targetProfile: 'blind',
     icon: 'alert-octagon-outline',
   },
   {
     key: 'overhead_clearance_ok',
-    label: 'Tĩnh không an toàn (≥ 2.0m)',
+    label: 'Lối đi thông thoáng trên đầu',
     category: 'visual',
+    group: 'visual',
     targetProfile: 'blind',
     icon: 'arrow-split-horizontal',
   },
   {
     key: 'braille_signage_present',
-    label: 'Có chữ nổi Braille chỉ dẫn/nút bấm',
+    label: 'Chữ nổi Braille',
     category: 'visual',
+    group: 'visual',
     targetProfile: 'blind',
     icon: 'braille',
   },
   {
     key: 'audible_signal_present',
-    label: 'Âm thanh thông báo đèn/thang máy',
+    label: 'Âm thanh thông báo',
     category: 'visual',
+    group: 'visual',
     targetProfile: 'blind',
     icon: 'volume-high',
   },
@@ -160,15 +253,17 @@ export const QCVN_FEATURE_TAGS: QcvnTagDefinition[] = [
   // 4. Nhóm Tiện ích Bổ trợ (Auxiliary Amenities)
   {
     key: 'parking_accessible_space',
-    label: 'Ô đỗ xe ưu tiên rộng ≥ 3.5m',
+    label: 'Chỗ đỗ xe ưu tiên NKT',
     category: 'amenity',
+    group: 'amenity',
     targetProfile: 'wheelchair',
     icon: 'car-parking-lights',
   },
   {
     key: 'counter_lowered_section',
-    label: 'Bàn giao dịch hạ thấp (70-80cm)',
+    label: 'Quầy phục vụ hạ thấp',
     category: 'amenity',
+    group: 'amenity',
     targetProfile: 'wheelchair',
     icon: 'table-furniture',
   },
@@ -179,6 +274,101 @@ export const QCVN_FEATURE_TAGS: QcvnTagDefinition[] = [
  */
 export function getTagsByCategory(category: FeatureCategory): QcvnTagDefinition[] {
   return QCVN_FEATURE_TAGS.filter((tag) => tag.category === category);
+}
+
+/**
+ * Returns entity groups belonging to a category.
+ */
+export function getGroupsByCategory(category: FeatureCategory): EntityGroupDefinition[] {
+  return ENTITY_GROUPS.filter((g) => g.category === category);
+}
+
+/**
+ * Returns tags belonging to a specific entity group.
+ */
+export function getTagsByGroup(group: FeatureGroup): QcvnTagDefinition[] {
+  return QCVN_FEATURE_TAGS.filter((tag) => tag.group === group);
+}
+
+/**
+ * Resolves effective state of an observation tag taking parent dependency into account.
+ * If parent item is explicitly 'absent', child is 'not_applicable'.
+ */
+export function resolveEffectiveState(
+  key: string,
+  observations: ObservationMap
+): ObservationState {
+  const def = QCVN_FEATURE_TAGS.find((t) => t.key === key);
+  if (def?.parentKey) {
+    const parentState = observations[def.parentKey] ?? 'unknown';
+    if (parentState === 'absent') {
+      return 'not_applicable';
+    }
+  }
+  return observations[key] ?? 'unknown';
+}
+
+/**
+ * Updates an observation key and cascade updates child states if parent becomes absent.
+ */
+export function setObservationState(
+  current: ObservationMap,
+  key: string,
+  nextState: ObservationState
+): ObservationMap {
+  const updated: ObservationMap = { ...current, [key]: nextState };
+  if (nextState === 'absent') {
+    // Cascade disable direct children
+    for (const tag of QCVN_FEATURE_TAGS) {
+      if (tag.parentKey === key) {
+        updated[tag.key] = 'not_applicable';
+      }
+    }
+  } else if (nextState === 'present' || nextState === 'unknown') {
+    // Reset child states if they were 'not_applicable'
+    for (const tag of QCVN_FEATURE_TAGS) {
+      if (tag.parentKey === key && updated[tag.key] === 'not_applicable') {
+        updated[tag.key] = 'unknown';
+      }
+    }
+  }
+  return updated;
+}
+
+/**
+ * Converts an observation map to the list of confirmed present keys.
+ */
+export function observationMapToConfirmedKeys(observations: ObservationMap): string[] {
+  return Object.entries(observations)
+    .filter(([_, state]) => state === 'present')
+    .map(([key]) => key);
+}
+
+/**
+ * Extracts explicit user observations (both 'present' and 'absent').
+ * Keys that are 'unknown' or unobserved are omitted to preserve baseline.
+ */
+export function observationMapToConfirmedObservations(
+  observations: ObservationMap
+): Record<string, 'present' | 'absent'> {
+  const result: Record<string, 'present' | 'absent'> = {};
+  for (const [key, state] of Object.entries(observations)) {
+    if (state === 'present' || state === 'absent') {
+      result[key] = state;
+    }
+  }
+  return result;
+}
+
+/**
+ * Initializes observation map from an existing list of confirmed present keys.
+ */
+export function initializeObservationsFromKeys(presentKeys: string[]): ObservationMap {
+  const map: ObservationMap = {};
+  for (const tag of QCVN_FEATURE_TAGS) {
+    map[tag.key] = presentKeys.includes(tag.key) ? 'present' : 'unknown';
+  }
+  return map;
 }
 
 /**
@@ -212,22 +402,32 @@ export function updateFieldNotes(currentNotes: string, newNotes: string): string
  * Adapter mapping QCVN sub-features to candidate pre-scan AI detection keys.
  */
 export const CV_TO_QCVN_PARENT_MAP: Record<string, string[]> = {
+  door_detected: ['door_detected', 'door_width_compliant', 'door_width_ok'],
   door_width_ok: ['door_detected', 'door_width_compliant', 'door_width_ok'],
   door_width_wide: ['door_detected', 'door_width_compliant', 'door_width_ok'],
   door_threshold_flat: ['door_detected', 'door_width_compliant', 'door_width_ok'],
+  door_threshold_flat_observed: ['door_detected', 'door_width_compliant', 'door_width_ok'],
   door_handle_lever: ['door_detected', 'door_width_compliant', 'door_width_ok'],
   door_lever_handle: ['door_detected', 'door_width_compliant', 'door_width_ok'],
+  door_auto_present: ['door_detected', 'door_width_compliant', 'door_width_ok'],
   ramp_slope_comfortable: ['exterior_ramp_present', 'ramp_slope_compliant'],
   ramp_handrails_present: ['exterior_ramp_present'],
   exterior_ramp_present: ['exterior_ramp_present'],
   steps_present: ['steps_present'],
-  elevator_accessible: ['elevator_present'],
+  elevator_present: ['elevator_present', 'elevator_accessible'],
+  elevator_accessible: ['elevator_present', 'elevator_accessible'],
+  restroom_present: ['accessible_restroom_sign'],
   restroom_accessible_stall: ['accessible_restroom_sign'],
+  restroom_sign_present: ['accessible_restroom_sign'],
   restroom_grab_bars: ['accessible_restroom_sign'],
   restroom_sink_clearance: ['accessible_restroom_sign'],
+  restroom_sink_clearance_observed: ['accessible_restroom_sign'],
   tactile_paving_guiding: ['tactile_paving_present'],
   tactile_paving_warning: ['tactile_paving_present'],
   tactile_paving_blocked: ['tactile_paving_present'],
+  parking_accessible_space: ['parking_disability_sign_present'],
+  parking_disability_sign_present: ['parking_disability_sign_present'],
+  counter_lowered_section: [],
 };
 
 /**

@@ -127,12 +127,27 @@ function FeatureCard({ locationId, feature, onRequestReport, refreshTrigger }: F
         setOriginalBaselineState(fetched);
       }
     } catch (error) {
-      if (error instanceof ApiError && error.status === 404) setUnavailable(true);
-      else setMessage('Chưa tải được trạng thái cộng đồng. Hãy thử lại sau.');
+      if (error instanceof ApiError && error.status === 404) {
+        setState({
+          locationId,
+          featureType: feature.featureType,
+          featureVersion: 1,
+          publishedStatus: feature.publishedStatus,
+          label: 'Uncorroborated',
+          eligibleVoterCount: 0,
+          contradictingVoterCount: 0,
+          lastTrustedReconfirmedAt: null,
+          freshnessFactor: 1,
+          advisory: null,
+        });
+        setUnavailable(false);
+      } else {
+        setMessage('Chưa tải được trạng thái cộng đồng. Hãy thử lại sau.');
+      }
     } finally {
       setLoading(false);
     }
-  }, [feature.featureType, locationId]);
+  }, [feature.featureType, feature.publishedStatus, locationId]);
 
   useEffect(() => {
     void load();

@@ -121,13 +121,23 @@ export function FeatureVerificationModal({
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.scrollContent}
           >
-            <FeatureCommunitySection
-              locationId={locationId}
-              features={features}
-              hideHeader
-              onRequestReport={onRequestReport}
-              refreshTrigger={refreshTrigger}
-            />
+            {features.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <MaterialCommunityIcons name="clipboard-text-search-outline" size={38} color="#94A3B8" />
+                <Text style={styles.emptyTitle}>Chưa có tiện ích cần xác nhận</Text>
+                <Text style={styles.emptyText}>
+                  Địa điểm này chưa có tiện ích tiếp cận được công bố để bình chọn. Bạn có thể gửi đóng góp dữ liệu mới bằng ảnh/video.
+                </Text>
+              </View>
+            ) : (
+              <FeatureCommunitySection
+                locationId={locationId}
+                features={features}
+                hideHeader
+                onRequestReport={onRequestReport}
+                refreshTrigger={refreshTrigger}
+              />
+            )}
           </ScrollView>
 
           {/* Modal Footer */}
@@ -310,5 +320,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 36,
+    paddingHorizontal: 24,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#334155',
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  emptyText: {
+    fontSize: 12.5,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });

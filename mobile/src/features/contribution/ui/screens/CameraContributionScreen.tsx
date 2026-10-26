@@ -29,7 +29,7 @@ import {
 import { reverseGeocode } from '@/entities/place';
 
 import { styles } from './CameraContributionScreen.styles';
-import { TagReviewScreen } from './TagReviewScreen';
+import { TagReviewScreen, type UserMeasurementsInput } from './TagReviewScreen';
 import { FinalScorecardScreen } from './FinalScorecardScreen';
 import {
   verifyWithAiOrFallback,
@@ -133,7 +133,9 @@ function ActiveCameraContributionScreen() {
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isPreScanning, setIsPreScanning] = useState(false);
   const [confirmedTagKeys, setConfirmedTagKeys] = useState<string[]>([]);
+  const [userObservations, setUserObservations] = useState<Record<string, 'present' | 'absent'>>({});
   const [fieldNotes, setFieldNotes] = useState('');
+  const [userMeasurements, setUserMeasurements] = useState<UserMeasurementsInput | null>(null);
   const [matrixResult, setMatrixResult] = useState<VerificationMatrixResult | null>(null);
 
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
@@ -460,13 +462,23 @@ function ActiveCameraContributionScreen() {
     setMessage(null);
     setWorkflowStep('camera');
     setMatrixResult(null);
+    setUserObservations({});
   }, []);
 
   const handleProceedToVerification = useCallback(
-    async (selectedKeys: string[], notes: string) => {
+    async (
+      selectedKeys: string[],
+      notes: string,
+      measurements?: UserMeasurementsInput,
+      confirmedObservations?: Record<string, 'present' | 'absent'>
+    ) => {
       if (!capturedMedia) return;
       setConfirmedTagKeys(selectedKeys);
       setFieldNotes(notes);
+      setUserMeasurements(measurements ?? null);
+      if (confirmedObservations) {
+        setUserObservations(confirmedObservations);
+      }
 
       const detectedPreScan = preScanTags.filter((t) => t.detected && t.confidence > 0);
       const detectedMap = new Map(detectedPreScan.map((t) => [t.key, t.confidence]));
@@ -516,7 +528,9 @@ function ActiveCameraContributionScreen() {
           media={capturedMedia}
           matrixResult={matrixResult}
           selectedTagKeys={confirmedTagKeys}
+          confirmedObservations={userObservations}
           notes={fieldNotes}
+          userMeasurements={userMeasurements}
           locationName={targetLocationName}
           locationAddress={targetAddress}
           onChangeLocation={() => setShowLocationModal(true)}
@@ -549,6 +563,7 @@ function ActiveCameraContributionScreen() {
           isPreScanning={isPreScanning}
           locationName={targetLocationName}
           locationAddress={targetAddress}
+          initialObservations={userObservations as any}
           onChangeLocation={() => setShowLocationModal(true)}
           onProceedToVerification={handleProceedToVerification}
           onRetake={handleRetake}

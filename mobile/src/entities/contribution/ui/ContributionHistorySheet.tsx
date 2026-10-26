@@ -14,6 +14,7 @@ import { Colors } from '@/shared/theme';
 import {
   getContributionRecords,
   loadContributionRecords,
+  syncPendingSubmissionsWithBackend,
 } from '../model/store';
 import type { ContributionSubmissionRecord } from '../model/types';
 
@@ -27,7 +28,7 @@ export function ContributionHistorySheet({ visible, onClose }: ContributionHisto
 
   useEffect(() => {
     if (visible) {
-      void loadContributionRecords().then((records) => {
+      void syncPendingSubmissionsWithBackend().then((records) => {
         setItems(records.length > 0 ? records : getContributionRecords());
       });
     }
@@ -109,13 +110,35 @@ export function ContributionHistorySheet({ visible, onClose }: ContributionHisto
                         {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · {new Date(item.createdAt).toLocaleDateString('vi-VN')}
                       </Text>
                       <View style={styles.statusRow}>
-                        <View style={styles.statusBadge}>
-                          <MaterialCommunityIcons name="check-circle" size={13} color="#10b981" />
-                          <Text style={styles.statusText}>
-                            Tự động phê duyệt ({Math.round(item.confidenceScore * 100)}%)
-                          </Text>
-                        </View>
-                        <Text style={styles.itemExp}>+{item.pointsAwarded} EXP</Text>
+                        {item.status === 'Rejected' ? (
+                          <View style={[styles.statusBadge, { backgroundColor: '#fef2f2' }]}>
+                            <MaterialCommunityIcons name="close-circle" size={13} color="#ef4444" />
+                            <Text style={[styles.statusText, { color: '#ef4444' }]}>
+                              Đã từ chối hồ sơ
+                            </Text>
+                          </View>
+                        ) : item.status === 'Pending Moderation' || item.status === 'Submitted' ? (
+                          <View style={[styles.statusBadge, { backgroundColor: '#fffbeb' }]}>
+                            <MaterialCommunityIcons name="clock-outline" size={13} color="#d97706" />
+                            <Text style={[styles.statusText, { color: '#d97706' }]}>
+                              Đang chờ duyệt
+                            </Text>
+                          </View>
+                        ) : (
+                          <View style={styles.statusBadge}>
+                            <MaterialCommunityIcons name="check-circle" size={13} color="#10b981" />
+                            <Text style={styles.statusText}>
+                              Tự động phê duyệt ({Math.round(item.confidenceScore * 100)}%)
+                            </Text>
+                          </View>
+                        )}
+                        <Text style={styles.itemExp}>
+                          {item.status === 'Rejected'
+                            ? '+0 EXP'
+                            : item.status === 'Pending Moderation' || item.status === 'Submitted'
+                              ? 'Chờ duyệt'
+                              : `+${item.pointsAwarded} EXP`}
+                        </Text>
                       </View>
                     </View>
                   </View>

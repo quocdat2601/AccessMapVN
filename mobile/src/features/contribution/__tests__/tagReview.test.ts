@@ -1,9 +1,15 @@
 import assert from 'node:assert';
 import {
+  getGroupsByCategory,
   getTagsByCategory,
+  initializeObservationsFromKeys,
   isViolationOrObstacleTag,
   matchSelectedTagsWithCvDetections,
+  observationMapToConfirmedKeys,
+  observationMapToConfirmedObservations,
   QCVN_FEATURE_TAGS,
+  resolveEffectiveState,
+  setObservationState,
   toggleFeatureTagKey,
   updateFieldNotes,
 } from '../model/tagReviewModel.ts';
@@ -87,6 +93,70 @@ export function runTagReviewTests() {
     assert.strictEqual(rampMatch.matchedCount, 2);
     assert.strictEqual(rampMatch.cvConfidence, 0.90);
     console.log('  ✅ Test Case 5: AI Pre-scan door_detected & ramp tags match QCVN features (PASSED)');
+  }
+
+  // Test Case 6: Quản lý trạng thái quan sát Tri-State và ràng buộc cha-con
+  {
+    let obs = initializeObservationsFromKeys(['door_width_ok', 'exterior_ramp_present']);
+    assert.strictEqual(obs.door_width_ok, 'present');
+    assert.strictEqual(obs.door_threshold_flat, 'unknown');
+
+    // Nếu cửa chính vắng mặt (absent) -> các đặc tính con phải bị chuyển thành not_applicable
+    obs = setObservationState(obs, 'door_width_ok', 'absent');
+    assert.strictEqual(obs.door_width_ok, 'absent');
+    assert.strictEqual(resolveEffectiveState('door_threshold_flat', obs), 'not_applicable');
+    assert.strictEqual(resolveEffectiveState('door_lever_handle', obs), 'not_applicable');
+
+    // Chuyển lại cửa chính thành present -> đặc tính con chuyển lại unknown để quan sát
+    obs = setObservationState(obs, 'door_width_ok', 'present');
+    assert.strictEqual(resolveEffectiveState('door_threshold_flat', obs), 'unknown');
+
+    // Đánh dấu con là present
+    obs = setObservationState(obs, 'door_threshold_flat', 'present');
+    const confirmed = observationMapToConfirmedKeys(obs);
+    assert.ok(confirmed.includes('door_width_ok'));
+    assert.ok(confirmed.includes('door_threshold_flat'));
+    assert.ok(confirmed.includes('exterior_ramp_present'));
+    assert.strictEqual(confirmed.includes('door_lever_handle'), false);
+
+    // Kiểm tra phân nhóm thực thể
+    const entranceGroups = getGroupsByCategory('entrance');
+    assert.strictEqual(entranceGroups.length, 3); // door, ramp, steps
+    console.log('  ✅ Test Case 6: Tri-state transitions and parent-child dependency cascade (PASSED)');
+  }
+
+  // Test Case 7: Tri-state payload preservation & decoupled AI suggestion
+  {
+    // Draft mới: mọi item bắt đầu là unknown (không tự động pre-fill AI suggestion vào confirmed)
+    let obs = initializeObservationsFromKeys([]);
+    assert.strictEqual(obs.exterior_ramp_present, 'unknown');
+    assert.strictEqual(obs.door_width_ok, 'unknown');
+    assert.deepStrictEqual(observationMapToConfirmedObservations(obs), {});
+
+    // Người dùng chủ động xác nhận: Có cửa, Không có ram dốc
+    obs = setObservationState(obs, 'door_width_ok', 'present');
+    obs = setObservationState(obs, 'exterior_ramp_present', 'absent');
+
+    const confirmedObs = observationMapToConfirmedObservations(obs);
+    // Payload giữ trọn vẹn cả present và absent, không bị lọc mất
+    assert.strictEqual(confirmedObs.door_width_ok, 'present');
+    assert.strictEqual(confirmedObs.exterior_ramp_present, 'absent');
+    // Các item để unknown không xuất hiện trong payload để không đụng chạm baseline
+    assert.strictEqual(confirmedObs.elevator_accessible, undefined);
+    assert.strictEqual(confirmedObs.restroom_accessible_stall, undefined);
+
+    // Người dùng đổi Không có ram -> Chưa rõ
+    obs = setObservationState(obs, 'exterior_ramp_present', 'unknown');
+    const updatedObs = observationMapToConfirmedObservations(obs);
+    assert.strictEqual(updatedObs.exterior_ramp_present, undefined);
+    assert.strictEqual(updatedObs.door_width_ok, 'present');
+
+    // Mở lại draft cũ: khôi phục chính xác lựa chọn đã lưu
+    const savedDraftObs = { door_width_ok: 'present' as const, exterior_ramp_present: 'absent' as const };
+    const restoredObs: Record<string, any> = { ...initializeObservationsFromKeys([]), ...savedDraftObs };
+    assert.strictEqual(restoredObs.door_width_ok, 'present');
+    assert.strictEqual(restoredObs.exterior_ramp_present, 'absent');
+    console.log('  ✅ Test Case 7: Tri-state payload keeps absent, omits unknown & restores draft (PASSED)');
   }
 }
 

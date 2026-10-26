@@ -23,13 +23,15 @@ import {
   setActiveUploadPromise,
 } from '@/features/reports/model/reportDraftStore';
 import { ScoreCriteriaExplainer } from '../components/review/ScoreCriteriaExplainer';
-
+import type { UserMeasurementsInput } from './TagReviewScreen';
 
 interface FinalScorecardScreenProps {
   media: CapturedContributionMedia;
   matrixResult: VerificationMatrixResult;
   selectedTagKeys: string[];
+  confirmedObservations?: Record<string, 'present' | 'absent'>;
   notes: string;
+  userMeasurements?: UserMeasurementsInput | null;
   flow?: string;
   locationName?: string;
   locationAddress?: string | null;
@@ -43,7 +45,9 @@ export function FinalScorecardScreen({
   media,
   matrixResult,
   selectedTagKeys,
+  confirmedObservations,
   notes,
+  userMeasurements,
   flow,
   locationName,
   locationAddress,
@@ -53,6 +57,7 @@ export function FinalScorecardScreen({
   onFinish,
 }: FinalScorecardScreenProps) {
   const insets = useSafeAreaInsets();
+  const scrollViewRef = useRef<ScrollView>(null);
   const { overallScore, status, statusLabel, statusDescription, pillars, spatialValid, spatialDistanceMeters } =
     matrixResult;
 
@@ -173,15 +178,30 @@ export function FinalScorecardScreen({
         user_id: 'mobile-contributor',
         media_urls: [uploadedUrl],
         client_observations: selectedTagKeys,
+        observations: confirmedObservations ?? {},
         feature_tags: selectedTagKeys,
 
         measurements: {
-          door_clear_width: {
-            status: 'not_measured',
-          },
-          ramp_slope: {
-            status: 'not_measured',
-          },
+          door_clear_width: userMeasurements?.doorClearWidthCm
+            ? {
+                status: 'provided',
+                value_mm: Math.round(userMeasurements.doorClearWidthCm * 10),
+                method: 'tape_measure',
+              }
+            : {
+                status: 'not_measured',
+              },
+          ramp_slope:
+            userMeasurements?.rampHeightCm != null && userMeasurements?.rampLengthCm != null
+              ? {
+                status: 'provided',
+                height_cm: userMeasurements.rampHeightCm,
+                length_cm: userMeasurements.rampLengthCm,
+                method: 'tape_measure',
+              }
+            : {
+                status: 'not_measured',
+              },
         },
         gps_lat: media.gps ? media.gps.latitude : 10.8454,
         gps_lng: media.gps ? media.gps.longitude : 106.8373,
@@ -229,13 +249,21 @@ export function FinalScorecardScreen({
       const is409 = err?.status === 409 || err?.statusCode === 409 || err?.data?.status === 409 || err?.data?.statusCode === 409;
       setIsConflictError(Boolean(is409));
 
-      const serverErr =
+      let errorMsg =
         err?.data?.errors?.GpsLat?.[0] ||
         err?.data?.errors?.LocationId?.[0] ||
-        err?.data?.title ||
-        err?.message ||
-        'Không thể gửi đóng góp lên máy chủ. Vui lòng thử lại.';
-      setSubmitError(serverErr);
+        err?.data?.title;
+
+      if (!errorMsg && err?.data?.details && typeof err.data.details === 'object') {
+        const detailValues = Object.values(err.data.details)
+          .flat()
+          .filter(Boolean);
+        if (detailValues.length > 0) {
+          errorMsg = detailValues.join(', ');
+        }
+      }
+
+      setSubmitError(errorMsg || err?.data?.message || err?.message || 'Không thể gửi đóng góp lên máy chủ. Vui lòng thử lại.');
     } finally {
       setIsSubmitting(false);
     }
@@ -366,6 +394,7 @@ export function FinalScorecardScreen({
       </View>
 
       <ScrollView
+        ref={scrollViewRef}
         style={styles.scroll}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
         showsVerticalScrollIndicator={false}
@@ -405,42 +434,7 @@ export function FinalScorecardScreen({
           >
             <Text style={styles.statusDescription}>{statusDescription}</Text>
 
-            {/* Submission Status or Info Banner */}
-            {submittedResult ? (
-              <View style={styles.successBanner}>
-                <MaterialCommunityIcons name="check-decagram" size={22} color="#059669" />
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={styles.successTitle}>
-                    Đã gửi hồ sơ thành công (+{submittedResult.pointsAwarded} EXP)
-                  </Text>
-                  <Text style={styles.successCode}>Mã: {submittedResult.submissionId}</Text>
-                  <Text style={styles.successSub}>{submittedResult.message}</Text>
-                </View>
-              </View>
-            ) : submitError ? (
-              <View style={[styles.errorBanner, isConflictError && { flexDirection: 'column' }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, width: '100%' }}>
-                  <MaterialCommunityIcons name="alert-circle-outline" size={18} color="#e11d48" />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.errorTitle}>
-                      {isConflictError ? 'Trùng mã phiên (409 Conflict)' : 'Lỗi gửi hồ sơ'}
-                    </Text>
-                    <Text style={styles.errorText}>{submitError}</Text>
-                  </View>
-                </View>
-                {isConflictError && (
-                  <Pressable
-                    style={({ pressed }) => [styles.conflictResetBtn, pressed && styles.pressed]}
-                    onPress={handleResetSubmissionId}
-                    accessibilityRole="button"
-                    accessibilityLabel="Tạo phiên khảo sát mới"
-                  >
-                    <MaterialCommunityIcons name="refresh" size={14} color="#9f1239" />
-                    <Text style={styles.conflictResetBtnText}>Tạo phiên khảo sát mới và thử lại</Text>
-                  </Pressable>
-                )}
-              </View>
-            ) : (
+            {!submittedResult && !submitError && (
               <View style={styles.testStopBanner}>
                 <MaterialCommunityIcons name="cloud-upload-outline" size={15} color="#004e58" />
                 <Text style={styles.testStopText}>
@@ -526,84 +520,120 @@ export function FinalScorecardScreen({
       </Animated.View>
     </ScrollView>
 
-      {/* Bottom Actions */}
+      {/* Bottom Actions with Docked Status Notification */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 14) + 6 }]}>
-        {flow === 'report' ? (
-          <>
-            <Pressable
-              style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
-              onPress={onEditTags}
-              accessibilityRole="button"
-            >
-              <MaterialCommunityIcons name="tag-outline" size={16} color="#334155" />
-              <Text style={styles.secondaryBtnText}>Sửa đặc tính</Text>
-            </Pressable>
-
-            <Pressable
-              style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
-              onPress={handleAttachToReport}
-              accessibilityRole="button"
-            >
-              <MaterialCommunityIcons name="clipboard-check-outline" size={18} color="#ffffff" />
-              <Text style={styles.primaryBtnText}>Đính kèm vào báo cáo</Text>
-            </Pressable>
-          </>
-        ) : submittedResult ? (
-          <>
-            <Pressable
-              style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
-              onPress={onRetakeOrReset}
-              accessibilityRole="button"
-            >
-              <MaterialCommunityIcons name="camera-retake" size={16} color="#334155" />
-              <Text style={styles.secondaryBtnText}>Đóng góp khác</Text>
-            </Pressable>
-
-            <Pressable
-              style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
-              onPress={onFinish || onRetakeOrReset}
-              accessibilityRole="button"
-            >
-              <MaterialCommunityIcons name="check" size={16} color="#ffffff" />
-              <Text style={styles.primaryBtnText}>Hoàn tất</Text>
-            </Pressable>
-          </>
-        ) : (
-          <>
-            <Pressable
-              style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
-              onPress={onEditTags}
-              accessibilityRole="button"
-              disabled={isSubmitting}
-            >
-              <MaterialCommunityIcons name="tag-outline" size={16} color="#334155" />
-              <Text style={styles.secondaryBtnText}>Sửa đặc tính</Text>
-            </Pressable>
-
-            <Pressable
-              style={({ pressed }) => [
-                styles.primaryBtn,
-                pressed && styles.pressed,
-                isSubmitting && { opacity: 0.8 },
-              ]}
-              onPress={handleSubmit}
-              disabled={isSubmitting}
-              accessibilityRole="button"
-            >
-              {isSubmitting ? (
-                <>
-                  <ActivityIndicator size="small" color="#ffffff" />
-                  <Text style={styles.primaryBtnText}>Đang gửi...</Text>
-                </>
-              ) : (
-                <>
-                  <MaterialCommunityIcons name="send" size={16} color="#ffffff" />
-                  <Text style={styles.primaryBtnText}>Gửi đóng góp</Text>
-                </>
+        {submitError ? (
+          <View style={styles.dockedAlertBanner}>
+            <MaterialCommunityIcons name="alert-circle-outline" size={18} color="#e11d48" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.dockedAlertTitle}>
+                {isConflictError ? 'Trùng mã phiên (409 Conflict)' : 'Lỗi gửi hồ sơ'}
+              </Text>
+              <Text style={styles.dockedAlertText}>{submitError}</Text>
+              {isConflictError && (
+                <Pressable
+                  style={styles.dockedConflictResetBtn}
+                  onPress={handleResetSubmissionId}
+                  accessibilityRole="button"
+                >
+                  <MaterialCommunityIcons name="refresh" size={12} color="#9f1239" />
+                  <Text style={styles.dockedConflictResetText}>Tạo phiên mới và thử lại</Text>
+                </Pressable>
               )}
-            </Pressable>
-          </>
-        )}
+            </View>
+          </View>
+        ) : submittedResult ? (
+          <View style={styles.dockedSuccessBanner}>
+            <MaterialCommunityIcons name="check-decagram" size={20} color="#059669" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.dockedSuccessTitle}>
+                Đã gửi hồ sơ thành công{submittedResult.pointsAwarded > 0 ? ` (+${submittedResult.pointsAwarded} EXP)` : ''}
+              </Text>
+              <Text style={styles.dockedSuccessText}>
+                Mã: {submittedResult.submissionId} · EXP sẽ được cộng sau khi duyệt
+              </Text>
+            </View>
+          </View>
+        ) : null}
+
+        <View style={styles.bottomButtonsRow}>
+          {flow === 'report' ? (
+            <>
+              <Pressable
+                style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
+                onPress={onEditTags}
+                accessibilityRole="button"
+              >
+                <MaterialCommunityIcons name="tag-outline" size={16} color="#334155" />
+                <Text style={styles.secondaryBtnText}>Sửa đặc tính</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
+                onPress={handleAttachToReport}
+                accessibilityRole="button"
+              >
+                <MaterialCommunityIcons name="clipboard-check-outline" size={18} color="#ffffff" />
+                <Text style={styles.primaryBtnText}>Đính kèm vào báo cáo</Text>
+              </Pressable>
+            </>
+          ) : submittedResult ? (
+            <>
+              <Pressable
+                style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
+                onPress={onRetakeOrReset}
+                accessibilityRole="button"
+              >
+                <MaterialCommunityIcons name="camera-retake" size={16} color="#334155" />
+                <Text style={styles.secondaryBtnText}>Đóng góp khác</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
+                onPress={onFinish || onRetakeOrReset}
+                accessibilityRole="button"
+              >
+                <MaterialCommunityIcons name="check" size={16} color="#ffffff" />
+                <Text style={styles.primaryBtnText}>Hoàn tất</Text>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <Pressable
+                style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
+                onPress={onEditTags}
+                accessibilityRole="button"
+                disabled={isSubmitting}
+              >
+                <MaterialCommunityIcons name="tag-outline" size={16} color="#334155" />
+                <Text style={styles.secondaryBtnText}>Sửa đặc tính</Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryBtn,
+                  pressed && styles.pressed,
+                  isSubmitting && { opacity: 0.8 },
+                ]}
+                onPress={handleSubmit}
+                disabled={isSubmitting}
+                accessibilityRole="button"
+              >
+                {isSubmitting ? (
+                  <>
+                    <ActivityIndicator size="small" color="#ffffff" />
+                    <Text style={styles.primaryBtnText}>Đang gửi...</Text>
+                  </>
+                ) : (
+                  <>
+                    <MaterialCommunityIcons name="send" size={16} color="#ffffff" />
+                    <Text style={styles.primaryBtnText}>Gửi đóng góp</Text>
+                  </>
+                )}
+              </Pressable>
+            </>
+          )}
+        </View>
       </View>
     </View>
   );
@@ -834,13 +864,80 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: 'rgba(255, 255, 255, 0.97)',
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9',
     paddingHorizontal: 16,
     paddingTop: 10,
+    flexDirection: 'column',
+    gap: 8,
+  },
+  bottomButtonsRow: {
     flexDirection: 'row',
     gap: 10,
+    width: '100%',
+  },
+  dockedAlertBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#fff1f2',
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    gap: 8,
+    width: '100%',
+  },
+  dockedAlertTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#9f1239',
+  },
+  dockedAlertText: {
+    fontSize: 11,
+    color: '#be123c',
+    lineHeight: 15,
+    marginTop: 1,
+  },
+  dockedConflictResetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#ffe4e6',
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    marginTop: 5,
+    alignSelf: 'flex-start',
+  },
+  dockedConflictResetText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#9f1239',
+  },
+  dockedSuccessBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    gap: 8,
+    width: '100%',
+  },
+  dockedSuccessTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#065f46',
+  },
+  dockedSuccessText: {
+    fontSize: 11,
+    color: '#047857',
   },
   secondaryBtn: {
     flex: 1,

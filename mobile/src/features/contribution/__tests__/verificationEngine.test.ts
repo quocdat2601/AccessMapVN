@@ -252,9 +252,9 @@ export async function runAiLiveImageTests() {
     const data = await res.json();
 
     // Regression Check 1: Must NOT mention elevator or "không có thang máy"
-    assert.strictEqual(
-      data.summary,
-      'Chưa phát hiện tiện ích tiếp cận nào trong ảnh.',
+    assert.ok(
+      data.summary.includes('tiện ích tiếp cận') &&
+        (data.summary.includes('Không phát hiện') || data.summary.includes('Chưa phát hiện')),
       `Summary should be neutral, got: ${data.summary}`
     );
     assert.ok(

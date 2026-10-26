@@ -5,37 +5,51 @@ import type { PreScanFeatureTag } from '../../../api/aiPreScanService';
 import {
   CATEGORY_CONFIG,
   type FeatureCategory,
+  getGroupsByCategory,
   getTagsByCategory,
+  getTagsByGroup,
+  initializeObservationsFromKeys,
   isViolationOrObstacleTag,
-  QCVN_FEATURE_TAGS,
+  type ObservationMap,
+  type ObservationState,
+  resolveEffectiveState,
+  setObservationState,
 } from '../../../model/tagReviewModel';
 
 interface FeatureTagSelectorProps {
   availableTags?: PreScanFeatureTag[];
-  selectedKeys: string[];
-  onToggleKey: (key: string) => void;
+  selectedKeys?: string[];
+  observations?: ObservationMap;
+  onChangeObservation?: (key: string, state: ObservationState) => void;
+  onToggleKey?: (key: string) => void;
 }
 
 const CATEGORIES: FeatureCategory[] = ['entrance', 'sanitation', 'amenity'];
 
 export function FeatureTagSelector({
   availableTags = [],
-  selectedKeys,
+  selectedKeys = [],
+  observations: controlledObservations,
+  onChangeObservation,
   onToggleKey,
 }: FeatureTagSelectorProps) {
   const [activeCategory, setActiveCategory] = useState<FeatureCategory>('entrance');
-  const selectedSet = new Set(selectedKeys);
 
-  // Quick lookup for AI confidence from pre-scan
+  // Internal state if not controlled externally
+  const [internalObservations, setInternalObservations] = useState<ObservationMap>(() =>
+    initializeObservationsFromKeys(selectedKeys)
+  );
+
+  const activeObservations = controlledObservations ?? internalObservations;
+
+  // AI confidence lookup
   const aiTagMap = new Map<string, PreScanFeatureTag>();
   const AI_KEY_MAPPING: Record<string, string[]> = {
     exterior_ramp_present: ['exterior_ramp_present'],
     steps_present: ['steps_present'],
     elevator_present: ['elevator_accessible'],
-    door_detected: ['door_width_ok'],
-    door_width_ok: ['door_width_ok'],
-    door_width_compliant: ['door_width_ok'],
     accessible_restroom_sign: ['restroom_accessible_stall'],
+    door_detected: ['door_width_ok'],
     tactile_paving_present: ['tactile_paving_guiding'],
   };
 
@@ -50,26 +64,48 @@ export function FeatureTagSelector({
   // Count active selections per category
   const categorySelectedCounts = CATEGORIES.reduce((acc, cat) => {
     const tagsInCat = getTagsByCategory(cat);
-    const count = tagsInCat.filter((t) => selectedSet.has(t.key)).length;
+    const count = tagsInCat.filter((t) => activeObservations[t.key] === 'present').length;
     acc[cat] = count;
     return acc;
   }, {} as Record<FeatureCategory, number>);
 
-  const currentCategoryTags = getTagsByCategory(activeCategory);
+  const groupsInActiveCategory = getGroupsByCategory(activeCategory);
+
+  const handleStateChange = (key: string, targetState: ObservationState) => {
+    const currentState = activeObservations[key] ?? 'unknown';
+    // If tapping the already active state, toggle back to 'unknown'
+    const nextState: ObservationState = currentState === targetState ? 'unknown' : targetState;
+
+    if (onChangeObservation) {
+      onChangeObservation(key, nextState);
+    } else {
+      setInternalObservations((prev) => setObservationState(prev, key, nextState));
+    }
+
+    if (onToggleKey) {
+      const wasPresent = currentState === 'present';
+      const isNowPresent = nextState === 'present';
+      if (wasPresent !== isNowPresent) {
+        onToggleKey(key);
+      }
+    }
+  };
+
+  const totalPresentCount = Object.values(activeObservations).filter((s) => s === 'present').length;
 
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <View style={styles.titleWrap}>
           <MaterialCommunityIcons name="checkbox-multiple-marked-outline" size={18} color="#004e58" />
-          <Text style={styles.title}>Đặc điểm tiếp cận</Text>
+          <Text style={styles.title}>Đặc điểm tiếp cận thực tế</Text>
         </View>
         <View style={styles.countPill}>
-          <Text style={styles.countPillText}>{selectedKeys.length} đã chọn</Text>
+          <Text style={styles.countPillText}>{totalPresentCount} xác nhận có</Text>
         </View>
       </View>
 
-      {/* 4 Category Tabs */}
+      {/* 3 Category Tabs */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -116,80 +152,258 @@ export function FeatureTagSelector({
       {/* Active Category Description */}
       <View style={styles.categoryInfoBar}>
         <Text style={styles.categoryInfoText}>
-          {CATEGORY_CONFIG[activeCategory].label} ({currentCategoryTags.length} tiêu chí)
+          {CATEGORY_CONFIG[activeCategory].label} ({groupsInActiveCategory.length} nhóm đối tượng)
         </Text>
       </View>
 
-      {/* Chips for Active Category */}
-      <View style={styles.chipsWrap}>
-        {currentCategoryTags.map((tag) => {
-          const isSelected = selectedSet.has(tag.key);
-          const isViolation = isViolationOrObstacleTag(tag.key);
-          const aiTag = aiTagMap.get(tag.key);
-          const isAiDetected = aiTag != null && aiTag.detected;
+      {/* Group Cards */}
+      <View style={styles.groupsContainer}>
+        {groupsInActiveCategory.map((group) => {
+          const groupTags = getTagsByGroup(group.id);
+          if (groupTags.length === 0) return null;
 
-          let chipStyle = styles.chipUnselected;
-          let textColor = '#334155';
-          let iconColor = '#64748b';
+          const primaryTag = group.primaryKey
+            ? groupTags.find((t) => t.key === group.primaryKey)
+            : undefined;
+          const childTags = primaryTag
+            ? groupTags.filter((t) => t.key !== group.primaryKey)
+            : groupTags;
 
-          if (isSelected) {
-            if (isViolation) {
-              chipStyle = styles.chipViolation;
-              textColor = '#b91c1c';
-              iconColor = '#dc2626';
-            } else {
-              chipStyle = styles.chipSelected;
-              textColor = '#065f46';
-              iconColor = '#059669';
-            }
-          }
+          const primaryState = primaryTag
+            ? (activeObservations[primaryTag.key] ?? 'unknown')
+            : undefined;
+          const isPrimaryAiDetected = primaryTag
+            ? aiTagMap.get(primaryTag.key)?.detected ?? false
+            : false;
+          const isPrimaryViolation = primaryTag ? isViolationOrObstacleTag(primaryTag.key) : false;
 
           return (
-            <Pressable
-              key={tag.key}
-              style={({ pressed }) => [
-                styles.chip,
-                chipStyle,
-                pressed && styles.pressed,
-              ]}
-              onPress={() => onToggleKey(tag.key)}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: isSelected }}
-              accessibilityLabel={`${tag.label}${isAiDetected ? ', AI phát hiện' : ''}`}
-            >
-              <MaterialCommunityIcons
-                name={
-                  isSelected
-                    ? isViolation
-                      ? 'alert-circle'
-                      : 'check-circle'
-                    : (tag.icon as any)
-                }
-                size={16}
-                color={iconColor}
-              />
-              <Text style={[styles.chipText, { color: textColor }]}>
-                {tag.label}
-              </Text>
-
-              {isAiDetected ? (
-                <View
-                  style={[
-                    styles.aiBadge,
-                    isSelected ? styles.aiBadgeSelected : styles.aiBadgeUnselected,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.aiBadgeText,
-                      isSelected ? styles.aiBadgeTextSelected : styles.aiBadgeTextUnselected,
-                    ]}
-                  >
-                    ✨ AI
-                  </Text>
+            <View key={group.id} style={styles.groupCard}>
+              {/* Group Card Header */}
+              <View
+                style={[
+                  styles.groupHeader,
+                  childTags.length === 0 && styles.groupHeaderSingle,
+                ]}
+              >
+                <View style={styles.groupHeaderLeft}>
+                  <View style={styles.groupIconWrap}>
+                    <MaterialCommunityIcons name={group.icon as any} size={16} color="#004e58" />
+                  </View>
+                  <View style={styles.groupHeaderTextWrap}>
+                    <Text
+                      style={[
+                        styles.groupTitle,
+                        isPrimaryViolation && styles.violationLabel,
+                      ]}
+                    >
+                      {group.title}
+                    </Text>
+                    {group.description && childTags.length > 0 ? (
+                      <Text style={styles.groupDescription}>{group.description}</Text>
+                    ) : null}
+                  </View>
                 </View>
-              ) : null}
-            </Pressable>
+
+                {/* Primary Tag Tri-State Controls in Header */}
+                {primaryTag && (
+                  <View style={styles.triStateGroup}>
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.triStateBtn,
+                        styles.triStateBtnLeft,
+                        primaryState === 'present' &&
+                          (isPrimaryViolation
+                            ? styles.triStateBtnPresentViolation
+                            : styles.triStateBtnPresent),
+                        pressed && styles.pressed,
+                      ]}
+                      onPress={() => handleStateChange(primaryTag.key, 'present')}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${group.title}: Chọn Có`}
+                      accessibilityState={{ selected: primaryState === 'present' }}
+                    >
+                      <Text
+                        style={[
+                          styles.triStateBtnText,
+                          primaryState === 'present' && styles.triStateBtnTextActive,
+                        ]}
+                      >
+                        Có
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.triStateBtn,
+                        styles.triStateBtnMiddle,
+                        primaryState === 'absent' && styles.triStateBtnAbsent,
+                        pressed && styles.pressed,
+                      ]}
+                      onPress={() => handleStateChange(primaryTag.key, 'absent')}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${group.title}: Chọn Không`}
+                      accessibilityState={{ selected: primaryState === 'absent' }}
+                    >
+                      <Text
+                        style={[
+                          styles.triStateBtnText,
+                          primaryState === 'absent' && styles.triStateBtnTextActive,
+                        ]}
+                      >
+                        Không
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.triStateBtn,
+                        styles.triStateBtnRight,
+                        primaryState === 'unknown' && styles.triStateBtnUnknown,
+                        pressed && styles.pressed,
+                      ]}
+                      onPress={() => handleStateChange(primaryTag.key, 'unknown')}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${group.title}: Chọn Chưa rõ`}
+                      accessibilityState={{ selected: primaryState === 'unknown' }}
+                    >
+                      <Text
+                        style={[
+                          styles.triStateBtnText,
+                          primaryState === 'unknown' && styles.triStateBtnTextActive,
+                        ]}
+                      >
+                        Chưa rõ
+                      </Text>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+
+              {/* Child Items in Card Body */}
+              {childTags.length > 0 && (
+                <View style={styles.groupItemsList}>
+                  {childTags.map((tag, idx) => {
+                    const effectiveState = resolveEffectiveState(tag.key, activeObservations);
+                    const isViolation = isViolationOrObstacleTag(tag.key);
+                    const aiTag = aiTagMap.get(tag.key);
+                    const isAiDetected = aiTag != null && aiTag.detected;
+                    const isNotApplicable = effectiveState === 'not_applicable';
+
+                    return (
+                      <View
+                        key={tag.key}
+                        style={[
+                          styles.itemRow,
+                          idx > 0 && styles.itemBorderTop,
+                          isNotApplicable && styles.disabledItemRow,
+                        ]}
+                      >
+                        {/* Left: Icon & Label */}
+                        <View style={styles.itemInfo}>
+                          <View style={styles.itemTitleRow}>
+                            <MaterialCommunityIcons
+                              name={tag.icon as any}
+                              size={14}
+                              color={isViolation ? '#dc2626' : '#64748b'}
+                              style={{ marginRight: 6 }}
+                            />
+                            <Text
+                              style={[
+                                styles.itemLabel,
+                                isViolation && styles.violationLabel,
+                                isNotApplicable && styles.disabledText,
+                              ]}
+                              numberOfLines={2}
+                            >
+                              {tag.label}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Right: Tri-State Segment or N/A */}
+                        {isNotApplicable ? (
+                          <View style={styles.naBadge}>
+                            <Text style={styles.naBadgeText}>Không áp dụng</Text>
+                          </View>
+                        ) : (
+                          <View style={styles.triStateGroup}>
+                            <Pressable
+                              style={({ pressed }) => [
+                                styles.triStateBtn,
+                                styles.triStateBtnLeft,
+                                effectiveState === 'present' &&
+                                  (isViolation
+                                    ? styles.triStateBtnPresentViolation
+                                    : styles.triStateBtnPresent),
+                                pressed && styles.pressed,
+                              ]}
+                              onPress={() => handleStateChange(tag.key, 'present')}
+                              accessibilityRole="button"
+                              accessibilityLabel={`${tag.label}: Chọn Có`}
+                              accessibilityState={{ selected: effectiveState === 'present' }}
+                            >
+                              <Text
+                                style={[
+                                  styles.triStateBtnText,
+                                  effectiveState === 'present' && styles.triStateBtnTextActive,
+                                ]}
+                              >
+                                Có
+                              </Text>
+                            </Pressable>
+
+                            <Pressable
+                              style={({ pressed }) => [
+                                styles.triStateBtn,
+                                styles.triStateBtnMiddle,
+                                effectiveState === 'absent' && styles.triStateBtnAbsent,
+                                pressed && styles.pressed,
+                              ]}
+                              onPress={() => handleStateChange(tag.key, 'absent')}
+                              accessibilityRole="button"
+                              accessibilityLabel={`${tag.label}: Chọn Không`}
+                              accessibilityState={{ selected: effectiveState === 'absent' }}
+                            >
+                              <Text
+                                style={[
+                                  styles.triStateBtnText,
+                                  effectiveState === 'absent' && styles.triStateBtnTextActive,
+                                ]}
+                              >
+                                Không
+                              </Text>
+                            </Pressable>
+
+                            <Pressable
+                              style={({ pressed }) => [
+                                styles.triStateBtn,
+                                styles.triStateBtnRight,
+                                effectiveState === 'unknown' && styles.triStateBtnUnknown,
+                                pressed && styles.pressed,
+                              ]}
+                              onPress={() => handleStateChange(tag.key, 'unknown')}
+                              accessibilityRole="button"
+                              accessibilityLabel={`${tag.label}: Chọn Chưa rõ`}
+                              accessibilityState={{ selected: effectiveState === 'unknown' }}
+                            >
+                              <Text
+                                style={[
+                                  styles.triStateBtnText,
+                                  effectiveState === 'unknown' && styles.triStateBtnTextActive,
+                                ]}
+                              >
+                                Chưa rõ
+                              </Text>
+                            </Pressable>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
           );
         })}
       </View>
@@ -229,7 +443,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   tabScrollView: {
-    marginBottom: 12,
+    marginBottom: 10,
   },
   tabScrollContent: {
     flexDirection: 'row',
@@ -240,12 +454,12 @@ const styles = StyleSheet.create({
   tabPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 20,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 18,
     borderWidth: 1,
     overflow: 'hidden',
-    gap: 6,
+    gap: 5,
   },
   tabPillActive: {
     backgroundColor: '#004e58',
@@ -259,7 +473,7 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   tabPillLabel: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '500',
     color: '#475569',
   },
@@ -287,63 +501,204 @@ const styles = StyleSheet.create({
     color: '#ffffff',
   },
   categoryInfoBar: {
-    marginBottom: 10,
+    marginBottom: 8,
     paddingHorizontal: 2,
   },
   categoryInfoText: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '600',
     color: '#004e58',
   },
-  chipsWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 9,
+  groupsContainer: {
+    gap: 12,
   },
-  chip: {
+  groupCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    overflow: 'hidden',
+  },
+  groupHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    borderWidth: 1,
-    gap: 7,
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    gap: 8,
   },
-  chipUnselected: {
-    backgroundColor: '#ffffff',
-    borderColor: '#e2e8f0',
+  groupHeaderSingle: {
+    borderBottomWidth: 0,
   },
-  chipSelected: {
-    backgroundColor: '#ecfdf5',
-    borderColor: '#10b981',
+  groupHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 8,
+    marginRight: 8,
   },
-  chipViolation: {
-    backgroundColor: '#fff1f2',
-    borderColor: '#f43f5e',
+  titleWithBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
-  chipText: {
+  aiBadgeInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#f0fdf4',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  groupIconWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    backgroundColor: '#e6fffa',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  groupHeaderTextWrap: {
+    flex: 1,
+  },
+  groupTitle: {
     fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  groupDescription: {
+    fontSize: 10.5,
+    color: '#64748b',
+    marginTop: 1,
+  },
+  groupItemsList: {
+    paddingHorizontal: 10,
+  },
+  itemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 9,
+    gap: 8,
+  },
+  childItemRow: {
+    paddingLeft: 10,
+    backgroundColor: '#fcfdfd',
+  },
+  itemBorderTop: {
+    borderTopWidth: 1,
+    borderTopColor: '#f8fafc',
+  },
+  disabledItemRow: {
+    opacity: 0.5,
+  },
+  itemInfo: {
+    flex: 1,
+  },
+  itemTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  childConnector: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginRight: 4,
+    fontWeight: '700',
+  },
+  itemLabel: {
+    fontSize: 12,
+    color: '#1e293b',
     fontWeight: '500',
+    flexShrink: 1,
+  },
+  childItemLabel: {
+    fontSize: 11.5,
+    color: '#334155',
+  },
+  violationLabel: {
+    color: '#b91c1c',
+  },
+  disabledText: {
+    color: '#94a3b8',
   },
   aiBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#f0fdf4',
     paddingHorizontal: 5,
     paddingVertical: 1.5,
-    borderRadius: 8,
-  },
-  aiBadgeUnselected: {
-    backgroundColor: '#f1f5f9',
-  },
-  aiBadgeSelected: {
-    backgroundColor: '#d1fae5',
+    borderRadius: 4,
+    marginTop: 2,
+    alignSelf: 'flex-start',
   },
   aiBadgeText: {
     fontSize: 9.5,
+    fontWeight: '600',
+    color: '#007D78',
+  },
+  naBadge: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  naBadgeText: {
+    fontSize: 10.5,
+    color: '#94a3b8',
+    fontWeight: '600',
+  },
+  triStateGroup: {
+    flexDirection: 'row',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+    padding: 2,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  triStateBtn: {
+    paddingVertical: 5,
+    paddingHorizontal: 7,
+    minWidth: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
+  },
+  triStateBtnLeft: {
+    borderTopRightRadius: 2,
+    borderBottomRightRadius: 2,
+  },
+  triStateBtnMiddle: {
+    borderRadius: 2,
+  },
+  triStateBtnRight: {
+    borderTopLeftRadius: 2,
+    borderBottomLeftRadius: 2,
+  },
+  triStateBtnPresent: {
+    backgroundColor: '#007D78',
+  },
+  triStateBtnPresentViolation: {
+    backgroundColor: '#e11d48',
+  },
+  triStateBtnAbsent: {
+    backgroundColor: '#475569',
+  },
+  triStateBtnUnknown: {
+    backgroundColor: '#cbd5e1',
+  },
+  triStateBtnText: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  triStateBtnTextActive: {
+    color: '#ffffff',
     fontWeight: '700',
-  },
-  aiBadgeTextUnselected: {
-    color: '#004e58',
-  },
-  aiBadgeTextSelected: {
-    color: '#065f46',
   },
 });

@@ -11,4 +11,11 @@ public interface IAiServiceClient
         List<string> mediaUrls,
         string? textDescription,
         CancellationToken cancellationToken = default);
+
+    Task<string?> VerifySubmissionRawAsync(
+        Guid submissionId,
+        List<string> mediaUrls,
+        string? textDescription,
+        string? locationId,
+        CancellationToken cancellationToken = default);
 }

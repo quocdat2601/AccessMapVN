@@ -136,7 +136,9 @@ public class SubmitSurveyCommandHandler : IRequestHandler<SubmitSurveyCommand, S
         var currentHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonicalJson)));
 
         var measurementsJson = request.Measurements != null ? JsonSerializer.Serialize(request.Measurements) : null;
-        var clientObsJson = tags.Count > 0 ? JsonSerializer.Serialize(tags) : null;
+        var clientObsJson = request.Observations != null && request.Observations.Count > 0
+            ? JsonSerializer.Serialize(request.Observations)
+            : (tags.Count > 0 ? JsonSerializer.Serialize(tags) : null);
 
         // 3. Kiểm tra Idempotency trước khi ghi
         var existing = await _submissionRepository.GetByClientSubmissionIdAsync(effectiveUserId, clientSubmissionId, cancellationToken);

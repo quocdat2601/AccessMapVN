@@ -1,7 +1,9 @@
 using System.Text.Json;
 using AccessMapVN.Application.Common.Exceptions;
+using AccessMapVN.Application.Common.Interfaces;
 using AccessMapVN.Application.Common.Utils;
 using AccessMapVN.Application.Features.Submissions.Admin;
+using AccessMapVN.Application.Features.Submissions.Commands.SubmitSurvey;
 using AccessMapVN.Application.Features.Wf02;
 using AccessMapVN.Domain.Entities;
 using AccessMapVN.Domain.Enums;
@@ -21,10 +23,12 @@ public sealed class AdminSubmissionsController : ControllerBase
     private const int PublicationPoints = 50;
     private const int SlaTargetMinutes = 120;
     private readonly ApplicationDbContext _db;
+    private readonly IAiServiceClient? _aiClient;
 
-    public AdminSubmissionsController(ApplicationDbContext db)
+    public AdminSubmissionsController(ApplicationDbContext db, IAiServiceClient? aiClient = null)
     {
         _db = db;
+        _aiClient = aiClient;
     }
 
     [HttpGet]
@@ -46,10 +50,25 @@ public sealed class AdminSubmissionsController : ControllerBase
         var placeIds = submissions.Select(s => s.PlaceId).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
         var userIds = submissions.Select(s => s.UserId).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
 
-        var places = await _db.Places
+        var validGuids = placeIds
+            .Select(id => Guid.TryParse(id, out var g) ? g : Guid.Empty)
+            .Where(g => g != Guid.Empty)
+            .ToList();
+
+        var matchedPlaces = await _db.Places
             .AsNoTracking()
-            .Where(p => placeIds.Contains(p.Id.ToString()))
-            .ToDictionaryAsync(p => p.Id.ToString(), cancellationToken);
+            .Where(p => validGuids.Contains(p.Id) || placeIds.Contains(p.Name))
+            .ToListAsync(cancellationToken);
+
+        var places = new Dictionary<string, Place>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in matchedPlaces)
+        {
+            places[p.Id.ToString()] = p;
+            if (!string.IsNullOrWhiteSpace(p.Name))
+            {
+                places[p.Name] = p;
+            }
+        }
 
         var appUsers = await _db.AppUsers
             .AsNoTracking()
@@ -147,6 +166,36 @@ public sealed class AdminSubmissionsController : ControllerBase
         var submission = await FindSubmissionAsync(id, cancellationToken);
         if (submission == null) return NotFound(new { message = $"Không tìm thấy hồ sơ '{id}'." });
 
+        if (string.IsNullOrWhiteSpace(submission.AiObservationsJson) && submission.MediaUrls.Count > 0 && _aiClient != null)
+        {
+            var validWebUrls = submission.MediaUrls
+                .Where(u => u.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                            u.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (validWebUrls.Count > 0)
+            {
+                var json = await _aiClient.VerifySubmissionRawAsync(
+                    submission.Id,
+                    validWebUrls,
+                    submission.TextDescription,
+                    cancellationToken);
+
+                if (!string.IsNullOrWhiteSpace(json))
+                {
+                    submission.AiObservationsJson = json;
+                    try
+                    {
+                        await _db.SaveChangesAsync(cancellationToken);
+                    }
+                    catch
+                    {
+                        // Graceful fallback on save conflict
+                    }
+                }
+            }
+        }
+
         var place = await FindPlaceAsync(submission.PlaceId, cancellationToken);
         if (place == null && submission.Status == SubmissionStatus.Published)
         {
@@ -171,31 +220,10 @@ public sealed class AdminSubmissionsController : ControllerBase
             await _db.SaveChangesAsync(cancellationToken);
         }
 
-        if (place != null && submission.Status == SubmissionStatus.Published && place.AccessibilityScore == null)
+        if (place != null && submission.Status == SubmissionStatus.Published)
         {
-            foreach (var tag in submission.FeatureTags)
-            {
-                var lower = tag.ToLowerInvariant();
-                if (lower.Contains("ramp") && place.HasRamp != true) place.HasRamp = true;
-                if ((lower.Contains("door") || lower.Contains("entrance")) && place.DoorWidthOk != true) place.DoorWidthOk = true;
-                if (lower.Contains("elevator") && place.HasAccessibleElevator != true) place.HasAccessibleElevator = true;
-                if (lower.Contains("restroom") && place.HasAccessibleRestroom != true) place.HasAccessibleRestroom = true;
-                if (lower.Contains("tactile") && place.HasTactilePaving != true) place.HasTactilePaving = true;
-            }
-
-            var featureCount = 0;
-            if (place.HasRamp == true) featureCount++;
-            if (place.DoorWidthOk == true) featureCount++;
-            if (place.HasAccessibleElevator == true) featureCount++;
-            if (place.HasAccessibleRestroom == true) featureCount++;
-            if (place.HasTactilePaving == true) featureCount++;
-
-            var confidencePercent = (decimal)Math.Round(submission.ConfidenceScore <= 1.0 ? submission.ConfidenceScore * 100 : submission.ConfidenceScore);
-            place.AccessibilityScore = confidencePercent >= 50 ? confidencePercent : Math.Round((decimal)featureCount / 5.0m * 100.0m, 1);
-            place.AccessibilityNote = !string.IsNullOrWhiteSpace(submission.TextDescription) && !submission.TextDescription.Contains("file:")
-                ? submission.TextDescription
-                : $"Đã kiểm định tiện ích tiếp cận thực tế ({featureCount} hạng mục).";
-            place.LastVerifiedAt = submission.CreatedAt.UtcDateTime;
+            ApplyPublicationCriteria(place, submission, submission.CreatedAt);
+            await SyncLocationFeaturesAsync(place, submission, submission.CreatedAt, cancellationToken);
             await _db.SaveChangesAsync(cancellationToken);
         }
 
@@ -288,30 +316,8 @@ public sealed class AdminSubmissionsController : ControllerBase
             submission.PlaceId = place.Id.ToString();
         }
 
-        foreach (var tag in submission.FeatureTags)
-        {
-            var lower = tag.ToLowerInvariant();
-            if (lower.Contains("ramp")) place.HasRamp = true;
-            if (lower.Contains("door") || lower.Contains("entrance")) place.DoorWidthOk = true;
-            if (lower.Contains("elevator")) place.HasAccessibleElevator = true;
-            if (lower.Contains("restroom")) place.HasAccessibleRestroom = true;
-            if (lower.Contains("tactile")) place.HasTactilePaving = true;
-        }
-
-        var featureCount = 0;
-        if (place.HasRamp == true) featureCount++;
-        if (place.DoorWidthOk == true) featureCount++;
-        if (place.HasAccessibleElevator == true) featureCount++;
-        if (place.HasAccessibleRestroom == true) featureCount++;
-        if (place.HasTactilePaving == true) featureCount++;
-
-        var confidencePercent = (decimal)Math.Round(submission.ConfidenceScore <= 1.0 ? submission.ConfidenceScore * 100 : submission.ConfidenceScore);
-        place.AccessibilityScore = confidencePercent >= 50 ? confidencePercent : Math.Round((decimal)featureCount / 5.0m * 100.0m, 1);
-        place.AccessibilityNote = !string.IsNullOrWhiteSpace(submission.TextDescription) && !submission.TextDescription.Contains("file:")
-            ? submission.TextDescription
-            : $"Đã kiểm định tiện ích tiếp cận thực tế ({featureCount} hạng mục).";
-        place.LastVerifiedAt = now;
-
+        ApplyPublicationCriteria(place, submission, now);
+        await SyncLocationFeaturesAsync(place, submission, now, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
 
         var detail = MapToDetail(submission, place, appUser);
@@ -458,8 +464,18 @@ public sealed class AdminSubmissionsController : ControllerBase
     {
         if (Guid.TryParse(placeId, out var guidId))
         {
-            return await _db.Places.FirstOrDefaultAsync(p => p.Id == guidId, cancellationToken);
+            var byGuid = await _db.Places.FirstOrDefaultAsync(p => p.Id == guidId, cancellationToken);
+            if (byGuid != null) return byGuid;
         }
+
+        if (!string.IsNullOrWhiteSpace(placeId))
+        {
+            var byName = await _db.Places.FirstOrDefaultAsync(
+                p => p.Name.ToLower() == placeId.ToLower(),
+                cancellationToken);
+            if (byName != null) return byName;
+        }
+
         return null;
     }
 
@@ -478,7 +494,9 @@ public sealed class AdminSubmissionsController : ControllerBase
         IReadOnlyDictionary<string, AppUser> appUsers)
     {
         var code = !string.IsNullOrWhiteSpace(s.SubmissionCode) ? s.SubmissionCode : s.Id.ToString();
-        var placeName = "Địa điểm khảo sát";
+        var placeName = !string.IsNullOrWhiteSpace(s.PlaceId) && s.PlaceId != "custom-location"
+            ? s.PlaceId
+            : "Địa điểm khảo sát";
         var placeAddress = "Chưa có địa chỉ";
         var placeCity = "TP.HCM";
         var placeDistrict = "Quận 1";
@@ -560,9 +578,13 @@ public sealed class AdminSubmissionsController : ControllerBase
         Place? place,
         AppUser? appUser)
     {
-        var placeDict = place != null
-            ? new Dictionary<string, Place> { [place.Id.ToString()] = place }
-            : new Dictionary<string, Place>();
+        var placeDict = new Dictionary<string, Place>(StringComparer.OrdinalIgnoreCase);
+        if (place != null)
+        {
+            placeDict[place.Id.ToString()] = place;
+            if (!string.IsNullOrWhiteSpace(place.Name)) placeDict[place.Name] = place;
+            if (!string.IsNullOrWhiteSpace(s.PlaceId)) placeDict[s.PlaceId] = place;
+        }
 
         var userDict = appUser != null
             ? new Dictionary<string, AppUser> { [appUser.Id.ToString()] = appUser }
@@ -696,15 +718,20 @@ public sealed class AdminSubmissionsController : ControllerBase
 
         if (evidenceList.Count > 0 && visualSuggestions.Count > 0)
         {
-            evidenceList[0].VisualSuggestions = visualSuggestions;
+            var detectedSuggestions = visualSuggestions
+                .Where(v => v.Value == "suggested_present" || (v.DetectorScore.HasValue && v.DetectorScore.Value >= 0.5))
+                .ToList();
+
+            evidenceList[0].VisualSuggestions = detectedSuggestions;
 
             var dynamicFindings = new List<EvidenceAiFindingDto>();
-            foreach (var vs in visualSuggestions)
+            foreach (var vs in detectedSuggestions)
             {
                 var labelName = vs.Feature switch
                 {
                     "ramp_present" => "Phát hiện ram dốc (Ramp)",
                     "stairs_present" => "Phát hiện bậc thang / tam cấp (Stairs)",
+                    "door_detected" or "door_present" => "Phát hiện cửa ra vào (Door)",
                     _ => vs.Feature
                 };
                 var score = vs.DetectorScore.HasValue ? Math.Round(vs.DetectorScore.Value * 100) : record.Verification.Confidence;
@@ -721,20 +748,106 @@ public sealed class AdminSubmissionsController : ControllerBase
             }
         }
 
+        UserMeasurementsDto? measurements = null;
+        if (!string.IsNullOrWhiteSpace(s.MeasurementsJson))
+        {
+            try
+            {
+                measurements = JsonSerializer.Deserialize<UserMeasurementsDto>(s.MeasurementsJson);
+            }
+            catch
+            {
+                // Graceful fallback on non-JSON
+            }
+        }
+
         var claims = record.Categories.Select((category, index) =>
         {
-            var claimConfidence = Math.Max(40, (int)Math.Round(record.Verification.Confidence - index * 5));
+            var matchingVs = visualSuggestions.FirstOrDefault(v =>
+                (category.Contains("Ram", StringComparison.OrdinalIgnoreCase) && v.Feature.Contains("ramp", StringComparison.OrdinalIgnoreCase)) ||
+                (category.Contains("Bậc", StringComparison.OrdinalIgnoreCase) && v.Feature.Contains("stair", StringComparison.OrdinalIgnoreCase)) ||
+                (category.Contains("Cửa", StringComparison.OrdinalIgnoreCase) && v.Feature.Contains("door", StringComparison.OrdinalIgnoreCase))
+            );
+
+            var claimConfidence = matchingVs?.DetectorScore.HasValue == true
+                ? (int)Math.Round(matchingVs.DetectorScore.Value * 100)
+                : (int)Math.Round(record.Verification.Confidence);
+
+            string aiLabel;
+            string aiDetails;
+
+            if (matchingVs != null && matchingVs.DetectorScore.HasValue)
+            {
+                var score = (int)Math.Round(matchingVs.DetectorScore.Value * 100);
+                if (score >= 75)
+                {
+                    aiLabel = "Khớp hình ảnh";
+                    aiDetails = $"Nhận diện hình ảnh phát hiện '{category}' ({score}%).";
+                }
+                else
+                {
+                    aiLabel = "Cần đối chiếu";
+                    aiDetails = $"Nhận diện hình ảnh phát hiện '{category}' nhưng độ tin cậy thấp ({score}%).";
+                }
+            }
+            else
+            {
+                if (claimConfidence >= 75)
+                {
+                    aiLabel = "Phù hợp";
+                    aiDetails = $"Độ tin cậy tổng thể hồ sơ đạt {claimConfidence}%.";
+                }
+                else if (claimConfidence >= 50)
+                {
+                    aiLabel = "Cần đối chiếu";
+                    aiDetails = $"Độ tin cậy trung bình ({claimConfidence}%). Cần đối chiếu kỹ minh chứng.";
+                }
+                else
+                {
+                    aiLabel = "Chưa phát hiện";
+                    aiDetails = $"AI chưa nhận diện được '{category}' trong ảnh ({claimConfidence}%). Cần kiểm tra kỹ minh chứng.";
+                }
+            }
+
+            string contributorClaimText;
+            if (category.Contains("ram", StringComparison.OrdinalIgnoreCase) &&
+                measurements?.RampSlope?.Status == "provided" &&
+                measurements.RampSlope.HeightCm.HasValue &&
+                measurements.RampSlope.LengthCm.HasValue &&
+                measurements.RampSlope.LengthCm.Value > 0)
+            {
+                var h = measurements.RampSlope.HeightCm.Value;
+                var l = measurements.RampSlope.LengthCm.Value;
+                var slopeRatio = h / l;
+                var slopePercent = Math.Round(slopeRatio * 100, 1);
+                var ratio = Math.Round(l / h, 1);
+                var slopeOk = slopeRatio <= (1.0 / 12.0);
+                contributorClaimText = $"Khai báo số đo: Độ dốc {slopePercent}% (1:{ratio}, H={h}cm, L={l}cm) - {(slopeOk ? "Đáp ứng tiêu chí độ dốc QCVN 10:2024 (≤ 1/12)" : "Vượt ngưỡng dốc QCVN 10:2024 (≤ 1/12)")}.";
+            }
+            else if (category.Contains("cửa", StringComparison.OrdinalIgnoreCase) &&
+                     measurements?.DoorClearWidth?.Status == "provided" &&
+                     measurements.DoorClearWidth.ValueMm.HasValue)
+            {
+                var w = measurements.DoorClearWidth.ValueMm.Value;
+                var wOk = w >= 900.0;
+                contributorClaimText = $"Khai báo số đo: Chiều rộng thông thủy {w / 10.0}cm - {(wOk ? "Đáp ứng tiêu chí chiều rộng cửa vào công trình theo QCVN 10:2024 (≥ 90cm)" : "Chưa đáp ứng tiêu chí chiều rộng cửa vào công trình theo QCVN 10:2024 (≥ 90cm)")}.";
+            }
+            else
+            {
+                contributorClaimText = $"Quan sát thực tế: Người dùng ghi nhận '{category}' tại địa điểm (chưa có số đo kỹ thuật).";
+            }
+
             return new AccessibilityClaimDto
             {
                 Id = $"{record.Id}-claim-{index + 1}",
                 Feature = category,
                 Standard = GetStandardForCategory(category),
-                ContributorClaim = $"Xác nhận có '{category}' tại địa điểm.",
+                ContributorClaim = contributorClaimText,
                 AiAssessment = new AiClaimAssessmentDto
                 {
-                    Label = claimConfidence >= 75 ? "Phù hợp" : "Cần đối chiếu",
+                    Label = aiLabel,
                     Confidence = claimConfidence,
-                    Details = $"Nhận diện hình ảnh phù hợp tiêu chuẩn {category}.",
+                    Details = aiDetails,
                     AdvisoryOnly = true,
                 },
                 CurrentPublishedValue = "Chưa có dữ liệu",
@@ -817,17 +930,105 @@ public sealed class AdminSubmissionsController : ControllerBase
         };
     }
 
+    public static void ApplyPublicationCriteria(Place place, Submission submission, DateTimeOffset publishedAt)
+    {
+        UserMeasurementsDto? measurements = null;
+        if (!string.IsNullOrWhiteSpace(submission.MeasurementsJson))
+        {
+            try
+            {
+                measurements = JsonSerializer.Deserialize<UserMeasurementsDto>(submission.MeasurementsJson);
+            }
+            catch
+            {
+                // Graceful fallback
+            }
+        }
+
+        // 1. Tiêu chí Chiều rộng thông thủy cửa vào công trình (QCVN 10:2024/BXD mục 2.3.1 >= 900 mm)
+        if (measurements?.DoorClearWidth?.ValueMm.HasValue == true)
+        {
+            var width = measurements.DoorClearWidth.ValueMm.Value;
+            place.DoorWidthOk = width >= 900.0;
+        }
+        // GHI CHÚ: Nếu submission mới không có số đo, bảo tồn nguyên trạng giá trị đã được duyệt trước đó.
+
+        // 2. Tiêu chí Ram dốc
+        var hasRampObservation = submission.FeatureTags.Any(t =>
+            t.Equals("exterior_ramp_present", StringComparison.OrdinalIgnoreCase) ||
+            t.Equals("ramp_present", StringComparison.OrdinalIgnoreCase));
+
+        // ponytail: absent tại một lối vào không được tự động gán place.HasRamp = false cho toàn bộ địa điểm.
+        // POI có thể có lối vào khác có dốc. Cập nhật absent phải gắn theo AccessPoint cụ thể và tổng hợp qua projection.
+        if (hasRampObservation && place.HasRamp != true)
+        {
+            place.HasRamp = true;
+        }
+
+        // 3. Tiêu chí Thang máy
+        var hasElevatorObs = submission.FeatureTags.Any(t =>
+            t.Equals("elevator_accessible", StringComparison.OrdinalIgnoreCase) ||
+            t.Equals("elevator_present", StringComparison.OrdinalIgnoreCase));
+        if (hasElevatorObs && place.HasAccessibleElevator != true)
+        {
+            place.HasAccessibleElevator = true;
+        }
+
+        // 4. Tiêu chí Nhà vệ sinh tiếp cận
+        var hasAccessibleRestroomClaim = submission.FeatureTags.Any(t =>
+            t.Equals("accessible_restroom", StringComparison.OrdinalIgnoreCase) ||
+            t.Equals("restroom_accessible_stall", StringComparison.OrdinalIgnoreCase));
+
+        if (hasAccessibleRestroomClaim && place.HasAccessibleRestroom != true)
+        {
+            place.HasAccessibleRestroom = true;
+        }
+
+        // 5. Tiêu chí Gạch xúc giác
+        var hasTactileObs = submission.FeatureTags.Any(t =>
+            t.Equals("tactile_paving_guiding", StringComparison.OrdinalIgnoreCase) ||
+            t.Equals("tactile_paving_warning", StringComparison.OrdinalIgnoreCase) ||
+            t.Equals("tactile_paving_present", StringComparison.OrdinalIgnoreCase));
+        if (hasTactileObs && place.HasTactilePaving != true)
+        {
+            place.HasTactilePaving = true;
+        }
+
+        // 6. Cập nhật Điểm số và thời gian kiểm định
+        var featureCount = 0;
+        if (place.HasRamp == true) featureCount++;
+        if (place.DoorWidthOk == true) featureCount++;
+        if (place.HasAccessibleElevator == true) featureCount++;
+        if (place.HasAccessibleRestroom == true) featureCount++;
+        if (place.HasTactilePaving == true) featureCount++;
+
+        var confidencePercent = (decimal)Math.Round(submission.ConfidenceScore <= 1.0 ? submission.ConfidenceScore * 100 : submission.ConfidenceScore);
+        place.AccessibilityScore = confidencePercent >= 50 ? confidencePercent : Math.Round((decimal)featureCount / 5.0m * 100.0m, 1);
+        place.AccessibilityNote = !string.IsNullOrWhiteSpace(submission.TextDescription) && !submission.TextDescription.Contains("file:")
+            ? submission.TextDescription
+            : $"Khảo sát cộng đồng: Ghi nhận {featureCount} hạng mục tiếp cận (chưa thẩm định thông số kỹ thuật).";
+        place.LastVerifiedAt = publishedAt;
+    }
+
     private static string MapTagToVietnameseCategory(string tag)
     {
         var lower = tag.ToLowerInvariant();
-        if (lower.Contains("ramp")) return "Ram dốc";
-        if (lower.Contains("door") || lower.Contains("entrance")) return "Lối vào chính";
-        if (lower.Contains("elevator")) return "Thang máy";
-        if (lower.Contains("restroom")) return "WC tiếp cận";
-        if (lower.Contains("tactile")) return "Lối xúc giác";
-        if (lower.Contains("parking")) return "Bãi đỗ xe ưu tiên";
-        if (lower.Contains("step_free")) return "Lối vào phẳng";
-        if (lower.Contains("auto")) return "Cửa tự động";
+        if (lower.Contains("ramp")) return "Có ram dốc";
+        if (lower.Contains("threshold")) return "Không thấy gờ/bậc tại cửa";
+        if (lower.Contains("door_auto") || lower == "door_auto_present") return "Có cửa tự động";
+        if (lower.Contains("lever") || lower == "door_lever_handle") return "Có tay nắm dạng gạt";
+        if (lower.Contains("door") || lower.Contains("entrance")) return "Có cửa ra vào";
+        if (lower.Contains("elevator")) return "Có thang máy";
+        if (lower.Contains("sink")) return "Có khoảng trống dưới bồn rửa";
+        if (lower.Contains("grab_bars")) return "Có tay vịn cạnh bồn cầu";
+        if (lower.Contains("sign")) return "Có biển ký hiệu người khuyết tật";
+        if (lower.Contains("restroom") || lower.Contains("toilet") || lower.Contains("wc")) return "Có nhà vệ sinh";
+        if (lower.Contains("tactile")) return "Có dải xúc giác";
+        if (lower.Contains("parking")) return "Có chỗ đỗ xe có ký hiệu NKT";
+        if (lower.Contains("counter")) return "Có đoạn quầy hạ thấp";
+        if (lower.Contains("braille")) return "Có chữ nổi Braille";
+        if (lower.Contains("audible")) return "Có âm thanh thông báo";
+        if (lower.Contains("step") || lower.Contains("stair")) return "Có bậc/cầu thang tại lối vào";
         return tag;
     }
 
@@ -835,14 +1036,20 @@ public sealed class AdminSubmissionsController : ControllerBase
     {
         return category switch
         {
-            "Ram dốc" => "Độ dốc không vượt quá 1:12, có tay vịn hai bên",
-            "Lối vào chính" => "Lối đi thông thủy rộng tối thiểu 900 mm, không có bậc cản",
-            "Cửa tự động" => "Chiều rộng thông thủy tối thiểu 900 mm, cảm biến nhạy",
-            "Thang máy" => "Kích thước buồng thang tối thiểu 1100x1400mm, bảng nút bấm thấp có chữ nổi",
-            "WC tiếp cận" => "Cửa mở ra ngoài, có tay vịn hỗ trợ, khoảng quay xe lăn đường kính tối thiểu 1500 mm",
-            "Lối xúc giác" => "Dải dẫn hướng và cảnh báo liên tục, độ tương phản màu sắc cao",
-            "Bãi đỗ xe ưu tiên" => "Ô đỗ xe rộng tối thiểu 3,5m, gần lối vào chính, có biển hiệu tiếp cận",
-            _ => "Quy chuẩn kỹ thuật QCVN 10:2014/BXD",
+            "Có ram dốc" => "QCVN 10:2024/BXD mục 2.2.1: Độ dốc không lớn hơn 1/12, có tay vịn khi dốc cao",
+            "Có cửa ra vào" => "QCVN 10:2024/BXD mục 2.3.1: Chiều rộng thông thủy cửa ra vào công trình không nhỏ hơn 900 mm",
+            "Không thấy gờ/bậc tại cửa" => "QCVN 10:2024/BXD: Gờ cửa không vượt quá 20 mm, vát thoải",
+            "Có cửa tự động" => "QCVN 10:2024/BXD: Cửa tự động có cảm biến nhận diện người ngồi xe lăn",
+            "Có tay nắm dạng gạt" => "QCVN 10:2024/BXD: Tay nắm dạng gạt dễ thao tác bằng một tay",
+            "Có thang máy" => "QCVN 10:2024/BXD: Buồng thang tiếp cận, bảng điều khiển thấp và chữ nổi",
+            "Có nhà vệ sinh" => "QCVN 10:2024/BXD mục 2.6: Cửa mở ra ngoài, không gian quay xe lăn đường kính tối thiểu 1500 mm",
+            "Có biển ký hiệu người khuyết tật" => "Biển hiệu quốc tế tiếp cận (ISA) gắn rõ ràng",
+            "Có tay vịn cạnh bồn cầu" => "QCVN 10:2024/BXD: Tay vịn chịu lực hỗ trợ chuyển tư thế",
+            "Có khoảng trống dưới bồn rửa" => "QCVN 10:2024/BXD: Chiều cao thông thủy dưới gầm lavabo tối thiểu 700 mm",
+            "Có chỗ đỗ xe có ký hiệu NKT" => "QCVN 10:2024/BXD: Ô đỗ xe rộng tối thiểu 3,5 m, có biển hiệu tiếp cận",
+            "Có bậc/cầu thang tại lối vào" => "Cảnh báo cản trở người đi xe lăn, cần kết hợp ram dốc hoặc thiết bị nâng",
+            "Có đoạn quầy hạ thấp" => "QCVN 10:2024/BXD: Chiều cao mặt bàn/quầy phục vụ từ 700 mm đến 800 mm",
+            _ => "Quy chuẩn kỹ thuật quốc gia QCVN 10:2024/BXD",
         };
     }
 
@@ -852,5 +1059,44 @@ public sealed class AdminSubmissionsController : ControllerBase
         if (parts.Length == 0) return "AM";
         if (parts.Length == 1) return parts[0][..Math.Min(2, parts[0].Length)].ToUpperInvariant();
         return $"{char.ToUpperInvariant(parts[0][0])}{char.ToUpperInvariant(parts[^1][0])}";
+    }
+
+    private async Task SyncLocationFeaturesAsync(Place place, Submission submission, DateTimeOffset publishedAt, CancellationToken cancellationToken)
+    {
+        var existingFeatures = await _db.LocationFeatures
+            .Where(f => f.LocationId == place.Id && f.ScopeId == null)
+            .ToListAsync(cancellationToken);
+
+        void EnsureFeature(AccessibilityFeatureType type, bool isPresent, PublishedFeatureStatus status)
+        {
+            if (!isPresent) return;
+            var feat = existingFeatures.FirstOrDefault(f => f.FeatureType == type);
+            if (feat == null)
+            {
+                _db.LocationFeatures.Add(new LocationFeature
+                {
+                    LocationId = place.Id,
+                    FeatureType = type,
+                    CurrentStatus = status,
+                    Version = 1,
+                    IsPublished = true,
+                    VerifiedAt = publishedAt,
+                    SourceSubmissionId = submission.Id,
+                });
+            }
+            else
+            {
+                feat.CurrentStatus = status;
+                feat.IsPublished = true;
+                feat.VerifiedAt = publishedAt;
+                feat.SourceSubmissionId = submission.Id;
+            }
+        }
+
+        EnsureFeature(AccessibilityFeatureType.Ramp, place.HasRamp == true, PublishedFeatureStatus.Available);
+        EnsureFeature(AccessibilityFeatureType.EntranceDoor, place.DoorWidthOk != null, place.DoorWidthOk == true ? PublishedFeatureStatus.Available : PublishedFeatureStatus.Limited);
+        EnsureFeature(AccessibilityFeatureType.Elevator, place.HasAccessibleElevator == true, PublishedFeatureStatus.Available);
+        EnsureFeature(AccessibilityFeatureType.AccessibleRestroom, place.HasAccessibleRestroom == true, PublishedFeatureStatus.Available);
+        EnsureFeature(AccessibilityFeatureType.TactilePaving, place.HasTactilePaving == true, PublishedFeatureStatus.Available);
     }
 }

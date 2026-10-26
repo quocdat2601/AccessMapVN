@@ -64,6 +64,12 @@ public record SubmitSurveyCommand : IRequest<SubmitSurveyResult>
     [JsonPropertyName("feature_tags")]
     public List<string> FeatureTags { get; init; } = new();
 
+    /// <summary>
+    /// Explicit tri-state observations (e.g. { "door_detected": "present", "exterior_ramp_present": "absent" }).
+    /// </summary>
+    [JsonPropertyName("observations")]
+    public Dictionary<string, string>? Observations { get; init; }
+
     [JsonPropertyName("measurements")]
     public UserMeasurementsDto? Measurements { get; init; }
 

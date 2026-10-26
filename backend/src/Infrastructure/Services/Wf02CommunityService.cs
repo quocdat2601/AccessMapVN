@@ -70,6 +70,51 @@ public sealed class Wf02CommunityService : IWf02CommunityService
                         item.IsPublished,
                 cancellationToken);
 
+        if (feature is null)
+        {
+            var isFeaturePresentOnPlace = featureType switch
+            {
+                AccessibilityFeatureType.Ramp => location.HasRamp == true,
+                AccessibilityFeatureType.EntranceDoor => location.DoorWidthOk != null,
+                AccessibilityFeatureType.Elevator => location.HasAccessibleElevator == true,
+                AccessibilityFeatureType.AccessibleRestroom => location.HasAccessibleRestroom == true,
+                AccessibilityFeatureType.TactilePaving => location.HasTactilePaving == true,
+                _ => false,
+            };
+
+            if (isFeaturePresentOnPlace)
+            {
+                var initialStatus = (featureType == AccessibilityFeatureType.EntranceDoor && location.DoorWidthOk == false)
+                    ? PublishedFeatureStatus.Limited
+                    : PublishedFeatureStatus.Available;
+
+                feature = new LocationFeature
+                {
+                    LocationId = locationId,
+                    FeatureType = featureType,
+                    CurrentStatus = initialStatus,
+                    Version = 1,
+                    IsPublished = true,
+                    VerifiedAt = location.LastVerifiedAt ?? new DateTimeOffset(location.CreatedAtUtc, TimeSpan.Zero),
+                };
+                _db.LocationFeatures.Add(feature);
+                try
+                {
+                    await _db.SaveChangesAsync(cancellationToken);
+                }
+                catch
+                {
+                    feature = await _db.LocationFeatures.AsNoTracking()
+                        .SingleOrDefaultAsync(
+                            item => item.LocationId == locationId &&
+                                    item.ScopeId == null &&
+                                    item.FeatureType == featureType &&
+                                    item.IsPublished,
+                            cancellationToken);
+                }
+            }
+        }
+
         if (feature is null || feature.CurrentStatus == PublishedFeatureStatus.Unknown)
         {
             throw new Wf02Exception(
@@ -171,6 +216,39 @@ public sealed class Wf02CommunityService : IWf02CommunityService
                     item.FeatureType == featureType &&
                     item.IsPublished,
             cancellationToken);
+
+        if (feature is null)
+        {
+            var isFeaturePresentOnPlace = featureType switch
+            {
+                AccessibilityFeatureType.Ramp => place.HasRamp == true,
+                AccessibilityFeatureType.EntranceDoor => place.DoorWidthOk != null,
+                AccessibilityFeatureType.Elevator => place.HasAccessibleElevator == true,
+                AccessibilityFeatureType.AccessibleRestroom => place.HasAccessibleRestroom == true,
+                AccessibilityFeatureType.TactilePaving => place.HasTactilePaving == true,
+                _ => false,
+            };
+
+            if (isFeaturePresentOnPlace)
+            {
+                var initialStatus = (featureType == AccessibilityFeatureType.EntranceDoor && place.DoorWidthOk == false)
+                    ? PublishedFeatureStatus.Limited
+                    : PublishedFeatureStatus.Available;
+
+                feature = new LocationFeature
+                {
+                    LocationId = locationId,
+                    FeatureType = featureType,
+                    CurrentStatus = initialStatus,
+                    Version = 1,
+                    IsPublished = true,
+                    VerifiedAt = place.LastVerifiedAt ?? new DateTimeOffset(place.CreatedAtUtc, TimeSpan.Zero),
+                };
+                _db.LocationFeatures.Add(feature);
+                await _db.SaveChangesAsync(cancellationToken);
+            }
+        }
+
         if (feature is null || feature.CurrentStatus == PublishedFeatureStatus.Unknown)
         {
             throw new Wf02Exception(

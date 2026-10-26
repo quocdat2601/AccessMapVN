@@ -17,10 +17,18 @@ public class AiServiceClient : IAiServiceClient
         _logger = logger;
     }
 
+    public Task<string?> VerifySubmissionRawAsync(
+        Guid submissionId,
+        List<string> mediaUrls,
+        string? textDescription,
+        CancellationToken cancellationToken = default)
+        => VerifySubmissionRawAsync(submissionId, mediaUrls, textDescription, null, cancellationToken);
+
     public async Task<string?> VerifySubmissionRawAsync(
         Guid submissionId,
         List<string> mediaUrls,
         string? textDescription,
+        string? locationId,
         CancellationToken cancellationToken = default)
     {
         if (mediaUrls == null || mediaUrls.Count == 0)
@@ -32,6 +40,7 @@ public class AiServiceClient : IAiServiceClient
         var requestPayload = new
         {
             submission_id = submissionId.ToString(),
+            location_id = Guid.TryParse(locationId, out var g) ? g.ToString() : Guid.NewGuid().ToString(),
             media_urls = mediaUrls,
             text_description = textDescription,
         };

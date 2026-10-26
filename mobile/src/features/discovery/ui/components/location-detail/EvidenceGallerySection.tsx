@@ -139,7 +139,7 @@ export function EvidenceGallerySection({
               firstItem.title === 'Cửa vào' ? (
                 <View style={styles.specTag}>
                   <MaterialCommunityIcons name="door-open" size={11} color="#FFFFFF" />
-                  <Text style={styles.specTagText}>Cửa thông thủy ≥ 90cm</Text>
+                  <Text style={styles.specTagText}>Cửa ra vào rộng rãi</Text>
                 </View>
               ) : firstItem.title === 'Ram dốc' ? (
                 <View style={styles.specTag}>

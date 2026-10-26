@@ -27,7 +27,7 @@ export function ContributionCTA({
           accessibilityLabel="Đóng góp dữ liệu tiếp cận"
           activeOpacity={0.88}
         >
-          <MaterialCommunityIcons name="video-plus-outline" size={19} color="#FFFFFF" style={styles.buttonIcon} />
+          <MaterialCommunityIcons name="video-plus-outline" size={20} color="#FFFFFF" style={styles.buttonIcon} />
           <Text
             style={styles.buttonText}
             numberOfLines={1}
@@ -36,6 +36,11 @@ export function ContributionCTA({
           >
             Đóng góp dữ liệu tiếp cận
           </Text>
+          {!showReportIssue ? (
+            <View style={styles.expBadge}>
+              <Text style={styles.expBadgeText}>+50 EXP</Text>
+            </View>
+          ) : null}
         </TouchableOpacity>
 
         {showReportIssue ? (
@@ -58,7 +63,7 @@ export function ContributionCTA({
       </View>
 
       <View style={styles.noteRow}>
-        <MaterialCommunityIcons name="star-circle" size={17} color="#007D78" />
+        <MaterialCommunityIcons name="star-circle" size={16} color="#007D78" />
         <Text style={styles.note}>
           Chụp ảnh hoặc quay video 5–10s để bổ sung bằng chứng thực tế • Nhận{' '}
           <Text style={styles.reward}>+50 điểm thưởng cộng đồng</Text>
@@ -79,13 +84,13 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   button: {
-    height: 48,
-    borderRadius: 14,
+    height: 50,
+    borderRadius: 16,
     backgroundColor: '#004E58',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
   },
   buttonFull: {
     flex: 1,
@@ -94,8 +99,8 @@ const styles = StyleSheet.create({
     flex: 1.5,
   },
   reportButton: {
-    height: 48,
-    borderRadius: 14,
+    height: 50,
+    borderRadius: 16,
     backgroundColor: '#FFFDF7',
     borderColor: '#F5D7A1',
     borderWidth: 1,
@@ -110,9 +115,22 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#FFFFFF',
-    fontSize: 13.5,
+    fontSize: 14,
     fontWeight: '700',
     letterSpacing: -0.2,
+  },
+  expBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  expBadgeText: {
+    color: '#E0F2FE',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.2,
   },
   reportButtonText: {
     color: '#B45309',

@@ -28,9 +28,14 @@ export function LocationHeader({
   phone,
   website,
 }: LocationHeaderProps) {
+  const hasCustomName = name && name.trim().length > 0 && name.trim().toLowerCase() !== address?.trim().toLowerCase();
+  const displayName = hasCustomName
+    ? name.trim()
+    : (address?.split(',').slice(0, 2).join(',').trim() || address || 'Vị trí khảo sát thực địa');
+
   return (
     <View style={styles.container}>
-      <Text style={styles.name} numberOfLines={2}>{name}</Text>
+      <Text style={styles.name} numberOfLines={2}>{displayName}</Text>
 
       {/* Meta Pills Row */}
       <View style={styles.metaRow}>
@@ -51,9 +56,25 @@ export function LocationHeader({
           </View>
         ) : null}
         {standardLabel ? (
-          <View style={styles.standardBadge}>
-            <MaterialCommunityIcons name="check-decagram" size={13} color={Colors.primary} />
-            <Text style={styles.standardText}>{standardLabel}</Text>
+          <View
+            style={[
+              styles.standardBadge,
+              standardLabel !== 'Đạt QCVN 10:2014' && styles.communityBadge,
+            ]}
+          >
+            <MaterialCommunityIcons
+              name={standardLabel === 'Đạt QCVN 10:2014' ? 'check-decagram' : 'clipboard-text-outline'}
+              size={13}
+              color={standardLabel === 'Đạt QCVN 10:2014' ? Colors.primary : '#B45309'}
+            />
+            <Text
+              style={[
+                styles.standardText,
+                standardLabel !== 'Đạt QCVN 10:2014' && styles.communityText,
+              ]}
+            >
+              {standardLabel}
+            </Text>
           </View>
         ) : null}
       </View>
@@ -160,10 +181,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
+  communityBadge: {
+    backgroundColor: '#FEF3C7',
+  },
   standardText: {
     color: Colors.primary,
     fontSize: 11.5,
     fontWeight: '700',
+  },
+  communityText: {
+    color: '#B45309',
   },
   addressRow: {
     marginTop: 10,

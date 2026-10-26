@@ -41,7 +41,7 @@ export async function fetchPlacesInBBox(
       has_elevator: Boolean(p.hasAccessibleElevator ?? p.has_accessible_elevator ?? p.has_elevator),
       has_tactile_paving: Boolean(p.hasTactilePaving ?? p.has_tactile_paving),
       has_accessible_restroom: Boolean(p.hasAccessibleRestroom ?? p.has_accessible_restroom),
-      door_width_ok: Boolean(p.doorWidthOk ?? p.door_width_ok),
+      door_width_ok: nullableBoolean(p.doorWidthOk, p.door_width_ok),
       accessibility_score: typeof p.accessibilityScore === 'number'
         ? p.accessibilityScore
         : typeof p.accessibility_score === 'number'
@@ -87,7 +87,7 @@ export async function fetchPlaceById(id: string): Promise<PlaceDto | null> {
       has_elevator: Boolean(p.hasAccessibleElevator ?? p.has_accessible_elevator ?? p.has_elevator),
       has_tactile_paving: Boolean(p.hasTactilePaving ?? p.has_tactile_paving),
       has_accessible_restroom: Boolean(p.hasAccessibleRestroom ?? p.has_accessible_restroom),
-      door_width_ok: Boolean(p.doorWidthOk ?? p.door_width_ok),
+      door_width_ok: nullableBoolean(p.doorWidthOk, p.door_width_ok),
       accessibility_score: typeof p.accessibilityScore === 'number'
         ? p.accessibilityScore
         : typeof p.accessibility_score === 'number'
@@ -291,7 +291,7 @@ export async function searchAccessMapPlaces(
       has_elevator: Boolean(p.hasAccessibleElevator ?? p.has_accessible_elevator ?? p.has_elevator),
       has_tactile_paving: Boolean(p.hasTactilePaving ?? p.has_tactile_paving),
       has_accessible_restroom: Boolean(p.hasAccessibleRestroom ?? p.has_accessible_restroom),
-      door_width_ok: Boolean(p.doorWidthOk ?? p.door_width_ok),
+      door_width_ok: nullableBoolean(p.doorWidthOk, p.door_width_ok),
       accessibility_score: typeof p.accessibilityScore === 'number'
         ? p.accessibilityScore
         : typeof p.accessibility_score === 'number'

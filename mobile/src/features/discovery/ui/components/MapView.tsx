@@ -138,8 +138,8 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   const [activeTapPoint, setActiveTapPoint] = useState<{ lng: number; lat: number; name?: string } | null>(null);
 
   const flyToPlace = (lng: number, lat: number, zoom = 16) => {
-    // Offset south so marker is centered in the upper viewport above the bottom sheet
-    const targetLat = lat - 0.0028;
+    // Offset south so marker is centered in the visible viewport between search bar and bottom sheet
+    const targetLat = lat - 0.0011;
     cameraRef.current?.flyTo({ center: [lng, targetLat], zoom, duration: 750 });
   };
 
@@ -509,11 +509,11 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         yPercent: Number.isFinite(y) ? y : 40 + idx * 10,
         isSelected: p.id === selectedPlaceId,
         accessibility: {
-          hasRamp: p.has_ramp,
-          hasElevator: p.has_elevator,
-          hasTactilePaving: p.has_tactile_paving,
-          hasAccessibleRestroom: p.has_accessible_restroom,
-          doorWidthOk: p.door_width_ok,
+          hasRamp: p.has_ramp ?? undefined,
+          hasElevator: p.has_elevator ?? undefined,
+          hasTactilePaving: p.has_tactile_paving ?? undefined,
+          hasAccessibleRestroom: p.has_accessible_restroom ?? undefined,
+          doorWidthOk: p.door_width_ok ?? undefined,
           note: p.accessibility_note ?? undefined,
         },
       };

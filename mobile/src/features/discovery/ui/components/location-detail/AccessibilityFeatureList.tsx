@@ -20,36 +20,54 @@ export function AccessibilityFeatureList({ features }: AccessibilityFeatureListP
             <Text style={styles.featureLabel} numberOfLines={1}>
               {feature.label}
             </Text>
-            {feature.description && (
+            {feature.specLabel ? (
+              <Text style={styles.specText} numberOfLines={1}>
+                {feature.specLabel}
+              </Text>
+            ) : feature.description ? (
               <Text style={styles.descriptionText} numberOfLines={1}>
                 {feature.description}
               </Text>
-            )}
+            ) : null}
           </View>
           <View
             style={[
               styles.verifiedBadge,
+              feature.verificationLevel === 'unverified_presence' && styles.unmeasuredBadge,
               feature.publishedStatus === 'NotAvailable' && styles.unavailableBadge,
               feature.publishedStatus === 'Limited' && styles.limitedBadge,
               feature.publishedStatus === 'Unknown' && styles.unknownBadge,
             ]}
           >
             <MaterialCommunityIcons
-              name={feature.publishedStatus === 'Available' ? 'check-circle' : 'information-outline'}
+              name={
+                feature.verificationLevel === 'verified_compliant'
+                  ? 'check-decagram'
+                  : feature.verificationLevel === 'unverified_presence'
+                    ? 'ruler'
+                    : feature.publishedStatus === 'Limited'
+                      ? 'alert-circle-outline'
+                      : feature.publishedStatus === 'NotAvailable'
+                        ? 'close-circle-outline'
+                        : 'information-outline'
+              }
               size={13}
               color={
-                feature.publishedStatus === 'Available'
+                feature.verificationLevel === 'verified_compliant'
                   ? '#059669'
-                  : feature.publishedStatus === 'Limited'
-                    ? '#B45309'
-                    : feature.publishedStatus === 'NotAvailable'
-                      ? '#B91C1C'
-                      : '#64748B'
+                  : feature.verificationLevel === 'unverified_presence'
+                    ? '#D97706'
+                    : feature.publishedStatus === 'Limited'
+                      ? '#B45309'
+                      : feature.publishedStatus === 'NotAvailable'
+                        ? '#B91C1C'
+                        : '#64748B'
               }
             />
             <Text
               style={[
                 styles.verifiedText,
+                feature.verificationLevel === 'unverified_presence' && styles.unmeasuredText,
                 feature.publishedStatus === 'NotAvailable' && styles.unavailableText,
                 feature.publishedStatus === 'Limited' && styles.limitedText,
                 feature.publishedStatus === 'Unknown' && styles.unknownText,
@@ -101,6 +119,12 @@ const styles = StyleSheet.create({
     color: '#64748b',
     marginTop: 1,
   },
+  specText: {
+    fontSize: 11,
+    color: '#007D78',
+    fontWeight: '600',
+    marginTop: 1,
+  },
   verifiedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -109,6 +133,12 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 8,
     gap: 4,
+  },
+  unmeasuredBadge: {
+    backgroundColor: '#FEF3C7',
+  },
+  unmeasuredText: {
+    color: '#D97706',
   },
   verifiedText: {
     fontSize: 11,

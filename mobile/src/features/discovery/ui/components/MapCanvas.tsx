@@ -43,7 +43,7 @@ export function MapCanvas({
   useEffect(() => {
     if (focusTarget && canvasSize.width > 0 && canvasSize.height > 0) {
       const targetX = canvasSize.width * 0.5;
-      const targetY = canvasSize.height * 0.25;
+      const targetY = canvasSize.height * 0.38;
       const locationX = canvasSize.width * (focusTarget.xPercent / 100);
       const locationY = canvasSize.height * (focusTarget.yPercent / 100);
 

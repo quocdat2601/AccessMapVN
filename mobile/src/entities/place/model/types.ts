@@ -12,11 +12,11 @@ export interface PlaceDto {
   operator?: string | null;
   lng: number;
   lat: number;
-  has_ramp: boolean;
-  has_elevator: boolean;
-  has_tactile_paving: boolean;
-  has_accessible_restroom: boolean;
-  door_width_ok: boolean;
+  has_ramp?: boolean | null;
+  has_elevator?: boolean | null;
+  has_tactile_paving?: boolean | null;
+  has_accessible_restroom?: boolean | null;
+  door_width_ok?: boolean | null;
   accessibility_score: number;
   accessibility_note: string | null;
   floor_level?: number | null;

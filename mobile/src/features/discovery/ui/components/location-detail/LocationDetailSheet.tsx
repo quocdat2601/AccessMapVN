@@ -21,7 +21,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '@/shared/theme';
-import { loadContributionRecords } from '@/entities/contribution';
+import { loadContributionRecords, syncPendingSubmissionsWithBackend } from '@/entities/contribution';
 import { fetchPlaceEvidence } from '@/entities/place';
 import { resolveServiceUrl } from '@/shared/api/client';
 import { useAuth } from '@/features/auth';
@@ -171,26 +171,36 @@ export function LocationDetailSheet({
   const [currentTimestamp] = useState(() => Date.now());
   const isRecentVerified = useMemo(() => {
     if (!place.last_verified_at) return false;
-    const diffDays = (currentTimestamp - new Date(place.last_verified_at).getTime()) / (1000 * 60 * 60 * 24);
-    return diffDays >= 0 && diffDays <= 90;
+    const verifiedTime = new Date(place.last_verified_at).getTime();
+    if (isNaN(verifiedTime)) return false;
+    const diffDays = (currentTimestamp - verifiedTime) / (1000 * 60 * 60 * 24);
+    // Tolerate negative diff due to server UTC timestamp vs local time
+    return diffDays >= -2 && diffDays <= 180;
   }, [place.last_verified_at, currentTimestamp]);
 
   const rawScore = Number(place.accessibility_score);
-  const trustPercent = isUnrated
-    ? 0
-    : isRecentVerified
-      ? 95
-      : Math.round(
-          rawScore <= 1
-            ? rawScore * 100
-            : rawScore <= 10
-              ? rawScore * 10
-              : Math.min(rawScore, 100)
-        );
-
   const isDemo2 = place.id === '70000000-0000-0000-0000-000000000002';
   const isDemo1 = place.id === '70000000-0000-0000-0000-000000000001';
-  const isFullyVerified = isDemo2 || (!isDemo1 && !isUnrated && isRecentVerified);
+  // A location is only fully verified (WF-02) if explicitly audited/certified compliant.
+  // Community submissions (WF-01) represent preliminary surveys without physical dimension audits.
+  const isFullyVerified = isDemo2 || Boolean(
+    (place as any).audit_status === 'verified_compliant' ||
+    (place as any).is_fully_verified === true
+  );
+
+  const normalizedScore = Math.round(
+    rawScore <= 1
+      ? rawScore * 100
+      : rawScore <= 10
+        ? rawScore * 10
+        : Math.min(rawScore, 100)
+  );
+
+  const trustPercent = isUnrated
+    ? 0
+    : isFullyVerified
+      ? Math.max(normalizedScore, 85)
+      : Math.min(normalizedScore, 55);
 
   const distanceStr = useMemo(
     () => calculateDistance(userLatitude, userLongitude, place.lat, place.lng),
@@ -206,29 +216,79 @@ export function LocationDetailSheet({
     const definitions: (Omit<AccessibilityDetailFeature, 'publishedStatus' | 'status'> & {
       value: boolean | null;
     })[] = [
-      { id: 'ramp', featureType: 'Ramp', icon: 'slope-uphill', label: 'Ram dốc lối vào', description: 'Tiếp cận lối vào bằng ram dốc', value: values.ramp },
+      { id: 'ramp', featureType: 'Ramp', icon: 'slope-uphill', label: 'Ram dốc lối vào', description: 'Tiếp cận lối vào bằng ram dốc', value: values.ramp ?? (place.has_ramp ? true : null) },
       { id: 'door', featureType: 'EntranceDoor', icon: 'door', label: 'Cửa ra vào tiếp cận', description: 'Độ rộng và ngưỡng cửa phù hợp', value: values.entranceDoor },
-      { id: 'elevator', featureType: 'Elevator', icon: 'elevator-passenger', label: 'Thang máy tiếp cận', description: 'Thang máy dành cho lộ trình tiếp cận', value: values.elevator },
-      { id: 'toilet', featureType: 'AccessibleRestroom', icon: 'toilet', label: 'Nhà vệ sinh tiếp cận', description: 'Không gian và tay vịn hỗ trợ', value: values.accessibleRestroom },
-      { id: 'tactile', featureType: 'TactilePaving', icon: 'dots-grid', label: 'Gạch dẫn hướng xúc giác', description: 'Dẫn hướng cho người khiếm thị', value: values.tactilePaving },
+      { id: 'elevator', featureType: 'Elevator', icon: 'elevator-passenger', label: 'Thang máy tiếp cận', description: 'Thang máy dành cho lộ trình tiếp cận', value: values.elevator ?? (place.has_accessible_elevator ? true : null) },
+      { id: 'toilet', featureType: 'AccessibleRestroom', icon: 'toilet', label: 'Nhà vệ sinh tiếp cận', description: 'Không gian và tay vịn hỗ trợ', value: values.accessibleRestroom ?? (place.has_accessible_restroom ? true : null) },
     ];
 
-    // WF-02 reads its truth from published LocationFeature rows. Keeping this
-    // catalogue lets a published feature appear even if the old boolean is null.
-    return definitions.map(({ value, ...definition }) => ({
-      ...definition,
-      publishedStatus: value == null ? 'Unknown' : value ? 'Available' : 'NotAvailable',
-      status: value ? 'Có sẵn' : 'Không có',
-    }));
-  }, [place]);
+    // WF-02 reads its truth from published LocationFeature rows.
+    // Differentiate features that have verified compliant specs from presence-only reports.
+    return definitions.map(({ value, ...definition }) => {
+      let verificationLevel: import('./types').FeatureVerificationLevel = 'unknown';
+      let status = 'Chưa rõ';
+      let specLabel: string | undefined;
+
+      if (definition.id === 'door') {
+        if (value === true || place.door_width_ok === true) {
+          verificationLevel = isFullyVerified ? 'verified_compliant' : 'unverified_presence';
+          status = isFullyVerified ? 'Đạt chuẩn' : 'Có cửa vào';
+          specLabel = isFullyVerified ? 'Thông thủy ≥ 90cm' : 'Khảo sát cộng đồng';
+        } else if (isFullyVerified && (value === false || place.door_width_ok === false)) {
+          verificationLevel = 'not_available';
+          status = 'Không có';
+          specLabel = 'Không có cửa riêng';
+        } else {
+          verificationLevel = 'unknown';
+          status = 'Chưa rõ';
+        }
+      } else if (value === true || (definition.id === 'ramp' && place.has_ramp)) {
+        verificationLevel = isFullyVerified ? 'verified_compliant' : 'unverified_presence';
+        status = isFullyVerified ? 'Đạt chuẩn' : 'Có ram dốc';
+        specLabel = isFullyVerified
+          ? (definition.id === 'ramp'
+              ? 'Độ dốc ≤ 1:12'
+              : definition.id === 'elevator'
+                ? 'Bảng nút thấp & chữ nổi'
+                : 'Có tay vịn & quay xe')
+          : 'Khảo sát cộng đồng';
+      } else if (isFullyVerified && value === false) {
+        verificationLevel = 'not_available';
+        status = 'Không có';
+        specLabel = 'Không có tiện ích';
+      } else {
+        // In community surveys, un-surveyed items are unknown, not affirmatively absent
+        verificationLevel = 'unknown';
+        status = 'Chưa rõ';
+      }
+
+      return {
+        ...definition,
+        publishedStatus:
+          verificationLevel === 'verified_compliant' || verificationLevel === 'unverified_presence'
+            ? 'Available'
+            : verificationLevel === 'not_available'
+              ? 'NotAvailable'
+              : 'Unknown',
+        verificationLevel,
+        status,
+        specLabel,
+      };
+    });
+  }, [place, isFullyVerified]);
 
   const hasPublishedAccessibilityInfo =
     !isUnrated && features.some((feature) => feature.publishedStatus !== 'Unknown');
   const hasDemoCommunityContent = isDemo1 || isDemo2;
+  const verifiableFeatures = useMemo(() => {
+    if (hasDemoCommunityContent) return features;
+    const known = features.filter((feature) => feature.publishedStatus !== 'Unknown');
+    return known.length > 0 ? known : features;
+  }, [hasDemoCommunityContent, features]);
   const publishedFeaturesCount = useMemo(() => {
     if (hasDemoCommunityContent) return features.length;
-    return features.filter((feature) => feature.publishedStatus === 'Available').length;
-  }, [hasDemoCommunityContent, features]);
+    return verifiableFeatures.filter((feature) => feature.publishedStatus === 'Available' || feature.publishedStatus === 'Limited').length;
+  }, [hasDemoCommunityContent, verifiableFeatures]);
   const showVerificationSection =
     !isFullyVerified && (hasDemoCommunityContent || (hasPublishedAccessibilityInfo && publishedFeaturesCount > 0));
 
@@ -237,7 +297,10 @@ export function LocationDetailSheet({
       return place.accessibility_note;
     }
     if (isFullyVerified && publishedFeaturesCount > 0) {
-      return `Đã xác minh ${publishedFeaturesCount} tiện ích tiếp cận thực tế.`;
+      return `Đã xác minh đặc tính kỹ thuật đạt chuẩn QCVN 10:2014.`;
+    }
+    if (publishedFeaturesCount > 0) {
+      return `Khảo sát sơ bộ: Chưa đo đạc độ dốc ram & chiều rộng cửa. Người dùng xe lăn nên có người trợ giúp.`;
     }
     return place.accessibility_note;
   }, [place.accessibility_note, isFullyVerified, publishedFeaturesCount]);
@@ -324,26 +387,26 @@ export function LocationDetailSheet({
     }
 
     function getEvidenceSpec(featureTags?: string[]): { tag: string; icon: string } {
-      if (!featureTags || featureTags.length === 0) return { tag: 'Đặc điểm tiếp cận', icon: 'check-circle-outline' };
+      if (!featureTags || featureTags.length === 0) return { tag: 'Minh chứng tiếp cận', icon: 'check-circle-outline' };
       if (featureTags.includes('exterior_ramp_present') || featureTags.includes('ramp_slope_comfortable')) {
-        return { tag: 'Độ dốc đạt chuẩn QCVN 10', icon: 'slope-uphill' };
+        return { tag: 'Ram dốc', icon: 'slope-uphill' };
       }
       if (featureTags.includes('door_width_ok')) {
-        return { tag: 'Cửa thông thủy ≥ 90cm', icon: 'door-open' };
+        return { tag: 'Cửa ra vào', icon: 'door-open' };
       }
       if (featureTags.includes('door_threshold_flat')) {
-        return { tag: 'Sàn phẳng (gờ ≤ 2cm)', icon: 'ray-start-end' };
+        return { tag: 'Ngạch cửa phẳng', icon: 'ray-start-end' };
       }
       if (featureTags.includes('elevator_present') || featureTags.includes('elevator_accessible')) {
-        return { tag: 'Thang máy tiếp cận', icon: 'elevator-passenger-outline' };
+        return { tag: 'Thang máy', icon: 'elevator-passenger-outline' };
       }
       if (featureTags.includes('accessible_restroom') || featureTags.includes('restroom_accessible_stall')) {
-        return { tag: 'WC có vòng xoay xe lăn', icon: 'wheelchair-accessibility' };
+        return { tag: 'WC cho xe lăn', icon: 'wheelchair-accessibility' };
       }
       if (featureTags.includes('tactile_paving_guiding') || featureTags.includes('tactile_paving_warning')) {
-        return { tag: 'Gạch dẫn hướng xúc giác', icon: 'dots-grid' };
+        return { tag: 'Lối đi xúc giác', icon: 'dots-grid' };
       }
-      return { tag: 'Đặc điểm tiếp cận', icon: 'check-circle-outline' };
+      return { tag: 'Minh chứng tiếp cận', icon: 'check-circle-outline' };
     }
 
     async function loadEvidence() {
@@ -371,22 +434,29 @@ export function LocationDetailSheet({
       } catch {}
 
       try {
+        await syncPendingSubmissionsWithBackend();
         const localRecords = await loadContributionRecords();
         localRecords
-          .filter((r) => r.locationId === place.id && r.mediaUri)
+          .filter(
+            (r) =>
+              r.locationId === place.id &&
+              r.mediaUri &&
+              r.status !== 'Rejected' &&
+              r.status !== 'Auto-Verified' &&
+              r.status !== 'Published'
+          )
           .forEach((r) => {
             const resolved = resolveEvidenceImageUrl(r.mediaUri);
             if (resolved && !seenUrls.has(resolved)) {
               seenUrls.add(resolved);
-              const spec = getEvidenceSpec(r.featureTags);
               items.push({
                 id: r.id,
-                title: getEvidenceTitle(r.featureTags),
+                title: `${getEvidenceTitle(r.featureTags)} (Chờ duyệt)`,
                 subtitle: new Date(r.createdAt).toLocaleDateString('vi-VN'),
-                badge: 'Đã gửi từ máy này',
+                badge: 'Đang chờ duyệt',
                 imageUrl: resolved,
-                specTag: spec.tag,
-                specIcon: spec.icon,
+                specTag: 'Ảnh đóng góp · Đang chờ duyệt',
+                specIcon: 'clock-outline',
               });
             }
           });
@@ -566,7 +636,7 @@ export function LocationDetailSheet({
           category={localizedCategory}
           brand={place.brand}
           distanceStr={distanceStr}
-          standardLabel={!isUnrated ? 'Đạt QCVN 10:2014' : undefined}
+          standardLabel={isFullyVerified ? 'Đạt QCVN 10:2014' : trustPercent > 0 ? 'Khảo sát cộng đồng' : undefined}
           address={place.address}
           isAddressLoading={place.isAddressLoading}
           openingHours={place.opening_hours}
@@ -621,7 +691,7 @@ export function LocationDetailSheet({
                     </View>
                   </View>
                   <Text style={styles.verificationCardSub}>
-                    Kiểm tra và xác nhận thực tế ram dốc, cửa vào, thang máy, WC...
+                    Kiểm tra thực tế hoặc báo sai lệch cùng cộng đồng
                   </Text>
                 </View>
               </View>
@@ -633,7 +703,7 @@ export function LocationDetailSheet({
             locationId={place.id}
             locationName={place.name}
             onPress={() => onContribute?.(place)}
-            showReportIssue={hasPublishedAccessibilityInfo}
+            showReportIssue={!showVerificationSection && hasPublishedAccessibilityInfo}
             onReportIssue={() => {
               if (!user) {
                 router.push('/login');
@@ -665,7 +735,7 @@ export function LocationDetailSheet({
         visible={showVerificationModal}
         locationId={place.id}
         locationName={place.name}
-        features={features}
+        features={verifiableFeatures}
         isFullyVerified={isFullyVerified}
         onRequestReport={handleRequestReportFromFeature}
         refreshTrigger={verificationRefreshKey}
@@ -740,7 +810,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   verificationCardLeft: {
     flexDirection: 'row',

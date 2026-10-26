@@ -13,12 +13,21 @@ export type AccessibilityIconName =
   | 'shield-check'
   | 'check-decagram';
 
+export type FeatureVerificationLevel =
+  | 'verified_compliant'
+  | 'unverified_presence'
+  | 'limited'
+  | 'not_available'
+  | 'unknown';
+
 export interface AccessibilityDetailFeature {
   id: string;
   icon: AccessibilityIconName;
   label: string;
   featureType: AccessibilityFeatureType;
   publishedStatus: PublishedFeatureStatus;
+  verificationLevel?: FeatureVerificationLevel;
+  specLabel?: string;
   confirmations?: number;
   status?: string;
   description?: string;

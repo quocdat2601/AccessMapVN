@@ -10,7 +10,6 @@ import {
   reportStatusLabels,
   type ReportDecision,
   type ReportResolution,
-  wf02AdminRepository,
 } from "@/entities/wf02";
 import { useReportDetail } from "@/features/wf02-moderation/model/use-report-detail";
 import { Badge } from "@/shared/ui/badge";
@@ -31,17 +30,6 @@ export function ReportDetailPage({ id }: { id: string }) {
   const [address, setAddress] = useState("");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
-  const [openingEvidenceId, setOpeningEvidenceId] = useState<string | null>(null);
-
-  async function openEvidence(evidenceId: string) {
-    setOpeningEvidenceId(evidenceId);
-    try {
-      const response = await wf02AdminRepository.getEvidenceAccess(id, evidenceId);
-      window.open(response.data.accessUrl, "_blank", "noopener,noreferrer");
-    } finally {
-      setOpeningEvidenceId(null);
-    }
-  }
 
   async function transition(event: FormEvent) {
     event.preventDefault();

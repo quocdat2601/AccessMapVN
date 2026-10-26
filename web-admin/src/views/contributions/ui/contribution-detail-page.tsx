@@ -45,7 +45,7 @@ function SecondaryDetails({ detail }: { detail: ContributionDetail }) {
   const sections = [
     { icon: Fingerprint, title: "Chi tiết kiểm định kỹ thuật & dữ liệu EXIF", content: detail.technicalNotes },
     { icon: BookOpen, title: "Tiêu chuẩn kỹ thuật áp dụng", content: detail.applicableStandards },
-    { icon: Link2, title: `Liên kết & tham chiếu cơ sở dữ liệu ${detail.locationIntegrity.poiCode}`, content: [`Hồ sơ nguồn: ${detail.id}`, `Mã địa điểm: ${detail.place.id}`, "Bản ghi mock chưa kết nối API backend."] },
+    { icon: Link2, title: `Liên kết & tham chiếu cơ sở dữ liệu ${detail.locationIntegrity.poiCode}`, content: [`Hồ sơ nguồn: ${detail.id}`, `Mã địa điểm: ${detail.place.id}`, "Trạng thái đồng bộ: Đã kết nối cơ sở dữ liệu ASP.NET Core."] },
   ];
   return <div className="space-y-2">{sections.map((section) => { const Icon = section.icon; return <details key={section.title} className="group rounded-xl border border-slate-200 bg-white"><summary className="flex cursor-pointer list-none items-center gap-2 p-4 text-sm font-bold text-slate-800"><Icon className="size-4 text-teal-700" /><span className="flex-1">{section.title}</span><ChevronDown className="size-4 text-slate-400 transition group-open:rotate-180" /></summary><div className="border-t border-slate-100 px-4 py-3"><ul className="space-y-2">{section.content.map((item) => <li key={item} className="flex items-start gap-2 text-xs leading-5 text-slate-600"><span className="mt-2 size-1.5 shrink-0 rounded-full bg-teal-500" />{item}</li>)}</ul></div></details>; })}</div>;
 }

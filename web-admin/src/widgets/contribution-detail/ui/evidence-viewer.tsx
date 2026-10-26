@@ -61,19 +61,29 @@ export function EvidenceViewer({ evidence, userClaims }: { evidence: Contributio
             EXIF {active.exifStatus === "valid" ? "hợp lệ" : "cần kiểm tra"}
           </Badge>
           <Button
-            variant={showBBoxes ? "default" : "outline"}
+            variant={showBBoxes && activeBBoxes.length > 0 ? "default" : "outline"}
             size="sm"
             onClick={() => setShowBBoxes((v) => !v)}
-            className={cn("h-8 text-xs gap-1.5", showBBoxes ? "bg-teal-700 hover:bg-teal-800 text-white" : "text-slate-700")}
-            title="Bật/tắt hiển thị Bounding Box AI"
+            className={cn(
+              "h-8 text-xs gap-1.5",
+              showBBoxes && activeBBoxes.length > 0
+                ? "bg-teal-700 hover:bg-teal-800 text-white"
+                : "border-slate-200 text-slate-700 bg-white hover:bg-slate-50"
+            )}
+            title={activeBBoxes.length > 0 ? "Bật/tắt hiển thị Bounding Box AI" : "AI không phát hiện đối tượng nào có khung nhận diện trong ảnh này"}
           >
             <ScanSearch className="size-3.5" />
             <span>AI Bounding Box</span>
-            {activeBBoxes.length > 0 && (
-              <span className={cn("ml-0.5 rounded px-1 text-[10px] font-bold", showBBoxes ? "bg-teal-900 text-teal-100" : "bg-slate-200 text-slate-700")}>
-                {activeBBoxes.length}
-              </span>
-            )}
+            <span
+              className={cn(
+                "ml-0.5 rounded px-1.5 py-0.5 text-[10px] font-bold",
+                activeBBoxes.length > 0
+                  ? (showBBoxes ? "bg-teal-900 text-teal-100" : "bg-slate-200 text-slate-700")
+                  : "bg-slate-100 text-slate-400"
+              )}
+            >
+              {activeBBoxes.length}
+            </span>
           </Button>
           <Button variant="outline" size="icon" onClick={() => setZoomed((value) => !value)} aria-label={zoomed ? "Thu nhỏ" : "Phóng to"}>
             {zoomed ? <ZoomOut className="size-4" /> : <ZoomIn className="size-4" />}
@@ -137,7 +147,7 @@ export function EvidenceViewer({ evidence, userClaims }: { evidence: Contributio
               return (
                 <div
                   key={idx}
-                  className={cn("pointer-events-none absolute border-2 ring-1 z-10", borderClass)}
+                  className={cn("pointer-events-none absolute border-2 ring-1 z-10 rounded-lg shadow-sm", borderClass)}
                   style={{
                     left: `${xmin * 100}%`,
                     top: `${ymin * 100}%`,
@@ -170,7 +180,7 @@ export function EvidenceViewer({ evidence, userClaims }: { evidence: Contributio
               Phân tích AI hỗ trợ
             </span>
             <span className="mt-1 block text-[10px] font-normal text-teal-50">
-              {activeBBoxes.length > 0 ? `Đã nhận diện ${activeBBoxes.length} vùng đối tượng` : "Không phải kết luận kiểm duyệt"}
+              {activeBBoxes.length > 0 ? `Đã nhận diện ${activeBBoxes.length} vùng đối tượng` : "0 đối tượng nhận diện · AI tham khảo"}
             </span>
           </div>
         </div>
@@ -261,28 +271,31 @@ export function EvidenceViewer({ evidence, userClaims }: { evidence: Contributio
             </div>
 
             {/* Visual suggestions with coordinates indicator */}
-            {active.visualSuggestions && active.visualSuggestions.length > 0 && (
+            {active.visualSuggestions && active.visualSuggestions.some((vs) => vs.value === "suggested_present" || Boolean(vs.detectorScore) || Boolean(vs.bboxNormalized)) && (
               <div className="mt-3 border-t border-slate-200 pt-2">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Gợi ý thị giác AI</p>
                 <div className="mt-1.5 space-y-1">
-                  {active.visualSuggestions.map((vs, sIdx) => {
-                    const isRamp = vs.feature.includes("ramp");
-                    const isStairs = vs.feature.includes("stair") || vs.feature.includes("step");
-                    const label = isRamp ? "Ram dốc (Ramp)" : isStairs ? "Bậc thang (Stairs)" : vs.feature;
-                    return (
-                      <div key={sIdx} className="flex items-center justify-between rounded bg-white px-2 py-1 text-xs border border-slate-100">
-                        <span className="text-slate-700">{label}</span>
-                        <div className="flex items-center gap-1">
-                          {vs.bboxNormalized && (
-                            <span className="text-[10px] text-slate-400">[{vs.bboxNormalized.map((n) => n.toFixed(2)).join(", ")}]</span>
-                          )}
-                          {vs.detectorScore && (
-                            <Badge variant={isStairs ? "amber" : "teal"}>{Math.round(vs.detectorScore * 100)}%</Badge>
-                          )}
+                  {active.visualSuggestions
+                    .filter((vs) => vs.value === "suggested_present" || Boolean(vs.detectorScore) || Boolean(vs.bboxNormalized))
+                    .map((vs, sIdx) => {
+                      const isRamp = vs.feature.includes("ramp");
+                      const isStairs = vs.feature.includes("stair") || vs.feature.includes("step");
+                      const isDoor = vs.feature.includes("door");
+                      const label = isRamp ? "Ram dốc (Ramp)" : isStairs ? "Bậc thang (Stairs)" : isDoor ? "Cửa ra vào (Door)" : vs.feature;
+                      return (
+                        <div key={sIdx} className="flex items-center justify-between rounded bg-white px-2 py-1 text-xs border border-slate-100">
+                          <span className="text-slate-700">{label}</span>
+                          <div className="flex items-center gap-1">
+                            {vs.bboxNormalized && (
+                              <span className="text-[10px] text-slate-400">[{vs.bboxNormalized.map((n) => n.toFixed(2)).join(", ")}]</span>
+                            )}
+                            {vs.detectorScore && (
+                              <Badge variant={isStairs ? "amber" : "teal"}>{Math.round(vs.detectorScore * 100)}%</Badge>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
                 </div>
               </div>
             )}
@@ -320,7 +333,7 @@ export function EvidenceViewer({ evidence, userClaims }: { evidence: Contributio
                 return (
                   <div
                     key={idx}
-                    className={cn("pointer-events-none absolute border-2 z-10", borderClass)}
+                    className={cn("pointer-events-none absolute border-2 z-10 rounded-lg shadow-sm", borderClass)}
                     style={{
                       left: `${xmin * 100}%`,
                       top: `${ymin * 100}%`,

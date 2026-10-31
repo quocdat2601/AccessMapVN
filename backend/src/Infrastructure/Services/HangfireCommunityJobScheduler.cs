@@ -13,7 +13,7 @@ public sealed class HangfireCommunityJobScheduler : ICommunityJobScheduler
     }
 
     public string? EnqueueEvaluation(Guid assessmentJobId) =>
-        _jobs.Enqueue<Wf02EvaluationJob>(job => job.RunAsync(assessmentJobId, CancellationToken.None));
+        _jobs.Enqueue<CommunityEvaluationJob>(job => job.RunAsync(assessmentJobId, CancellationToken.None));
 }
 
 public sealed class NoOpCommunityJobScheduler : ICommunityJobScheduler
@@ -21,17 +21,17 @@ public sealed class NoOpCommunityJobScheduler : ICommunityJobScheduler
     public string? EnqueueEvaluation(Guid assessmentJobId) => null;
 }
 
-public sealed class Wf02EvaluationJob
+public sealed class CommunityEvaluationJob
 {
     private readonly ICommunityValidationService _service;
 
-    public Wf02EvaluationJob(ICommunityValidationService service)
+    public CommunityEvaluationJob(ICommunityValidationService service)
     {
         _service = service;
     }
 
     [AutomaticRetry(Attempts = 0)]
-    [Queue("wf02-community")]
+    [Queue("community-validation")]
     public Task RunAsync(Guid assessmentJobId, CancellationToken cancellationToken) =>
         _service.EvaluateAsync(assessmentJobId, cancellationToken);
 }

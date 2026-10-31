@@ -301,12 +301,110 @@ public sealed class CommunityDisputeService : ICommunityDisputeService
 
         var votes = await (from link in _db.DisputeCaseVotes.AsNoTracking()
                            join vote in _db.CommunityVotes.AsNoTracking() on link.CommunityVoteId equals vote.Id
+                           join voter in _db.AppUsers.AsNoTracking() on vote.VoterId equals voter.Id into voterGroup
+                           from voter in voterGroup.DefaultIfEmpty()
                            where link.DisputeCaseId == disputeId
                            orderby vote.CreatedAtUtc descending
                            select new DisputeVoteDto(
-                               vote.Id, vote.VoteType, vote.ProposedStatus, vote.Comment,
-                               vote.Status, ToOffset(vote.CreatedAtUtc), vote.EvidenceSubmissionId))
+                               vote.Id,
+                               vote.VoteType,
+                               vote.ProposedStatus,
+                               vote.Comment,
+                               vote.Status,
+                               ToOffset(vote.CreatedAtUtc),
+                               vote.EvidenceSubmissionId,
+                               voter != null ? voter.DisplayName : "Thành viên cộng đồng",
+                               vote.ReputationTierSnapshot,
+                               vote.ReputationScoreSnapshot))
             .ToListAsync(cancellationToken);
+
+        var baselineHistory = await _db.LocationFeatureHistories.AsNoTracking()
+            .Where(item => item.LocationFeatureId == context.feature.Id && item.FeatureVersion == context.dispute.FeatureVersion)
+            .OrderByDescending(item => item.EffectiveAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var communityState = await _db.FeatureCommunityStates.AsNoTracking()
+            .Where(item => item.LocationFeatureId == context.feature.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var relatedReportRows = await (from report in _db.InaccurateInformationReports.AsNoTracking()
+                                       join reporter in _db.AppUsers.AsNoTracking() on report.ReporterId equals reporter.Id into reporterGroup
+                                       from reporter in reporterGroup.DefaultIfEmpty()
+                                       where report.LinkedDisputeCaseId == disputeId ||
+                                             (report.LocationId == context.location.Id && report.FeatureType == context.feature.FeatureType)
+                                       orderby report.CreatedAtUtc descending
+                                       select new
+                                       {
+                                           report.Id,
+                                           ReporterDisplayName = reporter != null ? reporter.DisplayName : "Người báo cáo",
+                                           report.Reason,
+                                           report.Description,
+                                           report.Status,
+                                           report.CreatedAtUtc,
+                                       })
+            .Take(10)
+            .ToListAsync(cancellationToken);
+
+        var reportIds = relatedReportRows.Select(r => r.Id).ToArray();
+        var evidenceRows = reportIds.Length == 0
+            ? []
+            : await _db.ReportEvidence.AsNoTracking()
+                .Where(item => reportIds.Contains(item.ReportId))
+                .OrderBy(item => item.CreatedAtUtc)
+                .ToListAsync(cancellationToken);
+        var mediaIds = evidenceRows.Where(item => item.OwnedMediaId is not null)
+            .Select(item => item.OwnedMediaId!.Value)
+            .Distinct()
+            .ToArray();
+        var mediaInfo = mediaIds.Length == 0
+            ? new Dictionary<Guid, (string MimeType, string StorageKey)>()
+            : await _db.OwnedMedia.AsNoTracking()
+                .Where(item => mediaIds.Contains(item.Id))
+                .ToDictionaryAsync(item => item.Id, item => (item.MimeType, item.StorageKey), cancellationToken);
+
+        var relatedReports = relatedReportRows.Select(r =>
+        {
+            var rEvidences = evidenceRows
+                .Where(ev => ev.ReportId == r.Id)
+                .Select(ev =>
+                {
+                    string? mediaUrl = null;
+                    if (ev.OwnedMediaId is Guid mId && mediaInfo.TryGetValue(mId, out var info) && !string.IsNullOrWhiteSpace(info.StorageKey))
+                    {
+                        if (info.StorageKey.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                            info.StorageKey.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                        {
+                            mediaUrl = info.StorageKey;
+                        }
+                        else if (info.StorageKey.StartsWith('/'))
+                        {
+                            mediaUrl = $"http://localhost:5256{info.StorageKey}";
+                        }
+                        else
+                        {
+                            mediaUrl = $"http://localhost:5256/uploads/{info.StorageKey}";
+                        }
+                    }
+
+                    return new AdminReportEvidenceDto(
+                        ev.Id,
+                        ev.Description,
+                        mediaUrl,
+                        ev.OwnedMediaId is Guid mediaId && mediaInfo.TryGetValue(mediaId, out var m) ? m.MimeType : "image/jpeg",
+                        ToOffset(ev.CreatedAtUtc));
+                })
+                .ToArray();
+
+            return new DisputeRelatedReportDto(
+                r.Id,
+                r.ReporterDisplayName,
+                r.Reason,
+                r.Description,
+                r.Status,
+                ToOffset(r.CreatedAtUtc),
+                rEvidences);
+        }).ToArray();
+
         var decisions = await (from decision in _db.DisputeDecisions.AsNoTracking()
                                join moderator in _db.AppUsers.AsNoTracking() on decision.ModeratorId equals moderator.Id
                                where decision.DisputeCaseId == disputeId
@@ -328,11 +426,29 @@ public sealed class CommunityDisputeService : ICommunityDisputeService
             .FirstOrDefaultAsync(cancellationToken);
 
         return new DisputeDetailDto(
-            context.dispute.Id, context.location.Id, context.location.Name, context.location.Address,
-            context.feature.FeatureType, context.dispute.FeatureVersion, context.feature.CurrentStatus,
-            context.dispute.Status, context.dispute.OpenReason, context.dispute.OpenedAt,
-            ToOffset(context.dispute.UpdatedAtUtc ?? context.dispute.CreatedAtUtc), votes.Count,
-            votes, decisions, advisory, context.dispute.CorrectionSubmissionId, context.dispute.Version);
+            context.dispute.Id,
+            context.location.Id,
+            context.location.Name,
+            context.location.Address,
+            context.feature.FeatureType,
+            context.dispute.FeatureVersion,
+            context.feature.CurrentStatus,
+            context.dispute.Status,
+            context.dispute.OpenReason,
+            context.dispute.OpenedAt,
+            ToOffset(context.dispute.UpdatedAtUtc ?? context.dispute.CreatedAtUtc),
+            votes.Count,
+            votes,
+            decisions,
+            advisory,
+            context.dispute.CorrectionSubmissionId,
+            context.dispute.Version,
+            baselineHistory?.Reason,
+            context.feature.VerifiedAt,
+            communityState?.WeightedAgreement,
+            communityState?.EligibleVoterCount,
+            communityState?.FreshnessFactor,
+            relatedReports);
     }
 
     private async Task ValidateCorrectionAsync(

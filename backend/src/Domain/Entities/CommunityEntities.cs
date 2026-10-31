@@ -12,7 +12,7 @@ public class AppUser : BaseEntity
     public bool IsActive { get; set; } = true;
     public decimal ReputationScore { get; set; }
     public string ReputationTier { get; set; } = "Baseline";
-    public string ReputationPolicyVersion { get; set; } = "wf02-provisional-v1";
+    public string ReputationPolicyVersion { get; set; } = "community-provisional-v1";
 }
 
 public class AccessScope : BaseEntity

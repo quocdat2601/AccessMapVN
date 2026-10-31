@@ -29,7 +29,7 @@ public class ExceptionHandlingMiddleware
             {
                 CommunityMetrics.IdempotencyConflicts.Add(1);
             }
-            _logger.LogWarning("WF-02 request failed with {Code}: {Message}", ex.Code, ex.Message);
+            _logger.LogWarning("Community request failed with {Code}: {Message}", ex.Code, ex.Message);
             context.Response.StatusCode = ex.StatusCode;
             context.Response.ContentType = "application/json";
             await context.Response.WriteAsync(JsonSerializer.Serialize(new

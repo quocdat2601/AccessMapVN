@@ -2,7 +2,7 @@
 
 This directory contains the Expo React Native application for discovering and contributing
 accessibility information about places in Vietnam. It integrates the ASP.NET API, Supabase Auth,
-the WF-01 contribution flow, and WF-02 feature voting/reporting flows.
+the contribution flow, and community feature voting/reporting flows.
 
 This guide explains where code belongs so multiple frontend developers can work consistently.
 
@@ -103,7 +103,7 @@ Each feature owns one user-facing capability:
 
 - `map`: map screen, markers, and map-specific presentation behavior.
 - `location-details`: accessible-location details and related business rules.
-- `contribution`: the WF1 contribution form and submission workflow.
+- `contribution`: the contribution form and submission workflow.
 - `submissions`: contribution status and submission history.
 - `auth`: sign-in, sign-out, and session contracts.
 - `profile`: viewing and editing the user's profile.
@@ -230,7 +230,7 @@ with their source files. Add a root `e2e` folder only if end-to-end testing is i
 
 ## Team workflow
 
-- Use one ticket and one focused branch per change, such as `feature/wf1-form`.
+- Use one ticket and one focused branch per change, such as `feature/contribution-form`.
 - Keep pull requests small and avoid unrelated refactoring or formatting.
 - Pull the latest target branch before starting and before opening a pull request.
 - Coordinate before changing shared code, route layouts, dependencies, or `package-lock.json`.

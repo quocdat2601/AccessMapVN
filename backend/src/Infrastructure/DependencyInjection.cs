@@ -72,7 +72,7 @@ public static class DependencyInjection
                     }));
             services.AddHangfireServer(options =>
             {
-                options.Queues = new[] { "wf02-community", "default" };
+                options.Queues = new[] { "community-validation", "default" };
                 options.WorkerCount = 2;
             });
             services.AddScoped<ICommunityJobScheduler, HangfireCommunityJobScheduler>();

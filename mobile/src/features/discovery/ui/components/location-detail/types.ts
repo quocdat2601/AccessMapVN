@@ -1,5 +1,6 @@
 import type {
   AccessibilityFeatureType,
+  CommunityCommentStatus,
   PublishedFeatureStatus,
 } from '@/features/community';
 
@@ -39,5 +40,9 @@ export interface CommunityReview {
   initials: string;
   age: string;
   helpfulCount: number;
+  likesCount?: number;
   comment: string;
+  status?: CommunityCommentStatus;
+  isOwn?: boolean;
+  createdAtIso?: string;
 }

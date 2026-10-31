@@ -100,7 +100,7 @@ public sealed class CommunityMediaService : ICommunityMediaService
             Status = OwnedMediaStatus.Staged,
             ExpiresAt = now.AddHours(1),
         };
-        media.StorageKey = $"wf02/{locationId:D}/{actorId:D}/{media.Id:D}";
+        media.StorageKey = $"community/{locationId:D}/{actorId:D}/{media.Id:D}";
         var intent = new UploadIntent
         {
             OwnerId = actorId,

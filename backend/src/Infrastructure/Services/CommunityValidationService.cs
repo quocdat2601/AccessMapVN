@@ -175,7 +175,7 @@ public sealed class CommunityValidationService : ICommunityValidationService
         {
             throw new CommunityValidationException(
                 "FEATURE_NOT_PUBLISHED",
-                "The feature is not published; contribute it through WF-01 instead.",
+                "The feature is not published; contribute it through the contribution flow instead.",
                 404);
         }
 
@@ -202,7 +202,7 @@ public sealed class CommunityValidationService : ICommunityValidationService
                 !Guid.TryParse(evidence.UserId, out var ownerId) || ownerId != actorId ||
                 !string.Equals(evidence.PlaceId, locationId.ToString(), StringComparison.OrdinalIgnoreCase))
             {
-                throw new CommunityValidationException("EVIDENCE_NOT_OWNED", "The linked WF-01 submission is not available for this vote.", 403);
+                throw new CommunityValidationException("EVIDENCE_NOT_OWNED", "The linked contribution submission is not available for this vote.", 403);
             }
         }
 
@@ -341,7 +341,7 @@ public sealed class CommunityValidationService : ICommunityValidationService
         }
         catch (Exception exception)
         {
-            _logger.LogError(exception, "Failed to enqueue WF-02 assessment job {AssessmentJobId}; reconciliation will retry.", job.Id);
+            _logger.LogError(exception, "Failed to enqueue community assessment job {AssessmentJobId}; reconciliation will retry.", job.Id);
         }
 
         return response;
@@ -425,7 +425,7 @@ public sealed class CommunityValidationService : ICommunityValidationService
                 FromStatus = previous,
                 ToStatus = vote.Status,
                 ActorId = actorId,
-                Reason = "Owned WF-01 evidence submission linked; eligibility will be evaluated again.",
+                Reason = "Owned evidence submission linked; eligibility will be evaluated again.",
                 OccurredAt = now,
             });
         }
@@ -472,7 +472,7 @@ public sealed class CommunityValidationService : ICommunityValidationService
         }
         catch (Exception exception)
         {
-            _logger.LogError(exception, "Failed to enqueue WF-02 assessment job {AssessmentJobId}; reconciliation will retry.", job.Id);
+            _logger.LogError(exception, "Failed to enqueue community assessment job {AssessmentJobId}; reconciliation will retry.", job.Id);
         }
         return response;
     }

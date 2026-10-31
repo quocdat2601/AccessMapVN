@@ -114,13 +114,13 @@ builder.Services.AddRateLimiter(options =>
             details = (object?)null,
         }, cancellationToken);
     };
-    AddFixedWindowPolicy(options, "wf02-vote", 10, TimeSpan.FromMinutes(10),
+    AddFixedWindowPolicy(options, "community-vote", 10, TimeSpan.FromMinutes(10),
         context => UserRouteKey(context, "locationId", "featureType"));
-    AddFixedWindowPolicy(options, "wf02-report", 5, TimeSpan.FromDays(1),
+    AddFixedWindowPolicy(options, "community-report", 5, TimeSpan.FromDays(1),
         context => UserRouteKey(context, "locationId"));
-    AddFixedWindowPolicy(options, "wf02-evidence", 10, TimeSpan.FromHours(1),
+    AddFixedWindowPolicy(options, "community-evidence", 10, TimeSpan.FromHours(1),
         context => UserRouteKey(context, "reportId"));
-    AddFixedWindowPolicy(options, "wf02-comment", 10, TimeSpan.FromHours(1),
+    AddFixedWindowPolicy(options, "community-comment", 10, TimeSpan.FromHours(1),
         context => UserRouteKey(context, "locationId"));
 });
 

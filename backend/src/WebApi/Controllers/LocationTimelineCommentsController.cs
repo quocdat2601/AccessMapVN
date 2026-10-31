@@ -30,7 +30,7 @@ public sealed class LocationTimelineCommentsController : ControllerBase
 
     [Authorize]
     [HttpPost("comments")]
-    [EnableRateLimiting("wf02-comment")]
+    [EnableRateLimiting("community-comment")]
     public async Task<ActionResult<CreateCommunityCommentResponse>> CreateComment(
         Guid locationId, [FromBody] CreateCommunityCommentRequest request, CancellationToken cancellationToken)
     {

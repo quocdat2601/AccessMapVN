@@ -19,7 +19,7 @@ public sealed class ReportsController : ControllerBase
     }
 
     [HttpPost("api/v1/locations/{locationId:guid}/reports")]
-    [EnableRateLimiting("wf02-report")]
+    [EnableRateLimiting("community-report")]
     [ProducesResponseType(typeof(CreateInaccurateReportResponse), StatusCodes.Status201Created)]
     public async Task<ActionResult<CreateInaccurateReportResponse>> Create(
         Guid locationId,
@@ -62,7 +62,7 @@ public sealed class ReportsController : ControllerBase
     }
 
     [HttpPost("api/v1/me/reports/{reportId:guid}/evidence")]
-    [EnableRateLimiting("wf02-evidence")]
+    [EnableRateLimiting("community-evidence")]
     [ProducesResponseType(typeof(AddReportEvidenceResponse), StatusCodes.Status201Created)]
     public async Task<ActionResult<AddReportEvidenceResponse>> AddEvidence(
         Guid reportId,

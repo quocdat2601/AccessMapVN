@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     version="1.0.0",
-    description="AI microservice for AccessMap VN – WF-01 Contributor Data Submission",
+    description="AI microservice for AccessMap VN – Contributor Data Verification",
     lifespan=lifespan,
     debug=settings.debug,
 )

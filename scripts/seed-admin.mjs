@@ -26,7 +26,7 @@ async function seedAdmin() {
     provider: 'email',
     providers: ['email'],
     role: 'admin',
-    permissions: ['Wf02.Moderate'],
+    permissions: ['Community.Moderate'],
   });
   const userMetadata = JSON.stringify({
     sub: userId,
@@ -86,7 +86,7 @@ async function seedAdmin() {
       id, display_name, role, is_active, reputation_score, reputation_tier,
       reputation_policy_version, created_at_utc, updated_at_utc
     ) VALUES (
-      $1::uuid, 'Quản trị viên', 3, true, 1000, 'Admin', 'wf02-provisional-v1', now(), now()
+      $1::uuid, 'Quản trị viên', 3, true, 1000, 'Admin', 'community-provisional-v1', now(), now()
     )
     ON CONFLICT (id) DO UPDATE SET
       display_name = 'Quản trị viên',

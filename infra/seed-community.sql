@@ -5,9 +5,9 @@ INSERT INTO app_users (
     id, display_name, role, is_active, reputation_score, reputation_tier,
     reputation_policy_version, created_at_utc, updated_at_utc
 ) VALUES
-    ('70000000-0000-0000-0000-000000000401', 'Người dùng demo An', 1, true, 0, 'Provisional', 'wf02-provisional-v1', now() - interval '40 days', now()),
-    ('70000000-0000-0000-0000-000000000402', 'Người dùng demo Bình', 1, true, 0, 'Provisional', 'wf02-provisional-v1', now() - interval '35 days', now()),
-    ('70000000-0000-0000-0000-000000000403', 'Điều phối viên demo', 3, true, 0, 'Provisional', 'wf02-provisional-v1', now() - interval '60 days', now())
+    ('70000000-0000-0000-0000-000000000401', 'Người dùng demo An', 1, true, 0, 'Provisional', 'community-provisional-v1', now() - interval '40 days', now()),
+    ('70000000-0000-0000-0000-000000000402', 'Người dùng demo Bình', 1, true, 0, 'Provisional', 'community-provisional-v1', now() - interval '35 days', now()),
+    ('70000000-0000-0000-0000-000000000403', 'Điều phối viên demo', 3, true, 0, 'Provisional', 'community-provisional-v1', now() - interval '60 days', now())
 ON CONFLICT (id) DO UPDATE SET
     display_name = EXCLUDED.display_name,
     role = EXCLUDED.role,
@@ -21,17 +21,17 @@ INSERT INTO places (
     status, merged_into_location_id, metadata_version, created_at_utc, updated_at_utc
 ) VALUES (
     '70000000-0000-0000-0000-000000000001',
-    '[WF-02 DEMO] Trung tâm Phục vụ Cộng đồng',
+    'Trung tâm Phục vụ Cộng đồng Quận 1',
     'other',
     'Dữ liệu minh hoạ tại trung tâm Quận 1 - không dùng làm thông tin thực tế',
     '028-0000-0000',
-    'https://example.invalid/wf02-demo',
+    'https://accessmap.vn/trung-tam-phuc-vu-cong-dong',
     '08:00-17:00',
     ST_SetSRID(ST_MakePoint(106.699018, 10.779783), 4326)::geography,
     106.699018, 10.779783,
     true, true, true, false, true,
     85,
-    'Dữ liệu seed local để kiểm thử WF-02: vote, community status, timeline, report và comment.',
+    'Dữ liệu seed local để kiểm thử xác thực cộng đồng: vote, community status, timeline, report và comment.',
     now() - interval '5 days',
     1, NULL, 1, now() - interval '150 days', now()
 )
@@ -62,7 +62,7 @@ INSERT INTO places (
     status, merged_into_location_id, metadata_version, created_at_utc, updated_at_utc
 ) VALUES (
     '70000000-0000-0000-0000-000000000002',
-    '[WF-02 DEMO 2] Trung tâm Tiếp cận Chuẩn',
+    'Trung tâm Tiếp cận Chuẩn Quận 1',
     'other',
     '135 Hai Bà Trưng, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh',
     '028 3822 9999',
@@ -168,8 +168,8 @@ INSERT INTO community_votes (
     reputation_tier_snapshot, tier_factor_snapshot, eligibility_reason,
     policy_version, created_at_utc, updated_at_utc
 ) VALUES
-    ('70000000-0000-0000-0000-000000000801', '70000000-0000-0000-0000-000000000104', '70000000-0000-0000-0000-000000000401', 1, 2, 1, 'WC tiếp cận đã được bổ sung gần đây.', 3, 0, 'Provisional', 1, 'Eligible provisional vote', 'wf02-provisional-v1', now() - interval '2 days', now()),
-    ('70000000-0000-0000-0000-000000000802', '70000000-0000-0000-0000-000000000104', '70000000-0000-0000-0000-000000000402', 1, 2, 1, 'Tôi cũng quan sát thấy biển WC tiếp cận.', 3, 0, 'Provisional', 1, 'Eligible provisional vote', 'wf02-provisional-v1', now() - interval '1 day', now())
+    ('70000000-0000-0000-0000-000000000801', '70000000-0000-0000-0000-000000000104', '70000000-0000-0000-0000-000000000401', 1, 2, 1, 'WC tiếp cận đã được bổ sung gần đây.', 3, 0, 'Provisional', 1, 'Eligible provisional vote', 'community-provisional-v1', now() - interval '2 days', now()),
+    ('70000000-0000-0000-0000-000000000802', '70000000-0000-0000-0000-000000000104', '70000000-0000-0000-0000-000000000402', 1, 2, 1, 'Tôi cũng quan sát thấy biển WC tiếp cận.', 3, 0, 'Provisional', 1, 'Eligible provisional vote', 'community-provisional-v1', now() - interval '1 day', now())
 ON CONFLICT (id) DO UPDATE SET
     comment = EXCLUDED.comment,
     status = EXCLUDED.status,
@@ -181,16 +181,16 @@ INSERT INTO community_votes (
     reputation_tier_snapshot, tier_factor_snapshot, eligibility_reason,
     policy_version, created_at_utc, updated_at_utc
 ) VALUES
-    ('70000000-0000-0000-0000-000000000821', '70000000-0000-0000-0000-000000000111', '70000000-0000-0000-0000-000000000401', 1, 1, NULL, 'Đã xác thực thực tế: Ram dốc chuẩn 1:12, xe lăn tự hành lên xuống rất an toàn.', 3, 0, 'Provisional', 1, 'Eligible provisional vote', 'wf02-provisional-v1', now() - interval '3 hours', now()),
-    ('70000000-0000-0000-0000-000000000822', '70000000-0000-0000-0000-000000000111', '70000000-0000-0000-0000-000000000402', 1, 1, NULL, 'Xác nhận ram dốc có bề mặt bám tốt, không trơn trượt khi trời mưa.', 3, 0, 'Provisional', 1, 'Eligible provisional vote', 'wf02-provisional-v1', now() - interval '2 hours', now()),
-    ('70000000-0000-0000-0000-000000000823', '70000000-0000-0000-0000-000000000112', '70000000-0000-0000-0000-000000000401', 1, 1, NULL, 'Cửa chính tự động mở rộng, lối vào hoàn toàn bằng phẳng không có gờ cản.', 3, 0, 'Provisional', 1, 'Eligible provisional vote', 'wf02-provisional-v1', now() - interval '3 hours', now()),
-    ('70000000-0000-0000-0000-000000000824', '70000000-0000-0000-0000-000000000112', '70000000-0000-0000-0000-000000000402', 1, 1, NULL, 'Cửa rộng rãi, xe lăn loại lớn đi qua thoải mái.', 3, 0, 'Provisional', 1, 'Eligible provisional vote', 'wf02-provisional-v1', now() - interval '2 hours', now()),
-    ('70000000-0000-0000-0000-000000000825', '70000000-0000-0000-0000-000000000113', '70000000-0000-0000-0000-000000000401', 1, 1, NULL, 'Thang máy tiếp cận rất tốt, phím bấm chữ Braille nổi rõ ràng, âm thanh thông báo chuẩn.', 3, 0, 'Provisional', 1, 'Eligible provisional vote', 'wf02-provisional-v1', now() - interval '3 hours', now()),
-    ('70000000-0000-0000-0000-000000000826', '70000000-0000-0000-0000-000000000113', '70000000-0000-0000-0000-000000000402', 1, 1, NULL, 'Cabin thang máy rộng, có gương quan sát và tay vịn xung quanh.', 3, 0, 'Provisional', 1, 'Eligible provisional vote', 'wf02-provisional-v1', now() - interval '2 hours', now()),
-    ('70000000-0000-0000-0000-000000000827', '70000000-0000-0000-0000-000000000114', '70000000-0000-0000-0000-000000000401', 1, 1, NULL, 'Nhà vệ sinh tiếp cận độc lập, tay vịn gập mở linh hoạt, bồn cầu độ cao chuẩn.', 3, 0, 'Provisional', 1, 'Eligible provisional vote', 'wf02-provisional-v1', now() - interval '3 hours', now()),
-    ('70000000-0000-0000-0000-000000000828', '70000000-0000-0000-0000-000000000114', '70000000-0000-0000-0000-000000000402', 1, 1, NULL, 'Không gian bên trong WC đủ rộng để xe lăn quay 360 độ.', 3, 0, 'Provisional', 1, 'Eligible provisional vote', 'wf02-provisional-v1', now() - interval '2 hours', now()),
-    ('70000000-0000-0000-0000-000000000829', '70000000-0000-0000-0000-000000000115', '70000000-0000-0000-0000-000000000401', 1, 1, NULL, 'Gạch xúc giác dẫn hướng liên tục từ cửa vào đến quầy thông tin.', 3, 0, 'Provisional', 1, 'Eligible provisional vote', 'wf02-provisional-v1', now() - interval '3 hours', now()),
-    ('70000000-0000-0000-0000-000000000830', '70000000-0000-0000-0000-000000000115', '70000000-0000-0000-0000-000000000402', 1, 1, NULL, 'Gạch cảm nhận rõ dưới gậy dò đường, không bị nứt vỡ hay che chắn.', 3, 0, 'Provisional', 1, 'Eligible provisional vote', 'wf02-provisional-v1', now() - interval '2 hours', now())
+    ('70000000-0000-0000-0000-000000000821', '70000000-0000-0000-0000-000000000111', '70000000-0000-0000-0000-000000000401', 1, 1, NULL, 'Đã xác thực thực tế: Ram dốc chuẩn 1:12, xe lăn tự hành lên xuống rất an toàn.', 3, 0, 'Provisional', 1, 'Eligible provisional vote', 'community-provisional-v1', now() - interval '3 hours', now()),
+    ('70000000-0000-0000-0000-000000000822', '70000000-0000-0000-0000-000000000111', '70000000-0000-0000-0000-000000000402', 1, 1, NULL, 'Xác nhận ram dốc có bề mặt bám tốt, không trơn trượt khi trời mưa.', 3, 0, 'Provisional', 1, 'Eligible provisional vote', 'community-provisional-v1', now() - interval '2 hours', now()),
+    ('70000000-0000-0000-0000-000000000823', '70000000-0000-0000-0000-000000000112', '70000000-0000-0000-0000-000000000401', 1, 1, NULL, 'Cửa chính tự động mở rộng, lối vào hoàn toàn bằng phẳng không có gờ cản.', 3, 0, 'Provisional', 1, 'Eligible provisional vote', 'community-provisional-v1', now() - interval '3 hours', now()),
+    ('70000000-0000-0000-0000-000000000824', '70000000-0000-0000-0000-000000000112', '70000000-0000-0000-0000-000000000402', 1, 1, NULL, 'Cửa rộng rãi, xe lăn loại lớn đi qua thoải mái.', 3, 0, 'Provisional', 1, 'Eligible provisional vote', 'community-provisional-v1', now() - interval '2 hours', now()),
+    ('70000000-0000-0000-0000-000000000825', '70000000-0000-0000-0000-000000000113', '70000000-0000-0000-0000-000000000401', 1, 1, NULL, 'Thang máy tiếp cận rất tốt, phím bấm chữ Braille nổi rõ ràng, âm thanh thông báo chuẩn.', 3, 0, 'Provisional', 1, 'Eligible provisional vote', 'community-provisional-v1', now() - interval '3 hours', now()),
+    ('70000000-0000-0000-0000-000000000826', '70000000-0000-0000-0000-000000000113', '70000000-0000-0000-0000-000000000402', 1, 1, NULL, 'Cabin thang máy rộng, có gương quan sát và tay vịn xung quanh.', 3, 0, 'Provisional', 1, 'Eligible provisional vote', 'community-provisional-v1', now() - interval '2 hours', now()),
+    ('70000000-0000-0000-0000-000000000827', '70000000-0000-0000-0000-000000000114', '70000000-0000-0000-0000-000000000401', 1, 1, NULL, 'Nhà vệ sinh tiếp cận độc lập, tay vịn gập mở linh hoạt, bồn cầu độ cao chuẩn.', 3, 0, 'Provisional', 1, 'Eligible provisional vote', 'community-provisional-v1', now() - interval '3 hours', now()),
+    ('70000000-0000-0000-0000-000000000828', '70000000-0000-0000-0000-000000000114', '70000000-0000-0000-0000-000000000402', 1, 1, NULL, 'Không gian bên trong WC đủ rộng để xe lăn quay 360 độ.', 3, 0, 'Provisional', 1, 'Eligible provisional vote', 'community-provisional-v1', now() - interval '2 hours', now()),
+    ('70000000-0000-0000-0000-000000000829', '70000000-0000-0000-0000-000000000115', '70000000-0000-0000-0000-000000000401', 1, 1, NULL, 'Gạch xúc giác dẫn hướng liên tục từ cửa vào đến quầy thông tin.', 3, 0, 'Provisional', 1, 'Eligible provisional vote', 'community-provisional-v1', now() - interval '3 hours', now()),
+    ('70000000-0000-0000-0000-000000000830', '70000000-0000-0000-0000-000000000115', '70000000-0000-0000-0000-000000000402', 1, 1, NULL, 'Gạch cảm nhận rõ dưới gậy dò đường, không bị nứt vỡ hay che chắn.', 3, 0, 'Provisional', 1, 'Eligible provisional vote', 'community-provisional-v1', now() - interval '2 hours', now())
 ON CONFLICT (id) DO UPDATE SET
     comment = EXCLUDED.comment,
     status = EXCLUDED.status,
@@ -222,11 +222,11 @@ INSERT INTO feature_community_states (
     freshness_factor, active_dispute_case_id, computed_at, policy_version,
     version, created_at_utc, updated_at_utc
 ) VALUES
-    ('70000000-0000-0000-0000-000000000301', '70000000-0000-0000-0000-000000000101', 1, 3, 0.92, 4, 0, now() - interval '2 days', 0.98, NULL, now(), 'wf02-provisional-v1', 1, now() - interval '5 days', now()),
-    ('70000000-0000-0000-0000-000000000302', '70000000-0000-0000-0000-000000000102', 1, 4, 0.70, 2, 0, now() - interval '105 days', 0.55, NULL, now(), 'wf02-provisional-v1', 1, now() - interval '130 days', now()),
-    ('70000000-0000-0000-0000-000000000303', '70000000-0000-0000-0000-000000000103', 1, 2, 1.00, 1, 0, now() - interval '3 days', 0.96, NULL, now(), 'wf02-provisional-v1', 1, now() - interval '12 days', now()),
-    ('70000000-0000-0000-0000-000000000304', '70000000-0000-0000-0000-000000000104', 1, 6, 0.00, 2, 2, NULL, 0.94, '70000000-0000-0000-0000-000000000901', now(), 'wf02-provisional-v1', 1, now() - interval '18 days', now()),
-    ('70000000-0000-0000-0000-000000000305', '70000000-0000-0000-0000-000000000105', 1, 1, NULL, 0, 0, NULL, 0.92, NULL, now(), 'wf02-provisional-v1', 1, now() - interval '20 days', now())
+    ('70000000-0000-0000-0000-000000000301', '70000000-0000-0000-0000-000000000101', 1, 3, 0.92, 4, 0, now() - interval '2 days', 0.98, NULL, now(), 'community-provisional-v1', 1, now() - interval '5 days', now()),
+    ('70000000-0000-0000-0000-000000000302', '70000000-0000-0000-0000-000000000102', 1, 4, 0.70, 2, 0, now() - interval '105 days', 0.55, NULL, now(), 'community-provisional-v1', 1, now() - interval '130 days', now()),
+    ('70000000-0000-0000-0000-000000000303', '70000000-0000-0000-0000-000000000103', 1, 2, 1.00, 1, 0, now() - interval '3 days', 0.96, NULL, now(), 'community-provisional-v1', 1, now() - interval '12 days', now()),
+    ('70000000-0000-0000-0000-000000000304', '70000000-0000-0000-0000-000000000104', 1, 6, 0.00, 2, 2, NULL, 0.94, '70000000-0000-0000-0000-000000000901', now(), 'community-provisional-v1', 1, now() - interval '18 days', now()),
+    ('70000000-0000-0000-0000-000000000305', '70000000-0000-0000-0000-000000000105', 1, 1, NULL, 0, 0, NULL, 0.92, NULL, now(), 'community-provisional-v1', 1, now() - interval '20 days', now())
 ON CONFLICT (location_feature_id) DO UPDATE SET
     feature_version = EXCLUDED.feature_version,
     label = EXCLUDED.label,
@@ -246,11 +246,11 @@ INSERT INTO feature_community_states (
     freshness_factor, active_dispute_case_id, computed_at, policy_version,
     version, created_at_utc, updated_at_utc
 ) VALUES
-    ('70000000-0000-0000-0000-000000000311', '70000000-0000-0000-0000-000000000111', 1, 3, 1.00, 5, 0, now(), 1.00, NULL, now(), 'wf02-provisional-v1', 1, now() - interval '30 days', now()),
-    ('70000000-0000-0000-0000-000000000312', '70000000-0000-0000-0000-000000000112', 1, 3, 1.00, 5, 0, now(), 1.00, NULL, now(), 'wf02-provisional-v1', 1, now() - interval '30 days', now()),
-    ('70000000-0000-0000-0000-000000000313', '70000000-0000-0000-0000-000000000113', 1, 3, 1.00, 5, 0, now(), 1.00, NULL, now(), 'wf02-provisional-v1', 1, now() - interval '30 days', now()),
-    ('70000000-0000-0000-0000-000000000314', '70000000-0000-0000-0000-000000000114', 1, 3, 1.00, 5, 0, now(), 1.00, NULL, now(), 'wf02-provisional-v1', 1, now() - interval '30 days', now()),
-    ('70000000-0000-0000-0000-000000000315', '70000000-0000-0000-0000-000000000115', 1, 3, 1.00, 5, 0, now(), 1.00, NULL, now(), 'wf02-provisional-v1', 1, now() - interval '30 days', now())
+    ('70000000-0000-0000-0000-000000000311', '70000000-0000-0000-0000-000000000111', 1, 3, 1.00, 5, 0, now(), 1.00, NULL, now(), 'community-provisional-v1', 1, now() - interval '30 days', now()),
+    ('70000000-0000-0000-0000-000000000312', '70000000-0000-0000-0000-000000000112', 1, 3, 1.00, 5, 0, now(), 1.00, NULL, now(), 'community-provisional-v1', 1, now() - interval '30 days', now()),
+    ('70000000-0000-0000-0000-000000000313', '70000000-0000-0000-0000-000000000113', 1, 3, 1.00, 5, 0, now(), 1.00, NULL, now(), 'community-provisional-v1', 1, now() - interval '30 days', now()),
+    ('70000000-0000-0000-0000-000000000314', '70000000-0000-0000-0000-000000000114', 1, 3, 1.00, 5, 0, now(), 1.00, NULL, now(), 'community-provisional-v1', 1, now() - interval '30 days', now()),
+    ('70000000-0000-0000-0000-000000000315', '70000000-0000-0000-0000-000000000115', 1, 3, 1.00, 5, 0, now(), 1.00, NULL, now(), 'community-provisional-v1', 1, now() - interval '30 days', now())
 ON CONFLICT (location_feature_id) DO UPDATE SET
     feature_version = EXCLUDED.feature_version,
     label = EXCLUDED.label,
@@ -345,7 +345,7 @@ INSERT INTO location_metadata_history (
     '70000000-0000-0000-0000-000000000403',
     '{}'::jsonb,
     '{"address":"Dữ liệu minh hoạ tại trung tâm Quận 1","metadataVersion":1}'::jsonb,
-    'Khởi tạo metadata cho địa điểm demo WF-02.',
+    'Khởi tạo metadata cho địa điểm Trung tâm Phục vụ Cộng đồng.',
     now() - interval '150 days', now() - interval '150 days', now()
 )
 ON CONFLICT (location_id, metadata_version) DO UPDATE SET

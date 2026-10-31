@@ -30,7 +30,19 @@ public sealed record DisputeVoteDto(
     string? Comment,
     CommunityVoteStatus Status,
     DateTimeOffset CreatedAt,
-    Guid? EvidenceSubmissionId);
+    Guid? EvidenceSubmissionId,
+    string? VoterDisplayName = null,
+    string? VoterReputationTier = null,
+    decimal? VoterReputationScore = null);
+
+public sealed record DisputeRelatedReportDto(
+    Guid Id,
+    string? ReporterDisplayName,
+    InaccurateReportReason Reason,
+    string Description,
+    InaccurateReportStatus Status,
+    DateTimeOffset CreatedAt,
+    IReadOnlyList<AdminReportEvidenceDto> Evidence);
 
 public sealed record DisputeDecisionDto(
     Guid Id,
@@ -66,7 +78,13 @@ public sealed record DisputeDetailDto(
     IReadOnlyList<DisputeDecisionDto> Decisions,
     TemporaryAdvisoryDto? Advisory,
     Guid? CorrectionSubmissionId,
-    int Version);
+    int Version,
+    string? BaselineReason = null,
+    DateTimeOffset? BaselineVerifiedAt = null,
+    decimal? WeightedAgreement = null,
+    int? EligibleVoterCount = null,
+    decimal? FreshnessFactor = null,
+    IReadOnlyList<DisputeRelatedReportDto>? RelatedReports = null);
 
 public sealed record DecideDisputeRequest(
     DisputeDecisionType Decision,
@@ -95,5 +113,3 @@ public interface ICommunityDisputeService
         DecideDisputeRequest request,
         CancellationToken cancellationToken = default);
 }
-
-

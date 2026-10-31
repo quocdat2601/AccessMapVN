@@ -78,3 +78,18 @@ export interface PublicCommunityComment {
   recencyWeight: number;
   isRecentContext: boolean;
 }
+
+
+export interface PublicCommunityCommentPage {
+  items: PublicCommunityComment[];
+  nextCursor?: string | null;
+}
+
+export type CommunityCommentStatus = 'PendingReview' | 'Approved' | 'Hidden';
+
+export interface CreateCommunityCommentResponse {
+  commentId: string;
+  status: CommunityCommentStatus;
+  version: number;
+  createdAt: string;
+}

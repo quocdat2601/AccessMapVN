@@ -17,7 +17,7 @@ public sealed record PublishLocationFeatureResult(
     DateTimeOffset PublishedAt);
 
 /// <summary>
-/// The single WF-01 publication boundary allowed to mutate published feature truth.
+/// The single contribution publication boundary allowed to mutate published feature truth.
 /// Votes and reports must never call this contract directly.
 /// </summary>
 public interface ILocationFeaturePublicationService

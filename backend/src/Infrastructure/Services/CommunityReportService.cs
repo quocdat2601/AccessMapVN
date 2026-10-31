@@ -367,7 +367,7 @@ public sealed class CommunityReportService : ICommunityReportService
             {
                 throw new CommunityValidationException(
                     "LOW_CONFIDENCE_EVIDENCE",
-                    $"Ảnh minh chứng có độ tin cậy AI thấp ({score}% < 60%). Báo cáo WF-02 yêu cầu độ tin cậy tối thiểu 60%.",
+                    $"Ảnh minh chứng có độ tin cậy AI thấp ({score}% < 60%). Báo cáo sai lệch yêu cầu độ tin cậy tối thiểu 60%.",
                     422);
             }
         }
@@ -820,7 +820,7 @@ public sealed class CommunityReportService : ICommunityReportService
                     {
                         throw new CommunityValidationException(
                             "PUBLICATION_REQUIRED",
-                            "A published WF-01 submission is required for this resolution.",
+                            "A published contribution submission is required for this resolution.",
                             409);
                     }
 
@@ -1295,7 +1295,7 @@ public sealed class CommunityReportService : ICommunityReportService
             {
                 throw new CommunityValidationException(
                     "LOW_CONFIDENCE_EVIDENCE",
-                    $"Ảnh minh chứng có độ tin cậy AI thấp ({score}% < 60%). Báo cáo WF-02 yêu cầu độ tin cậy tối thiểu 60%.",
+                    $"Ảnh minh chứng có độ tin cậy AI thấp ({score}% < 60%). Báo cáo sai lệch yêu cầu độ tin cậy tối thiểu 60%.",
                     422);
             }
         }

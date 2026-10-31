@@ -12,7 +12,7 @@ using Microsoft.Extensions.Options;
 
 namespace AccessMapVN.UnitTests;
 
-public sealed class Wf02PostgresIntegrationTests
+public sealed class CommunityPostgresIntegrationTests
 {
     [PostgreSqlFact]
     [Trait("Category", "PostgreSQL")]
@@ -20,7 +20,7 @@ public sealed class Wf02PostgresIntegrationTests
     {
         await using var db = CreateDatabaseOrSkip();
 
-        var location = NewLocation("WF02 vote integration");
+        var location = NewLocation("Community vote integration");
         var feature = new LocationFeature
         {
             LocationId = location.Id,
@@ -84,7 +84,7 @@ public sealed class Wf02PostgresIntegrationTests
     {
         await using var db = CreateDatabaseOrSkip();
 
-        var location = NewLocation("WF02 report integration");
+        var location = NewLocation("Community report integration");
         var feature = new LocationFeature
         {
             LocationId = location.Id,
@@ -148,7 +148,7 @@ public sealed class Wf02PostgresIntegrationTests
     public async Task SpatialReadModel_ReturnsCanonicalCoordinatesAndUuid()
     {
         await using var db = CreateDatabaseOrSkip();
-        var location = NewLocation("WF02 spatial integration");
+        var location = NewLocation("Community spatial integration");
         location.Lat = 10.77123;
         location.Lng = 106.70123;
         db.Places.Add(location);
@@ -167,7 +167,7 @@ public sealed class Wf02PostgresIntegrationTests
     public async Task CommunityRead_IgnoresProjectionFromOlderFeatureVersion()
     {
         await using var db = CreateDatabaseOrSkip();
-        var location = NewLocation("WF02 projection integration");
+        var location = NewLocation("Community projection integration");
         var feature = new LocationFeature
         {
             LocationId = location.Id,
@@ -188,7 +188,7 @@ public sealed class Wf02PostgresIntegrationTests
             ContradictingVoterCount = 2,
             LastTrustedReconfirmedAt = DateTimeOffset.UtcNow.AddDays(-2),
             ComputedAt = DateTimeOffset.UtcNow,
-            PolicyVersion = "wf02-provisional-v1",
+            PolicyVersion = "community-provisional-v1",
         });
         await db.SaveChangesAsync();
 
@@ -211,11 +211,11 @@ public sealed class Wf02PostgresIntegrationTests
     public async Task Publication_ResetsCommunityProjectionForNewVersion()
     {
         await using var db = CreateDatabaseOrSkip();
-        var location = NewLocation("WF02 publication integration");
+        var location = NewLocation("Community publication integration");
         var admin = new AppUser { Role = AppUserRole.Admin, IsActive = true };
         var submission = new Submission
         {
-            SubmissionCode = $"WF02-{Guid.NewGuid():N}",
+            SubmissionCode = $"SUB-{Guid.NewGuid():N}",
             PlaceId = location.Id.ToString(),
             UserId = Guid.NewGuid().ToString(),
             Status = SubmissionStatus.AutoVerified,
@@ -242,7 +242,7 @@ public sealed class Wf02PostgresIntegrationTests
             LastTrustedReconfirmedAt = DateTimeOffset.UtcNow.AddDays(-1),
             ActiveDisputeCaseId = null,
             ComputedAt = DateTimeOffset.UtcNow,
-            PolicyVersion = "wf02-provisional-v1",
+            PolicyVersion = "community-provisional-v1",
         });
         await db.SaveChangesAsync();
 
@@ -271,11 +271,11 @@ public sealed class Wf02PostgresIntegrationTests
     public async Task Timeline_ResolvesMergedLocationToCanonicalHistory()
     {
         await using var db = CreateDatabaseOrSkip();
-        var canonical = NewLocation("WF02 canonical timeline");
+        var canonical = NewLocation("Community canonical timeline");
         var actor = new AppUser { IsActive = true };
         db.AddRange(canonical, actor);
         await db.SaveChangesAsync();
-        var merged = NewLocation("WF02 merged timeline");
+        var merged = NewLocation("Community merged timeline");
         merged.Status = LocationStatus.Merged;
         merged.MergedIntoLocationId = canonical.Id;
         db.Places.Add(merged);

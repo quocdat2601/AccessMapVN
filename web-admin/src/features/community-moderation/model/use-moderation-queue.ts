@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  wf02AdminRepository,
+  communityModerationRepository,
   type AdminQueueQuery,
   type AdminQueueResponse,
   type CommunityCommentQueueItem,
   type DisputeQueueItem,
   type ReportQueueItem,
-} from "@/entities/wf02";
+} from "@/entities/community-moderation";
 import { ApiError } from "@/shared/api/api-client";
 
 type QueueKind = "disputes" | "reports" | "comments";
@@ -20,7 +20,7 @@ type QueueItemByKind = {
 
 function errorMessage(reason: unknown) {
   if (reason instanceof ApiError && reason.status === 403) {
-    return "Tài khoản không có quyền Wf02.Moderate.";
+    return "Tài khoản không có quyền kiểm duyệt cộng đồng (Community.Moderate).";
   }
   return reason instanceof Error ? reason.message : "Không thể tải hàng đợi kiểm duyệt.";
 }
@@ -34,10 +34,10 @@ export function useModerationQueue<K extends QueueKind>(kind: K, query: AdminQue
     const controller = new AbortController();
     const operation =
       kind === "disputes"
-        ? wf02AdminRepository.getDisputes(query, controller.signal)
+        ? communityModerationRepository.getDisputes(query, controller.signal)
         : kind === "reports"
-          ? wf02AdminRepository.getReports(query, controller.signal)
-          : wf02AdminRepository.getComments(query, controller.signal);
+          ? communityModerationRepository.getReports(query, controller.signal)
+          : communityModerationRepository.getComments(query, controller.signal);
 
     void operation
       .then((response) => {

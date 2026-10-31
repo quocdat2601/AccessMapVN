@@ -14,7 +14,7 @@ public sealed class MediaUploadIntentsController : ControllerBase
     private readonly ICommunityMediaService _service;
     public MediaUploadIntentsController(ICommunityMediaService service) => _service = service;
 
-    [EnableRateLimiting("wf02-evidence")]
+    [EnableRateLimiting("community-evidence")]
     [HttpPost("api/v1/locations/{locationId:guid}/media/upload-intents")]
     public async Task<ActionResult<CreateUploadIntentResponse>> Create(
         Guid locationId, [FromBody] CreateUploadIntentRequest request, CancellationToken cancellationToken)
@@ -25,7 +25,7 @@ public sealed class MediaUploadIntentsController : ControllerBase
         return StatusCode(StatusCodes.Status201Created, response);
     }
 
-    [EnableRateLimiting("wf02-evidence")]
+    [EnableRateLimiting("community-evidence")]
     [HttpPost("api/v1/upload-intents/{uploadIntentId:guid}/complete")]
     public async Task<ActionResult<CompleteUploadIntentResponse>> Complete(
         Guid uploadIntentId, CancellationToken cancellationToken) =>

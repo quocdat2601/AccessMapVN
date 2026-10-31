@@ -58,7 +58,7 @@ async function runTests() {
   assert.strictEqual(longResult.clampedDuration, 10);
   console.log('✅ BR-01 Video duration rules verified!');
 
-  console.log('[TEST 3] Checking WF-02 vote/report isolation invariants...');
+  console.log('[TEST 3] Checking community vote/report isolation invariants...');
   const sampleVote = {
     voteType: 'StillAccurate',
     observedFeatureVersion: 3,
@@ -83,7 +83,7 @@ async function runTests() {
   }
   assert.strictEqual(sampleVote.observedFeatureVersion, 3);
   assert.strictEqual(sampleReport.observedFeatureVersion, 3);
-  console.log('✅ WF-02 writes cannot request EXP, confidence, or publication mutations.');
+  console.log('✅ Community writes cannot request EXP, confidence, or publication mutations.');
   console.log('🎉 All test suites passed successfully!');
 }
 

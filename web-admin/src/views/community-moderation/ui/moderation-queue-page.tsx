@@ -15,13 +15,14 @@ import {
   disputeStatusLabels,
   featureLabels,
   formatAdminDate,
+  publishedStatusLabels,
   reportReasonLabels,
   reportStatusLabels,
   type AdminQueueQuery,
   type DisputeQueueItem,
   type ReportQueueItem,
-} from "@/entities/wf02";
-import { useModerationQueue } from "@/features/wf02-moderation/model/use-moderation-queue";
+} from "@/entities/community-moderation";
+import { useModerationQueue } from "@/features/community-moderation/model/use-moderation-queue";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
@@ -71,7 +72,7 @@ export function ModerationQueuePage({ kind }: { kind: QueueKind }) {
   const Icon = isDispute ? Gavel : FileWarning;
   const title = isDispute ? "Tranh chấp tiếp cận" : "Báo cáo thông tin sai lệch";
   const description = isDispute
-    ? "Xem xét mâu thuẫn theo từng tiện ích và phiên bản đã công bố."
+    ? "Đối chiếu các báo cáo & quan sát mâu thuẫn với dữ liệu đã công bố kèm kiểm định AI."
     : "Xử lý báo cáo chi tiết mà không biến báo cáo thành phiếu đồng thuận.";
   const statuses = isDispute ? disputeStatuses : reportStatuses;
 
@@ -79,7 +80,7 @@ export function ModerationQueuePage({ kind }: { kind: QueueKind }) {
     <div className="mx-auto w-full max-w-[1500px] space-y-4 p-4 sm:p-6">
       <header className="flex flex-col justify-between gap-3 md:flex-row md:items-end">
         <div>
-          <p className="text-xs font-semibold text-teal-700">WF-02 · Kiểm duyệt cộng đồng</p>
+          <p className="text-xs font-semibold text-teal-700">Kiểm duyệt & Xác thực cộng đồng</p>
           <h1 className="mt-1 flex items-center gap-2 text-2xl font-extrabold text-slate-950">
             <Icon className="size-6 text-teal-700" />
             {title}
@@ -177,26 +178,63 @@ export function ModerationQueuePage({ kind }: { kind: QueueKind }) {
 
 function DisputeTable({ items }: { items: DisputeQueueItem[] }) {
   return (
-    <table className="w-full min-w-[900px] text-left text-sm">
+    <table className="w-full min-w-[960px] text-left text-sm">
       <thead className="bg-white text-[11px] uppercase tracking-wide text-slate-400">
         <tr>
-          <th className="px-4 py-3">Tranh chấp</th>
+          <th className="px-4 py-3">Hồ sơ & Lý do mâu thuẫn</th>
           <th className="px-4 py-3">Địa điểm</th>
-          <th className="px-4 py-3">Tiện ích / phiên bản</th>
-          <th className="px-4 py-3">Trạng thái</th>
-          <th className="px-4 py-3">Mở lúc</th>
+          <th className="px-4 py-3">Hạng mục & Trạng thái gốc</th>
+          <th className="px-4 py-3">Số báo cáo đối lập</th>
+          <th className="px-4 py-3">Trạng thái xử lý</th>
+          <th className="px-4 py-3">Phát sinh lúc</th>
           <th className="px-4 py-3" />
         </tr>
       </thead>
       <tbody className="divide-y divide-slate-100">
         {items.map((item) => (
           <tr key={item.id} className="hover:bg-slate-50/70">
-            <td className="px-4 py-4"><span className="font-mono text-xs text-slate-600">{item.id}</span><p className="mt-1 max-w-xs truncate text-xs text-slate-500">{item.openReason}</p></td>
-            <td className="px-4 py-4"><p className="font-semibold text-slate-900">{item.locationName || item.locationId}</p><p className="max-w-xs truncate text-xs text-slate-500">{item.locationAddress}</p></td>
-            <td className="px-4 py-4"><p className="font-semibold text-slate-800">{featureLabels[item.featureType] ?? item.featureType}</p><p className="text-xs text-slate-500">v{item.featureVersion} · {item.publishedStatus || "—"}</p></td>
-            <td className="px-4 py-4"><Badge variant={statusVariant(item.status)}>{disputeStatusLabels[item.status] ?? item.status}</Badge></td>
+            <td className="px-4 py-4">
+              <span className="font-mono text-xs font-semibold text-teal-800">
+                #{item.id.slice(0, 8)}…{item.id.slice(-4)}
+              </span>
+              <p className="mt-1 max-w-sm text-xs leading-5 text-slate-700">{item.openReason}</p>
+            </td>
+            <td className="px-4 py-4">
+              <p className="font-semibold text-slate-900">{item.locationName || item.locationId}</p>
+              <p className="max-w-xs truncate text-xs text-slate-500">{item.locationAddress}</p>
+            </td>
+            <td className="px-4 py-4">
+              <p className="font-semibold text-slate-800">
+                {featureLabels[item.featureType] ?? item.featureType} (v{item.featureVersion})
+              </p>
+              <p className="text-xs text-slate-500">
+                Đang công bố:{" "}
+                <strong className="text-slate-700">
+                  {item.publishedStatus
+                    ? (publishedStatusLabels[item.publishedStatus] ?? item.publishedStatus)
+                    : "—"}
+                </strong>
+              </p>
+            </td>
+            <td className="px-4 py-4">
+              <Badge variant="amber">
+                {item.contradictingVoterCount ?? 2} báo cáo trái chiều
+              </Badge>
+            </td>
+            <td className="px-4 py-4">
+              <Badge variant={statusVariant(item.status)}>
+                {disputeStatusLabels[item.status] ?? item.status}
+              </Badge>
+            </td>
             <td className="px-4 py-4 text-xs text-slate-600">{formatAdminDate(item.openedAt)}</td>
-            <td className="px-4 py-4 text-right"><Link href={`/admin/tranh-chap-tiep-can/${item.id}`} className="font-semibold text-teal-700 hover:underline">Xem chi tiết</Link></td>
+            <td className="px-4 py-4 text-right">
+              <Link
+                href={`/admin/tranh-chap-tiep-can/${item.id}`}
+                className="inline-flex items-center rounded-lg border border-teal-200 bg-teal-50 px-3 py-1.5 text-xs font-bold text-teal-800 transition hover:bg-teal-100"
+              >
+                So sánh & Phân xử
+              </Link>
+            </td>
           </tr>
         ))}
       </tbody>

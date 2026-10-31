@@ -250,7 +250,7 @@ export function ReportFormModal({
         if (detected.length === 0 || aiScore < 60) {
           Alert.alert(
             'Độ tin cậy quá thấp',
-            `Ảnh được chọn không phát hiện rõ đặc điểm tiếp cận nào hoặc độ tin cậy AI quá thấp (${aiScore}% < 60%).\n\nBáo cáo mâu thuẫn (WF-02) yêu cầu minh chứng đạt tối thiểu 60% độ tin cậy AI. Vui lòng chọn ảnh chụp rõ góc lối vào, ram dốc hoặc bậc thang.`,
+            `Ảnh được chọn không phát hiện rõ đặc điểm tiếp cận nào hoặc độ tin cậy AI quá thấp (${aiScore}% < 60%).\n\nBáo cáo mâu thuẫn yêu cầu minh chứng đạt tối thiểu 60% độ tin cậy AI. Vui lòng chọn ảnh chụp rõ góc lối vào, ram dốc hoặc bậc thang.`,
             [{ text: 'Đồng ý', style: 'default' }]
           );
           setPickedAsset(null);
@@ -389,7 +389,7 @@ export function ReportFormModal({
         evidence.aiSummary ||
         (evidence.aiScore != null
           ? `Điểm tin cậy AI: ${evidence.aiScore}/100\nĐặc tính: ${evidence.featureTags.join(', ')}`
-          : 'Minh chứng chụp từ Camera AI (WF-02)');
+          : 'Minh chứng chụp từ Camera AI');
     } else if (pickedAsset) {
       if (pickedUploadedUrl) {
         uploadedMediaUrl = pickedUploadedUrl;

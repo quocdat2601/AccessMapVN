@@ -177,7 +177,7 @@ export function FinalScorecardScreen({
     if (overallScore < 60) {
       Alert.alert(
         'Độ tin cậy quá thấp',
-        `Ảnh minh chứng chỉ đạt ${overallScore}% độ tin cậy AI (yêu cầu tối thiểu 60%).\n\nBáo cáo mâu thuẫn WF-02 không chấp nhận ảnh độ tin cậy thấp để bảo vệ chất lượng dữ liệu tiếp cận. Vui lòng chụp lại ảnh rõ góc ram dốc hoặc lối vào.`,
+        `Ảnh minh chứng chỉ đạt ${overallScore}% độ tin cậy AI (yêu cầu tối thiểu 60%).\n\nBáo cáo mâu thuẫn không chấp nhận ảnh độ tin cậy thấp để bảo vệ chất lượng dữ liệu tiếp cận. Vui lòng chụp lại ảnh rõ góc ram dốc hoặc lối vào.`,
         [
           { text: 'Chụp lại ngay', onPress: onRetakeOrReset, style: 'default' },
           { text: 'Đóng', style: 'cancel' },
@@ -334,7 +334,7 @@ export function FinalScorecardScreen({
                   </Text>
                   <Text style={styles.criticalWarningText}>
                     {flow === 'report'
-                      ? 'Ảnh minh chứng chưa rõ nét hoặc thiếu đặc tính tiếp cận (< 60%). Báo cáo mâu thuẫn (WF-02) yêu cầu minh chứng đạt từ 60% trở lên để đảm bảo tính xác thực. Vui lòng bấm Chụp lại.'
+                      ? 'Ảnh minh chứng chưa rõ nét hoặc thiếu đặc tính tiếp cận (< 60%). Báo cáo mâu thuẫn yêu cầu minh chứng đạt từ 60% trở lên để đảm bảo tính xác thực. Vui lòng bấm Chụp lại.'
                       : 'Ảnh mờ hoặc thiếu chi tiết tiếp cận (< 60%). Hệ thống sẽ từ chối để tránh spam. Bạn nên chụp lại ảnh rõ nét.'}
                   </Text>
                 </View>

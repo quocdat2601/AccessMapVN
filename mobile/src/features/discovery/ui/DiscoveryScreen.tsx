@@ -37,7 +37,7 @@ interface DiscoveryScreenProps {
 }
 
 const QUICK_SEARCH_SUGGESTIONS = [
-  { id: 'wf02-demo', icon: 'shield-checkmark', label: '[WF-02 DEMO] Trung tâm Phục vụ (Q.1)', query: 'WF-02 DEMO' },
+  { id: 'community-demo', icon: 'shield-checkmark', label: 'Trung tâm Phục vụ Cộng đồng (Q.1)', query: 'Trung tâm Phục vụ Cộng đồng' },
   { id: 'hosp', icon: 'medical', label: 'Bệnh viện & Cơ sở y tế', query: 'Bệnh viện' },
   { id: 'cafe', icon: 'cafe', label: 'Quán Cà phê tiếp cận', query: 'Cà phê' },
   { id: 'mall', icon: 'cart', label: 'TTTM & Siêu thị', query: 'Siêu thị' },

@@ -98,6 +98,19 @@ export interface DisputeVoteSummary {
   status?: string;
   createdAt: string;
   evidenceSubmissionId?: string;
+  voterDisplayName?: string;
+  voterReputationTier?: string;
+  voterReputationScore?: number;
+}
+
+export interface DisputeRelatedReport {
+  id: string;
+  reporterDisplayName?: string;
+  reason: ReportReason;
+  description: string;
+  status: ReportStatus;
+  createdAt: string;
+  evidence: ReportEvidence[];
 }
 
 export interface DisputeDecisionRecord {
@@ -125,6 +138,12 @@ export interface DisputeDetail extends DisputeQueueItem {
   advisory?: TemporaryAdvisory;
   correctionSubmissionId?: string;
   version: number;
+  baselineReason?: string;
+  baselineVerifiedAt?: string;
+  weightedAgreement?: number;
+  eligibleVoterCount?: number;
+  freshnessFactor?: number;
+  relatedReports?: DisputeRelatedReport[];
 }
 
 export interface DisputeDecisionInput {
@@ -199,11 +218,10 @@ export interface ReportTransitionInput {
   decision: ReportDecision;
   note: string;
   expectedVersion: number;
-  resolution?: ReportResolution;
-  publicResolutionNote?: string;
   linkedDisputeCaseId?: string;
   linkedSubmissionId?: string;
-  advisoryId?: string;
+  resolution?: ReportResolution;
+  publicResolutionNote?: string;
 }
 
 export interface MetadataCorrectionInput {

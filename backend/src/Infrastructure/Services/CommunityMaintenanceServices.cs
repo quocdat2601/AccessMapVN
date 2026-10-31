@@ -15,13 +15,13 @@ using Microsoft.Extensions.Logging;
 
 namespace AccessMapVN.Infrastructure.Services;
 
-public sealed class Wf02MaintenanceJob
+public sealed class CommunityMaintenanceJob
 {
     private readonly ApplicationDbContext _db;
     private readonly ICommunityValidationService _community;
     private readonly TimeProvider _clock;
 
-    public Wf02MaintenanceJob(ApplicationDbContext db, ICommunityValidationService community, TimeProvider clock)
+    public CommunityMaintenanceJob(ApplicationDbContext db, ICommunityValidationService community, TimeProvider clock)
     {
         _db = db;
         _community = community;
@@ -29,17 +29,17 @@ public sealed class Wf02MaintenanceJob
     }
 
     [AutomaticRetry(Attempts = 2)]
-    [Queue("wf02-community")]
+    [Queue("community-validation")]
     public Task ScanFreshnessAsync(CancellationToken cancellationToken) =>
         _community.ScanFreshnessAsync(cancellationToken);
 
     [AutomaticRetry(Attempts = 2)]
-    [Queue("wf02-community")]
+    [Queue("community-validation")]
     public Task ReconcileAssessmentsAsync(CancellationToken cancellationToken) =>
         _community.ReconcileJobsAsync(cancellationToken);
 
     [AutomaticRetry(Attempts = 2)]
-    [Queue("wf02-community")]
+    [Queue("community-validation")]
     public async Task MaintainAdvisoriesAsync(CancellationToken cancellationToken)
     {
         var now = _clock.GetUtcNow();
@@ -117,15 +117,15 @@ public sealed class CommunityRecurringJobRegistrar : IHostedService
 
     private void RegisterJobs()
     {
-        var freshnessCron = _configuration["Wf02:Freshness:Cron"] ?? "0 2 * * *";
-        var reconciliationCron = _configuration["Wf02:Jobs:ReconciliationCron"] ?? "* * * * *";
+        var freshnessCron = _configuration["CommunityValidation:Freshness:Cron"] ?? "0 2 * * *";
+        var reconciliationCron = _configuration["CommunityValidation:Jobs:ReconciliationCron"] ?? "* * * * *";
         var options = new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc };
-        _jobs.AddOrUpdate<Wf02MaintenanceJob>(
-            "wf02-freshness", job => job.ScanFreshnessAsync(CancellationToken.None), freshnessCron, options);
-        _jobs.AddOrUpdate<Wf02MaintenanceJob>(
-            "wf02-reconcile", job => job.ReconcileAssessmentsAsync(CancellationToken.None), reconciliationCron, options);
-        _jobs.AddOrUpdate<Wf02MaintenanceJob>(
-            "wf02-advisories", job => job.MaintainAdvisoriesAsync(CancellationToken.None), "* * * * *", options);
+        _jobs.AddOrUpdate<CommunityMaintenanceJob>(
+            "community-freshness", job => job.ScanFreshnessAsync(CancellationToken.None), freshnessCron, options);
+        _jobs.AddOrUpdate<CommunityMaintenanceJob>(
+            "community-reconcile", job => job.ReconcileAssessmentsAsync(CancellationToken.None), reconciliationCron, options);
+        _jobs.AddOrUpdate<CommunityMaintenanceJob>(
+            "community-advisories", job => job.MaintainAdvisoriesAsync(CancellationToken.None), "* * * * *", options);
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
@@ -173,7 +173,7 @@ public sealed class CommunityOutboxDispatcher : BackgroundService
         {
             Credential = credential,
             ProjectId = _configuration["Notifications:Firebase:ProjectId"],
-        }, $"accessmapvn-wf02-{Guid.NewGuid():N}");
+        }, $"accessmapvn-community-{Guid.NewGuid():N}");
         return FirebaseMessaging.GetMessaging(app);
     }
 
@@ -216,7 +216,7 @@ public sealed class CommunityOutboxDispatcher : BackgroundService
                     new KeyValuePair<string, object?>("event.type", outbox.Type));
                 outbox.Attempts += 1;
                 outbox.LastError = exception.Message.Length > 2000 ? exception.Message[..2000] : exception.Message;
-                _logger.LogWarning(exception, "WF-02 outbox dispatch failed for {OutboxId} attempt {Attempt}", outbox.Id, outbox.Attempts);
+                _logger.LogWarning(exception, "Community outbox dispatch failed for {OutboxId} attempt {Attempt}", outbox.Id, outbox.Attempts);
                 if (outbox.Attempts >= 3) outbox.ProcessedAt = _clock.GetUtcNow();
             }
             outbox.UpdatedAtUtc = _clock.GetUtcNow().UtcDateTime;

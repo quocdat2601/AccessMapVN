@@ -7,18 +7,22 @@ export {
   linkVoteSubmission,
   fetchLocationTimeline,
   fetchCommunityComments,
+  fetchCommunityCommentPage,
   submitCommunityComment,
 } from './api/communityApi';
 export type {
   AccessibilityFeatureType,
   CastCommunityVoteInput,
+  CommunityCommentStatus,
   CommunityFeatureInput,
   CommunityFeatureState,
   CommunityVoteReceipt,
   CommunityVoteStatus,
   CommunityVoteType,
+  CreateCommunityCommentResponse,
   FeatureCommunityLabel,
   PublishedFeatureStatus,
   PublicCommunityComment,
+  PublicCommunityCommentPage,
   PublicTimelineItem,
 } from './model/types';

@@ -32,7 +32,7 @@ public sealed class CommunityValidationController : ControllerBase
 
     [Authorize]
     [HttpPost("votes")]
-    [EnableRateLimiting("wf02-vote")]
+    [EnableRateLimiting("community-vote")]
     [ProducesResponseType(typeof(CreateCommunityVoteResponse), StatusCodes.Status201Created)]
     public async Task<ActionResult<CreateCommunityVoteResponse>> CreateVote(
         Guid locationId,
@@ -75,7 +75,7 @@ public sealed class CommunityValidationController : ControllerBase
 
     [Authorize]
     [HttpPost("~/api/v1/community-votes/{voteId:guid}/link-submission")]
-    [EnableRateLimiting("wf02-evidence")]
+    [EnableRateLimiting("community-evidence")]
     [ProducesResponseType(typeof(LinkVoteSubmissionResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<LinkVoteSubmissionResponse>> LinkSubmission(
         Guid voteId,

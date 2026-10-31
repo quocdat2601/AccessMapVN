@@ -175,7 +175,7 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
   return response.json() as Promise<T>;
 }
 
-const IDEMPOTENCY_PREFIX = 'wf02:idempotency:';
+const IDEMPOTENCY_PREFIX = 'accessmap:idempotency:';
 const idempotencyLookups = new Map<string, Promise<PendingIdempotency>>();
 
 interface PendingIdempotency {
@@ -271,7 +271,7 @@ async function postIdempotent<T>(
   }
 }
 
-/** Multipart helper for the WF-01 AI service; it intentionally does not attach app auth. */
+/** Multipart helper for the AI verification service; it intentionally does not attach app auth. */
 export function postMultipart<T = unknown>(
   url: string,
   formData: FormData,

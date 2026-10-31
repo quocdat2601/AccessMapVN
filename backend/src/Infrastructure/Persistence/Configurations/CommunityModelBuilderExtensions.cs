@@ -11,7 +11,7 @@ internal static partial class CommunityModelBuilderExtensions
     public static void ConfigureCommunityValidation(this ModelBuilder modelBuilder)
     {
         ConfigureUsers(modelBuilder);
-        ConfigureWf01Foundations(modelBuilder);
+        ConfigureCoreFoundations(modelBuilder);
         ConfigureLocationFeatures(modelBuilder);
         ConfigureVotesAndAssessments(modelBuilder);
         ConfigureDisputes(modelBuilder);
@@ -19,8 +19,8 @@ internal static partial class CommunityModelBuilderExtensions
         ConfigureCommentsAndInfrastructure(modelBuilder);
     }
 
-    [Obsolete("Use ConfigureCommunityValidation instead.")]
-    public static void ConfigureWf02(this ModelBuilder modelBuilder) => ConfigureCommunityValidation(modelBuilder);
+
+
 
     private static void ConfigureUsers(ModelBuilder modelBuilder)
     {
@@ -32,7 +32,7 @@ internal static partial class CommunityModelBuilderExtensions
         user.Property(x => x.ReputationPolicyVersion).HasMaxLength(100);
     }
 
-    private static void ConfigureWf01Foundations(ModelBuilder modelBuilder)
+    private static void ConfigureCoreFoundations(ModelBuilder modelBuilder)
     {
         var scope = modelBuilder.Entity<AccessScope>();
         ConfigureBase(scope, "access_scopes");

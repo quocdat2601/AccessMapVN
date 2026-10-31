@@ -3,7 +3,7 @@ using FluentAssertions;
 
 namespace AccessMapVN.UnitTests;
 
-public sealed class Wf02MediaContentTests
+public sealed class CommunityMediaContentTests
 {
     [Theory]
     [InlineData("image/jpeg", "FFD8FFE000104A464946")]

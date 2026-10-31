@@ -8,7 +8,7 @@ namespace AccessMapVN.WebApi.Authorization;
 
 public static class CommunityPolicies
 {
-    public const string Moderate = "Wf02.Moderate";
+    public const string Moderate = "Community.Moderate";
 }
 
 public sealed class CommunityModerationRequirement : IAuthorizationRequirement;

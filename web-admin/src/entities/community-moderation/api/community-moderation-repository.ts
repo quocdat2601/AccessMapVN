@@ -50,7 +50,7 @@ function normalizeQueue<T>(payload: AdminQueueResponse<T> | T[], query: AdminQue
   };
 }
 
-export const wf02AdminRepository = {
+export const communityModerationRepository = {
   async getDisputes(query: AdminQueueQuery = {}, signal?: AbortSignal) {
     const response = await apiRequest<AdminQueueResponse<DisputeQueueItem> | DisputeQueueItem[]>(
       `/api/v1/admin/community-disputes${queryString(query)}`,

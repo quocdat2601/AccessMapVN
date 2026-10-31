@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ModerationQueuePage } from "@/views/wf02-moderation";
+import { ModerationQueuePage } from "@/views/community-moderation";
 
 export const metadata: Metadata = { title: "Báo cáo thông tin sai lệch" };
 

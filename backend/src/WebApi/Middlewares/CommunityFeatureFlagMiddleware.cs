@@ -35,7 +35,7 @@ public sealed class CommunityFeatureFlagMiddleware
                             : true;
         if (!enabled)
         {
-            throw new CommunityValidationException("FEATURE_DISABLED", "This WF-02 capability is temporarily unavailable.", 404);
+            throw new CommunityValidationException("FEATURE_DISABLED", "This community capability is temporarily unavailable.", 404);
         }
 
         await _next(context);

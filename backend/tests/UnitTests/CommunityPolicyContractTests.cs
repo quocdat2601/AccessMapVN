@@ -5,7 +5,7 @@ using FluentAssertions;
 
 namespace AccessMapVN.UnitTests;
 
-public sealed class Wf02PolicyContractTests
+public sealed class CommunityPolicyContractTests
 {
     [Fact]
     public void Defaults_MatchApprovedProvisionalPolicy()
@@ -21,7 +21,7 @@ public sealed class Wf02PolicyContractTests
         options.Consensus.CrowdAutoResolveEnabled.Should().BeFalse();
         options.Reputation.DefaultReputationScore.Should().Be(0);
         options.Reputation.VoteHoldThreshold.Should().Be(0);
-        options.Reputation.PolicyVersion.Should().Be("wf02-provisional-v1");
+        options.Reputation.PolicyVersion.Should().Be("community-provisional-v1");
         options.Thresholds.AutoApproveConfidenceThreshold.Should().Be(0.80);
         options.Thresholds.RejectConfidenceThreshold.Should().Be(0.40);
     }

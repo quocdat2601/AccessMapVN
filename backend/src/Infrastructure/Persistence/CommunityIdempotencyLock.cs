@@ -20,7 +20,7 @@ internal static class CommunityIdempotencyLock
         string resourceIdentity,
         CancellationToken cancellationToken)
     {
-        var lockIdentity = $"wf02:{resourceIdentity}";
+        var lockIdentity = $"community:{resourceIdentity}";
         return db.Database.ExecuteSqlInterpolatedAsync(
             $"SELECT pg_advisory_xact_lock(hashtextextended({lockIdentity}, 0));",
             cancellationToken);

@@ -1,4 +1,4 @@
-name: AccessMap-WF01-Mock
+name: AccessMap-Contribution-Mock
 values:
   - key: url
     value: https://3a35c4a2-6c43-465f-8232-f9c2e176aafb.mock.pstmn.io

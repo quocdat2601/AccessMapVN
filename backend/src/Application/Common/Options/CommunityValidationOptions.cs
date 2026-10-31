@@ -3,9 +3,9 @@ namespace AccessMapVN.Application.Common.Options;
 public class CommunityValidationOptions
 {
     public const string SectionName = "CommunityValidation";
-    public const string LegacySectionName = "Wf02";
+    public const string LegacySectionName = "Community";
 
-    public string PolicyVersion { get; set; } = "wf02-v1";
+    public string PolicyVersion { get; set; } = "community-v1";
     public RecencyOptions Recency { get; set; } = new();
     public FreshnessOptions Freshness { get; set; } = new();
     public ConsensusOptions Consensus { get; set; } = new();
@@ -90,7 +90,7 @@ public class CommunityValidationOptions
     {
         public decimal DefaultReputationScore { get; set; }
         public decimal VoteHoldThreshold { get; set; }
-        public string PolicyVersion { get; set; } = "wf02-provisional-v1";
+        public string PolicyVersion { get; set; } = "community-provisional-v1";
     }
 
     public sealed class FeatureFlagOptions

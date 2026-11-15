@@ -13,6 +13,7 @@ interface MapControlsProps {
   onZoomIn?: () => void;
   onZoomOut?: () => void;
   onMyLocation?: () => void;
+  topOffset?: number;
 }
 
 export function MapControls({
@@ -24,11 +25,13 @@ export function MapControls({
   onZoomIn,
   onZoomOut,
   onMyLocation,
+  topOffset,
 }: MapControlsProps) {
   const insets = useSafeAreaInsets();
+  const calculatedTop = topOffset ?? (insets.top + 190);
 
   return (
-    <View style={[styles.container, { top: insets.top + 130 }]}>
+    <View style={[styles.container, { top: calculatedTop }]}>
       {/* 1. Compass Button */}
       <TouchableOpacity
         style={styles.circleButton}

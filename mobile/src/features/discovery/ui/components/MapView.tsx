@@ -138,9 +138,8 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
   const [activeTapPoint, setActiveTapPoint] = useState<{ lng: number; lat: number; name?: string } | null>(null);
 
   const flyToPlace = (lng: number, lat: number, zoom = 16) => {
-    // Offset south so marker is centered in the upper viewport above the bottom sheet
-    const targetLat = lat - 0.0028;
-    cameraRef.current?.flyTo({ center: [lng, targetLat], zoom, duration: 750 });
+    // Center the map directly on the selected location coordinates for clear visibility
+    cameraRef.current?.flyTo({ center: [lng, lat], zoom, duration: 700 });
   };
 
   const handleClusterPress = (lng: number, lat: number) => {
@@ -243,8 +242,8 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       if (typeof px === 'number' && typeof py === 'number' && !isNaN(px) && !isNaN(py)) {
         try {
           features = await mapRef.current.queryRenderedFeatures([
-            [px - 24, py - 24],
-            [px + 24, py + 24],
+            [px - 32, py - 32],
+            [px + 32, py + 32],
           ]);
         } catch {
           features = [];
@@ -264,17 +263,50 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         features = nativeEvent?.features ?? [];
       }
 
-      // Priority 0: Check if user tapped directly on or near their current location marker
       const tapCoords: [number, number] | null =
         event?.geometry?.coordinates ||
         nativeEvent?.lngLat ||
         (nativeEvent?.coordinate ? [nativeEvent.coordinate.longitude, nativeEvent.coordinate.latitude] : null);
 
+      const immediateAddress = extractImmediateAddress(features || []);
+
+      // Priority 1: Check if user tapped directly on an AccessMapVN place marker feature
+      const appFeature = features.find(
+        (f: any) => f?.properties?.id && places.some((p) => p.id === f.properties.id)
+      );
+      if (appFeature) {
+        await handleSelectAppPlace(appFeature.properties.id, immediateAddress);
+        return;
+      }
+
+      // Priority 2: Spatial Proximity Snapping - If tapped near any known app place (<= 40m), select it directly
+      if (tapCoords) {
+        let closestAppPlace: PlaceDto | null = null;
+        let closestDistance = Infinity;
+        for (const p of places) {
+          const d = getDistanceMeters(p.lat, p.lng, tapCoords[1], tapCoords[0]);
+          if (d <= 40 && d < closestDistance) {
+            closestDistance = d;
+            closestAppPlace = p;
+          }
+        }
+        if (closestAppPlace) {
+          await handleSelectAppPlace(closestAppPlace.id, immediateAddress);
+          return;
+        }
+      }
+
+      // Priority 3: Check if user specifically tapped on their own location dot (only if NO place was closer)
+      const userDistance =
+        userLatitude != null && userLongitude != null && tapCoords
+          ? getDistanceMeters(userLatitude, userLongitude, tapCoords[1], tapCoords[0])
+          : Infinity;
+
       const isUserLocationTap =
         userLatitude != null &&
         userLongitude != null &&
-        (features.some((f: any) => f?.properties?.isUserLocation || (f?.layer?.id && f.layer.id.includes('user-location'))) ||
-          (tapCoords && getDistanceMeters(userLatitude, userLongitude, tapCoords[1], tapCoords[0]) <= 35));
+        (features.some((f: any) => f?.properties?.isUserLocation || (f?.layer?.id && f.layer.id === 'user-location-dot')) ||
+          userDistance <= 14);
 
       if (isUserLocationTap && userLatitude != null && userLongitude != null) {
         flyToPlace(userLongitude, userLatitude);
@@ -283,7 +315,6 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         setActiveTapPoint(null);
         onSelectPlace?.(null);
 
-        const immediateAddress = extractImmediateAddress(features);
         const userPlace: PlaceDto = {
           id: myPlaceId,
           name: 'Vị trí hiện tại của bạn',
@@ -336,25 +367,6 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         return;
       }
 
-      const immediateAddress = extractImmediateAddress(features || []);
-
-      // Priority 0.5: Spatial Proximity Snapping - If tapped near any known app place (<= 32m), select it directly
-      if (tapCoords) {
-        let closestAppPlace: PlaceDto | null = null;
-        let closestDistance = Infinity;
-        for (const p of places) {
-          const d = getDistanceMeters(p.lat, p.lng, tapCoords[1], tapCoords[0]);
-          if (d <= 32 && d < closestDistance) {
-            closestDistance = d;
-            closestAppPlace = p;
-          }
-        }
-        if (closestAppPlace) {
-          await handleSelectAppPlace(closestAppPlace.id, immediateAddress);
-          return;
-        }
-      }
-
       if (!features || features.length === 0) {
         setActiveTapPoint(null);
         onSelectPlace?.(null);
@@ -362,16 +374,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         return;
       }
 
-      // Priority 1: Check if user tapped directly on an AccessMapVN place marker
-      const appFeature = features.find(
-        (f: any) => f?.properties?.id && places.some((p) => p.id === f.properties.id)
-      );
-      if (appFeature) {
-        await handleSelectAppPlace(appFeature.properties.id, immediateAddress);
-        return;
-      }
-
-      // Priority 2: Check if tapped base map feature matches an existing loaded place
+      // Priority 4: Check if tapped base map feature matches an existing loaded place
       const namedFeature = features.find(
         (f: any) =>
           f?.properties?.name ||

@@ -1,5 +1,6 @@
 export { FeatureCommunitySection, type SubmittedObservation } from './ui/FeatureCommunitySection';
 export { FeatureVerificationModal } from './ui/FeatureVerificationModal';
+export { CommunityScreen } from './ui/CommunityScreen';
 export {
   fetchCommunityState,
   castCommunityVote,

@@ -156,7 +156,7 @@ export function AccessibilityLayer({
       id="accessibility-places"
       data={geojson}
       cluster={false}
-      hitbox={{ top: 22, bottom: 22, left: 22, right: 22 }}
+      hitbox={{ top: 38, bottom: 38, left: 38, right: 38 }}
       onPress={(e: any) => {
         const features = e?.nativeEvent?.features ?? e?.features;
         const feature = features?.[0];

@@ -227,6 +227,66 @@ public sealed class LocationFeaturePublicationService : ILocationFeaturePublicat
         submission.Status = SubmissionStatus.Published;
         submission.UpdatedAtUtc = now.UtcDateTime;
 
+        var newlyAwardedReputation = 0m;
+        if (!isExactReplay && Guid.TryParse(submission.UserId, out var contributorId))
+        {
+            var thirtyDaysAgo = now.AddDays(-30);
+            var priorPublicationDates = await (
+                from history in _db.LocationFeatureHistories.AsNoTracking()
+                join feat in _db.LocationFeatures.AsNoTracking() on history.LocationFeatureId equals feat.Id
+                join sub in _db.Submissions.AsNoTracking() on history.SourceSubmissionId equals sub.Id
+                where feat.LocationId == request.LocationId &&
+                      sub.UserId == submission.UserId &&
+                      sub.Id != request.SubmissionId
+                select history.EffectiveAt)
+                .ToListAsync(cancellationToken);
+
+            var withinCooldown = priorPublicationDates.Any(dt => dt >= thirtyDaysAgo);
+            if (!withinCooldown)
+            {
+                newlyAwardedReputation = priorPublicationDates.Count == 0 ? 5m : 2m;
+                var contributor = await _db.AppUsers.SingleOrDefaultAsync(
+                    u => u.Id == contributorId,
+                    cancellationToken);
+
+                if (contributor is null)
+                {
+                    contributor = new AppUser
+                    {
+                        Id = contributorId,
+                        ReputationScore = newlyAwardedReputation,
+                        ReputationTier = ResolveReputationTier(newlyAwardedReputation),
+                    };
+                    _db.AppUsers.Add(contributor);
+                }
+                else
+                {
+                    contributor.ReputationScore += newlyAwardedReputation;
+                    contributor.ReputationTier = ResolveReputationTier(contributor.ReputationScore);
+                    contributor.UpdatedAtUtc = now.UtcDateTime;
+                }
+
+                _db.OutboxMessages.Add(new OutboxMessage
+                {
+                    Type = "ReputationCredited",
+                    PayloadJson = JsonSerializer.Serialize(new
+                    {
+                        userId = contributorId,
+                        locationId = request.LocationId,
+                        submissionId = request.SubmissionId,
+                        delta = newlyAwardedReputation,
+                        newScore = contributor.ReputationScore,
+                        tier = contributor.ReputationTier,
+                        reason = priorPublicationDates.Count == 0
+                            ? "Đóng góp địa điểm tiếp cận mới được công bố (+5)"
+                            : "Đóng góp bổ sung tiện ích sau chu kỳ 30 ngày (+2)",
+                        occurredAt = now,
+                    }),
+                    OccurredAt = now,
+                });
+            }
+        }
+
         if (!isExactReplay)
         {
             _db.OutboxMessages.Add(new OutboxMessage
@@ -279,4 +339,12 @@ public sealed class LocationFeaturePublicationService : ILocationFeaturePublicat
         location.LastVerifiedAt = verifiedAt;
         location.UpdatedAtUtc = verifiedAt.UtcDateTime;
     }
+
+    private static string ResolveReputationTier(decimal score) => score switch
+    {
+        >= 100m => "Hạng Vàng",
+        >= 50m => "Trusted",
+        >= 10m => "Hạng Đồng",
+        _ => "Baseline",
+    };
 }

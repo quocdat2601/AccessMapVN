@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using AccessMapVN.Application.Common.Exceptions;
 using AccessMapVN.Application.Common.Options;
 using AccessMapVN.Application.Features.CommunityValidation;
@@ -138,10 +139,7 @@ public sealed class LocationTimelineCommentService : ILocationTimelineCommentSer
         CancellationToken cancellationToken = default)
     {
         ValidateIdempotencyKey(idempotencyKey);
-        if (string.IsNullOrWhiteSpace(request.Body) || request.Body.Trim().Length > 2000)
-        {
-            throw new CommunityValidationException("INVALID_COMMENT", "A comment of at most 2000 characters is required.", 422);
-        }
+        var sanitizedBody = SanitizeAndValidateComment(request.Body);
         var endpoint = $"/api/v1/locations/{locationId:D}/comments";
         var hash = Hash(request);
         var now = _clock.GetUtcNow();
@@ -163,12 +161,24 @@ public sealed class LocationTimelineCommentService : ILocationTimelineCommentSer
             throw new CommunityValidationException("SCOPE_MISMATCH", "The scope does not belong to this location.", 422);
         }
 
+        var recentCutoff = now.AddMinutes(-5).UtcDateTime;
+        var isDuplicateSpam = await _db.CommunityComments.AsNoTracking().AnyAsync(
+            item => item.AuthorId == actorId &&
+                    item.LocationId == locationId &&
+                    item.Body == sanitizedBody &&
+                    item.CreatedAtUtc >= recentCutoff,
+            cancellationToken);
+        if (isDuplicateSpam)
+        {
+            throw new CommunityValidationException("COMMENT_DUPLICATE_SPAM", "Duplicate comment submitted too quickly.", 429);
+        }
+
         var comment = new CommunityComment
         {
             LocationId = locationId,
             ScopeId = request.ScopeId,
             AuthorId = actorId,
-            Body = request.Body.Trim(),
+            Body = sanitizedBody,
             Status = CommunityCommentStatus.PendingReview,
         };
         _db.CommunityComments.Add(comment);
@@ -364,6 +374,35 @@ public sealed class LocationTimelineCommentService : ILocationTimelineCommentSer
     {
         if (page < 1 || pageSize is < 1 or > 100)
             throw new CommunityValidationException("INVALID_PAGINATION", "page must be positive and pageSize must be between 1 and 100.", 422);
+    }
+
+    public static string SanitizeAndValidateComment(string? rawBody)
+    {
+        if (string.IsNullOrWhiteSpace(rawBody))
+        {
+            throw new CommunityValidationException("INVALID_COMMENT", "A comment of at most 1500 characters is required.", 422);
+        }
+
+        if (Regex.IsMatch(rawBody, @"(javascript:|vbscript:|onerror\s*=|onload\s*=)", RegexOptions.IgnoreCase))
+        {
+            throw new CommunityValidationException("INVALID_COMMENT", "Comment contains prohibited script content.", 422);
+        }
+
+        var withoutScripts = Regex.Replace(rawBody, @"<script\b[^>]*>.*?</script>", " ", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        var withoutHtml = Regex.Replace(withoutScripts, @"<[^>]+>", " ");
+        var normalized = Regex.Replace(withoutHtml, @"\s+", " ").Trim();
+
+        if (string.IsNullOrWhiteSpace(normalized) || normalized.Length > 1500)
+        {
+            throw new CommunityValidationException("INVALID_COMMENT", "A comment of at most 1500 characters is required.", 422);
+        }
+
+        if (Regex.IsMatch(normalized, @"\b(dcm|dkm|vkl|đmm|địt|lồn|cặc)\b", RegexOptions.IgnoreCase))
+        {
+            throw new CommunityValidationException("INVALID_COMMENT", "Comment violates community language standards.", 422);
+        }
+
+        return normalized;
     }
 
     private static void ValidateIdempotencyKey(string key)

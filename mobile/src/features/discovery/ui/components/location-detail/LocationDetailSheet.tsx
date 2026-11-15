@@ -54,6 +54,8 @@ interface LocationDetailSheetProps {
   place: PlaceDto;
   userLatitude?: number | null;
   userLongitude?: number | null;
+  isFavorite?: boolean;
+  onToggleFavorite?: (place: PlaceDto) => void;
   onClose: () => void;
   onContribute?: (place: PlaceDto) => void;
   onReportIssue?: (place: PlaceDto) => void;
@@ -135,6 +137,8 @@ export function LocationDetailSheet({
   place,
   userLatitude,
   userLongitude,
+  isFavorite = false,
+  onToggleFavorite,
   onClose,
   onContribute,
   onReportIssue,
@@ -585,6 +589,8 @@ export function LocationDetailSheet({
               openingHours={place.opening_hours}
               phone={place.phone}
               website={place.website}
+              isFavorite={isFavorite}
+              onToggleFavorite={onToggleFavorite ? () => onToggleFavorite(place) : undefined}
             />
 
             <AccessibilitySummary

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Platform, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,6 +14,11 @@ interface HeaderBarProps {
 
 export function HeaderBar({ onNotificationPress, onProfilePress }: HeaderBarProps) {
   const insets = useSafeAreaInsets();
+  const safeTop = Math.max(
+    insets.top,
+    Platform.OS === 'android' ? (StatusBar.currentHeight ?? 28) : 0,
+    12
+  );
   const router = useRouter();
   const { isGuest, userProfile } = useAuth();
 
@@ -37,7 +42,7 @@ export function HeaderBar({ onNotificationPress, onProfilePress }: HeaderBarProp
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: safeTop }]}>
       <View style={styles.contentRow}>
         <View style={styles.leftSection}>
           {/* Reuse the same replaceable brand asset shown on Intro and Login. */}

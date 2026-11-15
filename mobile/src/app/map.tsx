@@ -1,20 +1,5 @@
-import { DiscoveryScreen } from '@/features/discovery';
-import { startContributionFlow } from '@/features/contribution';
-import { useRouter } from 'expo-router';
+import { MainTabContainer } from '@/shared/ui/MainTabContainer';
 
 export default function MapRoute() {
-  const router = useRouter();
-
-  return (
-    <DiscoveryScreen
-      onNavigateToContribute={(place) => {
-        startContributionFlow(router, {
-          id: place.id,
-          name: place.name,
-          latitude: place.latitude,
-          longitude: place.longitude,
-        });
-      }}
-    />
-  );
+  return <MainTabContainer initialTab="map" />;
 }

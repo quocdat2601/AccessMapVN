@@ -4,9 +4,9 @@ import type { BoundingBox, MapRegion } from '../types';
 const DEBOUNCE_MS = 300;
 
 const HCMC_INITIAL: MapRegion = {
-  latitude: 10.7769,
-  longitude: 106.7009,
-  zoom: 15,
+  latitude: 10.8454,
+  longitude: 106.8373,
+  zoom: 16,
 };
 
 export function useMapRegion(initialCoords?: { latitude: number; longitude: number } | null) {

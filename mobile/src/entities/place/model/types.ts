@@ -35,6 +35,8 @@ export interface PlaceDto {
   floor_level?: number | null;
   building_id?: string | null;
   has_accessible_elevator?: boolean | null;
+  has_accessible_parking?: boolean | null;
+  has_step_free?: boolean | null;
   last_verified_at?: string | null;
   isAddressLoading?: boolean;
   legacy_feature_values?: {

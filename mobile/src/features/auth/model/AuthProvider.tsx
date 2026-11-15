@@ -8,8 +8,8 @@ import {
   useMemo,
   useState,
 } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { apiClient } from '@/shared/api/client';
 import { isSupabaseConfigured, supabase } from '@/shared/lib/supabase';
 
 export interface UserProfile {
@@ -19,6 +19,8 @@ export interface UserProfile {
   avatarUrl: string | null;
   role: string;
   expPoints: number;
+  reputationScore: number;
+  reputationTier: string;
   contributionsCount: number;
   reportsCount: number;
   isGuest: boolean;
@@ -31,6 +33,7 @@ export interface AuthContextValue {
   isGuest: boolean;
   isLoading: boolean;
   isConfigured: boolean;
+  refreshProfile(): Promise<void>;
   signIn(email: string, password: string): Promise<void>;
   signUp(email: string, password: string, fullName?: string): Promise<boolean>;
   sendPasswordReset(email: string): Promise<void>;
@@ -45,30 +48,56 @@ function requireConfiguration() {
   }
 }
 
+interface BackendProfileResponse {
+  id: string;
+  displayName?: string;
+  role?: string;
+  expPoints: number;
+  reputationScore: number;
+  reputationTier: string;
+  contributionsCount: number;
+  reportsCount: number;
+}
+
+const DEFAULT_PROFILE_STATS = {
+  expPoints: 0,
+  reputationScore: 0,
+  reputationTier: 'Thành viên mới',
+  contributionsCount: 0,
+  reportsCount: 0,
+};
+
 export function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [localStats, setLocalStats] = useState({ exp: 100, contributions: 2, reports: 1 });
+  const [profileStats, setProfileStats] = useState(DEFAULT_PROFILE_STATS);
 
-  // Load any locally cached contributions stats
-  useEffect(() => {
-    async function loadStats() {
-      try {
-        const raw = await AsyncStorage.getItem('@accessmap_contributions');
-        if (raw) {
-          const list = JSON.parse(raw);
-          if (Array.isArray(list)) {
-            setLocalStats((prev) => ({
-              ...prev,
-              contributions: Math.max(list.length, prev.contributions),
-              exp: Math.max(list.length * 50, prev.exp),
-            }));
-          }
-        }
-      } catch {}
+  const refreshProfile = useCallback(async () => {
+    if (!session?.access_token) {
+      setProfileStats(DEFAULT_PROFILE_STATS);
+      return;
     }
-    void loadStats();
-  }, [session]);
+
+    try {
+      const data = await apiClient.get<BackendProfileResponse>('/api/v1/users/me/profile', {
+        auth: 'required',
+      });
+      setProfileStats({
+        expPoints: data.expPoints ?? 0,
+        reputationScore: data.reputationScore ?? 0,
+        reputationTier: data.reputationTier || 'Thành viên mới',
+        contributionsCount: data.contributionsCount ?? 0,
+        reportsCount: data.reportsCount ?? 0,
+      });
+    } catch {
+      // Keep zeroed defaults if backend is unreachable instead of showing fake stats
+      setProfileStats(DEFAULT_PROFILE_STATS);
+    }
+  }, [session?.access_token]);
+
+  useEffect(() => {
+    void refreshProfile();
+  }, [refreshProfile]);
 
   useEffect(() => {
     let mounted = true;
@@ -138,6 +167,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
         avatarUrl: null,
         role: 'Khách',
         expPoints: 0,
+        reputationScore: 0,
+        reputationTier: 'Khách',
         contributionsCount: 0,
         reportsCount: 0,
         isGuest: true,
@@ -154,12 +185,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
       fullName,
       avatarUrl: user.user_metadata?.avatar_url || null,
       role: (user.app_metadata?.role as string) || 'Người dùng đã xác thực',
-      expPoints: localStats.exp,
-      contributionsCount: localStats.contributions,
-      reportsCount: localStats.reports,
+      expPoints: profileStats.expPoints,
+      reputationScore: profileStats.reputationScore,
+      reputationTier: profileStats.reputationTier,
+      contributionsCount: profileStats.contributionsCount,
+      reportsCount: profileStats.reportsCount,
       isGuest: false,
     };
-  }, [user, localStats]);
+  }, [user, profileStats]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -169,12 +202,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
       isGuest,
       isLoading,
       isConfigured: isSupabaseConfigured,
+      refreshProfile,
       signIn,
       signUp,
       sendPasswordReset,
       signOut,
     }),
-    [isLoading, sendPasswordReset, session, signIn, signOut, signUp, user, userProfile, isGuest]
+    [isLoading, refreshProfile, sendPasswordReset, session, signIn, signOut, signUp, user, userProfile, isGuest]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

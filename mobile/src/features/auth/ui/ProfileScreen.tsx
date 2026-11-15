@@ -165,7 +165,7 @@ export default function ProfileScreen() {
               </View>
               <View style={styles.statDivider} />
               <View style={styles.statItem}>
-                <Text style={styles.statValue}>Hạng Bạc</Text>
+                <Text style={styles.statValue}>{userProfile.reputationTier}</Text>
                 <Text style={styles.statLabel}>Danh tiếng</Text>
               </View>
             </View>

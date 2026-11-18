@@ -1,4 +1,5 @@
 export { backendContributionRepository as contributionRepository } from "./api/backend-contribution-repository";
+export { ModerationDecision } from "./model/types";
 export type { ContributionRepository } from "./api/contribution-repository";
 export type {
   AccessibilityCategory,
@@ -25,8 +26,9 @@ export type {
   ContributorSummary,
   InformationRequest,
   LocationIntegrity,
-  ModerationDecision,
+  ModerationDecisionRecord,
   RequestMoreInfoInput,
+  ReviseClaimAssessmentInput,
   TimelineEventType,
   VerificationOutcome,
 } from "./model/types";

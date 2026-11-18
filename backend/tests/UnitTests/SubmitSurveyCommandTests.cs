@@ -196,7 +196,7 @@ public class SubmitSurveyCommandTests
 
         var result = await handler.Handle(command, CancellationToken.None);
 
-        result.Status.Should().Be("AutoVerified");
+        result.Status.Should().Be("Published");
         result.PointsAwarded.Should().Be(50);
         result.Message.Should().Contain("tự động xác minh");
 

@@ -1,0 +1,30 @@
+sequenceDiagram
+actor Contributor
+participant Mobile
+participant API
+participant Places
+participant Storage
+participant DB
+Contributor->>Mobile: Search and select place
+Mobile->>API: Search location
+API->>DB: Local search
+opt Insufficient local results
+API->>Places: Provider search
+end
+Contributor->>Mobile: Capture in app or select recent gallery photo; location optional
+Mobile->>Mobile: Capture GPS + accuracy, compare selected place within 30 m
+Mobile->>API: Request signed intents + per-media capture metadata
+API-->>Mobile: mediaIds + short-lived PUT URLs
+Mobile->>Storage: PUT media to private staging
+loop Bounded batches covering selected photos/videos
+Mobile->>API: POST pre-scan + staged mediaIds + selected tags
+API-->>Mobile: Quality and optional Python AI hints
+end
+Contributor->>Mobile: Review pre-scan and confirm Submit
+Mobile->>API: POST JSON submission + owned mediaIds + key
+API->>Places: Resolve selected external place if needed
+API->>Storage: Verify media and capture metadata, finalize outside transaction
+API->>DB: Transaction: location, submission, attached media, claims, job, replay record
+DB-->>API: Commit
+API->>API: Best-effort Hangfire enqueue after commit, recurring reconciliation backs it up
+API-->>Mobile: 202 Accepted + submissionId

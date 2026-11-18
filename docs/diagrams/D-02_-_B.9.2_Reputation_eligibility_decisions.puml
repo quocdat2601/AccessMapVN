@@ -1,0 +1,1 @@
+Shared figures: System Diagrams §4.6 and §6.4. The copied source lifecycle separates Pending/HeldForReview from actual Credited and final ineligible Cancelled. B.1/B.2 own eligibility snapshots and the existing support/Admin handoff; no new ticket flow is introduced.

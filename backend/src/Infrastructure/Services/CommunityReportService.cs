@@ -127,7 +127,6 @@ public sealed class CommunityReportService : ICommunityReportService
                     AccessibilityFeatureType.Elevator => canonicalLocation.HasAccessibleElevator == true ? PublishedFeatureStatus.Available : PublishedFeatureStatus.NotAvailable,
                     AccessibilityFeatureType.EntranceDoor => canonicalLocation.DoorWidthOk == true ? PublishedFeatureStatus.Available : PublishedFeatureStatus.NotAvailable,
                     AccessibilityFeatureType.AccessibleRestroom => canonicalLocation.HasAccessibleRestroom == true ? PublishedFeatureStatus.Available : PublishedFeatureStatus.NotAvailable,
-                    AccessibilityFeatureType.TactilePaving => canonicalLocation.HasTactilePaving == true ? PublishedFeatureStatus.Available : PublishedFeatureStatus.NotAvailable,
                     _ => PublishedFeatureStatus.Available
                 };
 

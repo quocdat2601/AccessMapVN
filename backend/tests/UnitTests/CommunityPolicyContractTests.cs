@@ -39,7 +39,7 @@ public sealed class CommunityPolicyContractTests
     public void FeatureAndStatusEnums_AreTheCanonicalClosedSets()
     {
         Enum.GetNames<AccessibilityFeatureType>().Should().Equal(
-            "Ramp", "EntranceDoor", "Elevator", "AccessibleRestroom", "TactilePaving");
+            "Ramp", "Elevator", "AccessibleRestroom", "EntranceDoor");
         Enum.GetNames<PublishedFeatureStatus>().Should().Equal(
             "Available", "Limited", "NotAvailable", "Unknown");
     }
@@ -155,5 +155,66 @@ public sealed class CommunityPolicyContractTests
 
         var objectResult = result.Result.Should().BeOfType<ObjectResult>().Subject;
         objectResult.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
+    }
+
+    [Fact]
+    public void SubmissionStatus_MatchesSpecification()
+    {
+        ((int)SubmissionStatus.Submitted).Should().Be(0);
+        ((int)SubmissionStatus.AIProcessing).Should().Be(1);
+        ((int)SubmissionStatus.AwaitingMoreInfo).Should().Be(2);
+        ((int)SubmissionStatus.PendingModeration).Should().Be(3);
+        ((int)SubmissionStatus.Published).Should().Be(5);
+        ((int)SubmissionStatus.Rejected).Should().Be(6);
+        ((int)SubmissionStatus.Cancelled).Should().Be(7);
+        Enum.GetNames<SubmissionStatus>().Should().NotContain("AutoVerified");
+    }
+
+    [Fact]
+    public void CommunityEnums_MatchSpecification()
+    {
+        ((int)AccessibilityFeatureType.Ramp).Should().Be(1);
+        ((int)AccessibilityFeatureType.Elevator).Should().Be(2);
+        ((int)AccessibilityFeatureType.AccessibleRestroom).Should().Be(3);
+        ((int)AccessibilityFeatureType.EntranceDoor).Should().Be(5);
+
+        ((int)LocationStatus.Provisional).Should().Be(0);
+        ((int)LocationStatus.Active).Should().Be(1);
+        ((int)LocationStatus.Merged).Should().Be(2);
+        ((int)LocationStatus.Hidden).Should().Be(3);
+        ((int)LocationStatus.Closed).Should().Be(4);
+
+        ((int)LocationOrigin.ContributorProposed).Should().Be(1);
+        ((int)LocationOrigin.ExternalPlaceImport).Should().Be(2);
+        ((int)LocationOrigin.Admin).Should().Be(3);
+
+        ((int)ModerationDecision.Approve).Should().Be(1);
+        ((int)ModerationDecision.Reject).Should().Be(2);
+        ((int)ModerationDecision.RequestMoreInfo).Should().Be(3);
+        ((int)ModerationDecision.ReviseClaimAssessment).Should().Be(4);
+
+        ((int)ContributionEventType.NewLocationPublished).Should().Be(1);
+        ((int)ContributionEventType.ExistingLocationEnriched).Should().Be(2);
+        ((int)ContributionEventType.ClaimAssessmentFinalized).Should().Be(3);
+        ((int)ContributionEventType.ClaimAssessmentRevised).Should().Be(4);
+        ((int)ContributionEventType.ReportResolved).Should().Be(5);
+        ((int)ContributionEventType.AccountViolationConfirmed).Should().Be(6);
+        ((int)ContributionEventType.AccountViolationReversed).Should().Be(7);
+        ((int)ContributionEventType.RewardRevoked).Should().Be(8);
+        ((int)ContributionEventType.RewardRestored).Should().Be(9);
+
+        ((int)ContributionEventStatus.Pending).Should().Be(0);
+        ((int)ContributionEventStatus.Credited).Should().Be(1);
+        ((int)ContributionEventStatus.HeldForReview).Should().Be(2);
+        ((int)ContributionEventStatus.Cancelled).Should().Be(3);
+    }
+
+    [Fact]
+    public void SubmissionEntity_HasRevisionAndResubmissionFieldsWithDefaults()
+    {
+        var submission = new Submission();
+        submission.Revision.Should().Be(1);
+        submission.ResubmissionCount.Should().Be(0);
+        submission.LastResubmittedAt.Should().BeNull();
     }
 }

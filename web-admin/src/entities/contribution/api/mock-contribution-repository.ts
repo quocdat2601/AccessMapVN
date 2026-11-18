@@ -1,15 +1,17 @@
 import type { ContributionRepository } from "./contribution-repository";
 import { contributionMockRecords } from "./mock-contribution-data";
 import { createContributionDetail } from "./mock-contribution-details";
-import type {
-  ApproveContributionInput,
-  ContributionDetail,
-  ContributionNavigation,
-  ContributionQueueQuery,
-  ContributionQueueResponse,
-  ContributionQueueSummary,
-  ContributionRecord,
-  RequestMoreInfoInput,
+import {
+  ModerationDecision,
+  type ApproveContributionInput,
+  type ContributionDetail,
+  type ContributionNavigation,
+  type ContributionQueueQuery,
+  type ContributionQueueResponse,
+  type ContributionQueueSummary,
+  type ContributionRecord,
+  type RequestMoreInfoInput,
+  type ReviseClaimAssessmentInput,
 } from "../model/types";
 
 const MOCK_LATENCY_MS = 320;
@@ -205,6 +207,37 @@ class MockContributionRepository implements ContributionRepository {
     detail.claims = detail.claims.map((claim) => ({ ...claim, decision: "rejected", decisionNote: reason }));
     detail.moderationDecision = { type: "rejected", selectedClaimIds: [], reason, decidedAt: now, decidedBy: "Minh Trần" };
     detail.timeline.push({ id: `${id}-timeline-${Date.now()}`, type: "rejected", title: "Từ chối hồ sơ", description: reason, occurredAt: now, actor: "Minh Trần" });
+    return this.save(detail);
+  }
+
+  async reviseClaimAssessment(id: string, input: ReviseClaimAssessmentInput): Promise<ContributionDetail> {
+    const detail = this.details.get(id);
+    if (!detail) throw new Error("Không tìm thấy hồ sơ");
+    if (!input.reason.trim()) throw new Error("Lý do hiệu chỉnh là bắt buộc");
+
+    const now = new Date().toISOString();
+    detail.status = "published";
+    detail.claims = detail.claims.map((claim) =>
+      input.claimIds.includes(claim.id)
+        ? { ...claim, decision: "approved", decisionNote: `Hiệu chỉnh đánh giá: ${input.reason}` }
+        : claim
+    );
+    detail.moderationDecision = {
+      type: "revise_claim_assessment",
+      decision: ModerationDecision.ReviseClaimAssessment,
+      selectedClaimIds: input.claimIds,
+      reason: input.reason,
+      decidedAt: now,
+      decidedBy: "Minh Trần",
+    };
+    detail.timeline.push({
+      id: `${id}-timeline-${Date.now()}`,
+      type: "published",
+      title: "Hiệu chỉnh đánh giá hạng mục (Revise Claim Assessment)",
+      description: input.reason,
+      occurredAt: now,
+      actor: "Minh Trần",
+    });
     return this.save(detail);
   }
 

@@ -1,0 +1,11 @@
+erDiagram
+direction LR
+USER ||--o{ REPORT : submits
+LOCATION ||--o{ REPORT : targets
+LOCATION_FEATURE o|--o{ REPORT : optional_context
+REPORT ||--o{ REPORT_STATUS_HISTORY : audits
+LOCATION_FEATURE_REVIEW o|--o{ REPORT : triage_link
+SUBMISSION o|--o{ REPORT : challenged_submission
+SUBMISSION_CLAIM o|--o{ REPORT : challenged_claim
+SUBMISSION o|--o{ REPORT : correction_evidence
+LOCATION_SCOPE o|--o{ REPORT : scoped_context

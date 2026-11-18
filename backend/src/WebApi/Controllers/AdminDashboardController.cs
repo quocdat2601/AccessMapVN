@@ -311,8 +311,8 @@ public sealed class AdminDashboardController : ControllerBase
 
         // 8. AI Outcomes
         var totalSubCount = Math.Max(submissions.Count, 1);
-        var autoVerifiedCount = submissions.Count(s => s.Status == SubmissionStatus.AutoVerified);
-        var manualCount = submissions.Count(s => s.Status == SubmissionStatus.Submitted || s.Status == SubmissionStatus.PendingModeration || s.Status == SubmissionStatus.Published);
+        var autoVerifiedCount = submissions.Count(s => s.Status == SubmissionStatus.Published);
+        var manualCount = submissions.Count(s => s.Status == SubmissionStatus.Submitted || s.Status == SubmissionStatus.AIProcessing || s.Status == SubmissionStatus.PendingModeration || s.Status == SubmissionStatus.AwaitingMoreInfo);
         var rejectedCount = submissions.Count(s => s.Status == SubmissionStatus.Rejected);
 
         var aiOutcomes = new List<AiOutcomeDto>

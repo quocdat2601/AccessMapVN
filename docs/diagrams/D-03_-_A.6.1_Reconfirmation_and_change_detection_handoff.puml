@@ -1,0 +1,1 @@
+Shared figures: System Diagrams §6.2 and §4.3. API receives the observation, validates ownership/version and commits vote/history/replay; durable assessment updates the public-safe projection. Admin enters only for held votes or reviewable cases.

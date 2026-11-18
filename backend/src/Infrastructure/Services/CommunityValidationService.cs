@@ -49,7 +49,7 @@ public sealed class CommunityValidationService : ICommunityValidationService
     {
         var location = await _db.Places.AsNoTracking()
             .SingleOrDefaultAsync(item => item.Id == locationId, cancellationToken);
-        if (location is null || location.Status is LocationStatus.Provisional or LocationStatus.Archived)
+        if (location is null || location.Status is LocationStatus.Provisional or LocationStatus.Hidden or LocationStatus.Closed)
         {
             throw new CommunityValidationException("LOCATION_NOT_FOUND", "The location was not found.", 404);
         }

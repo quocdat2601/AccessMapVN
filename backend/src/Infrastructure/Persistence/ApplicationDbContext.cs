@@ -51,7 +51,7 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Status)
                 .HasDefaultValue(AccessMapVN.Domain.Enums.LocationStatus.Active)
-                .HasSentinel((AccessMapVN.Domain.Enums.LocationStatus)0);
+                .HasSentinel((AccessMapVN.Domain.Enums.LocationStatus)(-1));
             entity.Property(e => e.MetadataVersion).HasDefaultValue(1).IsConcurrencyToken();
             entity.Property(e => e.RowVersion).IsRowVersion().HasColumnName("xmin");
         });
@@ -73,6 +73,9 @@ public class ApplicationDbContext : DbContext, IApplicationDbContext
             entity.Property(e => e.Status).HasColumnName("status").HasConversion<string>();
             entity.Property(e => e.ConfidenceScore).HasColumnName("confidence_score");
             entity.Property(e => e.PointsAwarded).HasColumnName("points_awarded");
+            entity.Property(e => e.Revision).HasColumnName("revision").HasDefaultValue(1);
+            entity.Property(e => e.ResubmissionCount).HasColumnName("resubmission_count").HasDefaultValue(0);
+            entity.Property(e => e.LastResubmittedAt).HasColumnName("last_resubmitted_at");
             entity.Property(e => e.CreatedAt).HasColumnName("created_at");
             entity.Property(e => e.CreatedAtUtc).HasColumnName("created_at_utc");
             entity.Property(e => e.UpdatedAtUtc).HasColumnName("updated_at_utc");

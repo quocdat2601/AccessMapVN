@@ -1,4 +1,12 @@
-import type { ApproveContributionInput, ContributionDetail, ContributionNavigation, ContributionQueueQuery, ContributionQueueResponse, RequestMoreInfoInput } from "../model/types";
+import type {
+  ApproveContributionInput,
+  ContributionDetail,
+  ContributionNavigation,
+  ContributionQueueQuery,
+  ContributionQueueResponse,
+  RequestMoreInfoInput,
+  ReviseClaimAssessmentInput,
+} from "../model/types";
 
 export interface ContributionRepository {
   getQueue(query?: ContributionQueueQuery, signal?: AbortSignal): Promise<ContributionQueueResponse>;
@@ -7,5 +15,6 @@ export interface ContributionRepository {
   approve(id: string, input: ApproveContributionInput): Promise<ContributionDetail>;
   requestMoreInfo(id: string, input: RequestMoreInfoInput): Promise<ContributionDetail>;
   reject(id: string, reason: string): Promise<ContributionDetail>;
+  reviseClaimAssessment(id: string, input: ReviseClaimAssessmentInput): Promise<ContributionDetail>;
   sendReminder(id: string): Promise<ContributionDetail>;
 }

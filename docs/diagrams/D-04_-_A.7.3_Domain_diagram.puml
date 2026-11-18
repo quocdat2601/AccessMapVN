@@ -1,0 +1,15 @@
+flowchart TB
+Person["Contributor"] --> Submission["Submission attempt"]
+Submission --> Evidence["Photo, video, derived frames"]
+Submission --> Claims["Feature claims"]
+Submission --> Verification["AI evidence + feature results"]
+Claims --> Decision["Integrity + confidence + moderation"]
+Evidence --> Decision
+Verification --> Decision
+Decision --> Truth["Current LocationFeature"]
+Truth --> History["Prior feature versions"]
+Decision -->|"Admin requests more information"| Next["Next correction attempt"]
+Next -->|"same ID; count+1; revision+1"| NewSubmission["Updated Submission revision"]
+NewSubmission -->|"new media"| Evidence
+NewSubmission -->|"new claims"| Claims
+NewSubmission -->|"new AI analysis"| Verification

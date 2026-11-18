@@ -1,0 +1,62 @@
+erDiagram
+LOCATION_FEATURE ||--o| FEATURE_FEEDBACK_SUMMARY : current_view
+LOCATION_FEATURE ||--o{ COMMUNITY_REVIEW : assessments
+LOCATION_FEATURE ||--o{ LOCATION_FEATURE_REVIEW : contested
+LOCATION_FEATURE_REVIEW ||--o{ LOCATION_FEATURE_REVIEW_DECISION : decisions
+LOCATION_FEATURE_REVIEW ||--o{ LOCATION_FEATURE_REVIEW_VOTE : cites
+COMMUNITY_VOTE ||--o{ LOCATION_FEATURE_REVIEW_VOTE : source
+LOCATION_FEATURE ||--o{ LOCATION_FEATURE_NOTICE : overlays
+FEATURE_FEEDBACK_SUMMARY {
+uuid Id PK
+uuid LocationFeatureId FK
+int FeatureVersion
+int Label
+decimal FreshnessFactor
+datetime LastTrustedReconfirmedAt
+}
+COMMUNITY_REVIEW {
+uuid Id PK
+uuid EvaluationRequestId UK
+uuid LocationFeatureId FK
+uuid DisputeCaseId FK
+decimal WeightedAgreement
+datetime AsOfAt
+}
+LOCATION_FEATURE_REVIEW {
+uuid Id PK
+uuid LocationFeatureId FK
+int FeatureVersion
+int Status
+uuid LinkedCorrectionSubmissionId FK
+}
+LOCATION_FEATURE_REVIEW_DECISION {
+uuid Id PK
+uuid DisputeCaseId FK
+uuid AdminId FK
+int Type
+datetime CreatedAt
+}
+LOCATION_FEATURE_REVIEW_VOTE {
+uuid Id PK
+uuid DisputeCaseId FK
+uuid CommunityVoteId FK
+}
+LOCATION_FEATURE_NOTICE {
+uuid Id PK
+uuid LocationFeatureId FK
+datetime StartsAt
+datetime EndsAt
+int Status
+}
+LOCATION_FEATURE {
+uuid Id PK
+uuid LocationId FK
+uuid ScopeId FK
+int FeatureType
+int Version
+}
+COMMUNITY_VOTE {
+uuid Id PK
+uuid LocationFeatureId FK
+uuid TargetSubmissionClaimId FK
+}

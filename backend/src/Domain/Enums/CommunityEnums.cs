@@ -9,19 +9,26 @@ public enum AppUserRole
 
 public enum LocationStatus
 {
+    Provisional = 0,
     Active = 1,
-    Provisional = 2,
-    Merged = 3,
-    Archived = 4,
+    Merged = 2,
+    Hidden = 3,
+    Closed = 4,
+}
+
+public enum LocationOrigin
+{
+    ContributorProposed = 1,
+    ExternalPlaceImport = 2,
+    Admin = 3,
 }
 
 public enum AccessibilityFeatureType
 {
     Ramp = 1,
-    EntranceDoor = 2,
-    Elevator = 3,
-    AccessibleRestroom = 4,
-    TactilePaving = 5,
+    Elevator = 2,
+    AccessibleRestroom = 3,
+    EntranceDoor = 5,
 }
 
 public enum PublishedFeatureStatus
@@ -142,6 +149,35 @@ public enum CommentModerationDecision
 {
     Approve = 1,
     Hide = 2,
+}
+
+public enum ModerationDecision
+{
+    Approve = 1,
+    Reject = 2,
+    RequestMoreInfo = 3,
+    ReviseClaimAssessment = 4,
+}
+
+public enum ContributionEventType
+{
+    NewLocationPublished = 1,
+    ExistingLocationEnriched = 2,
+    ClaimAssessmentFinalized = 3,
+    ClaimAssessmentRevised = 4,
+    ReportResolved = 5,
+    AccountViolationConfirmed = 6,
+    AccountViolationReversed = 7,
+    RewardRevoked = 8,
+    RewardRestored = 9,
+}
+
+public enum ContributionEventStatus
+{
+    Pending = 0,
+    Credited = 1,
+    HeldForReview = 2,
+    Cancelled = 3,
 }
 
 public enum SubmissionClaimStatus

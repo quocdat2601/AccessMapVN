@@ -218,7 +218,7 @@ public sealed class CommunityPostgresIntegrationTests
             SubmissionCode = $"SUB-{Guid.NewGuid():N}",
             PlaceId = location.Id.ToString(),
             UserId = Guid.NewGuid().ToString(),
-            Status = SubmissionStatus.AutoVerified,
+            Status = SubmissionStatus.Published,
             GpsLat = location.Lat,
             GpsLng = location.Lng,
         };

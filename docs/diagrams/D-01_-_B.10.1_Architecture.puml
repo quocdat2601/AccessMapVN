@@ -1,0 +1,1 @@
+Shared figure: System Diagrams §3. WF3 uses local published AccessMap data and deterministic backend matching. The system-wide AI service belongs to WF1; optional address geocoding and the mobile map SDK do not create external accessibility results.

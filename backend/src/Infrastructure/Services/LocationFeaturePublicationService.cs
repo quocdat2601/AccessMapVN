@@ -60,7 +60,7 @@ public sealed class LocationFeaturePublicationService : ILocationFeaturePublicat
             throw new CommunityValidationException("PUBLICATION_LOCATION_MISMATCH", "The submission does not belong to this location.", 409);
         }
 
-        if (submission.Status is not (SubmissionStatus.AutoVerified or SubmissionStatus.PendingModeration or SubmissionStatus.Published))
+        if (submission.Status is not (SubmissionStatus.PendingModeration or SubmissionStatus.Published))
         {
             throw new CommunityValidationException("SUBMISSION_NOT_VERIFIED", "Only a verified submission can be published.", 409);
         }
@@ -330,9 +330,6 @@ public sealed class LocationFeaturePublicationService : ILocationFeaturePublicat
                 break;
             case AccessibilityFeatureType.AccessibleRestroom:
                 location.HasAccessibleRestroom = exists;
-                break;
-            case AccessibilityFeatureType.TactilePaving:
-                location.HasTactilePaving = exists;
                 break;
         }
 

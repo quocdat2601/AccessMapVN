@@ -1,0 +1,8 @@
+erDiagram
+USER ||--o{ SUBMISSION : contributes
+LOCATION ||--o{ SUBMISSION : receives
+SUBMISSION ||--o{ SUBMISSION_MEDIA : contains
+SUBMISSION ||--o{ SUBMISSION_CLAIM : asserts
+SUBMISSION ||--o{ AI_ANALYSIS : evaluated_by
+LOCATION ||--o{ LOCATION_FEATURE : publishes
+SUBMISSION_CLAIM ||--o| LOCATION_FEATURE : current_nonretired_source

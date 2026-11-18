@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { PlaceDto } from '@/entities/place';
+import { AccessibilityFeatureType, type PlaceDto } from '@/entities/place';
 
 export type CriterionLevel = 'none' | 'preferred' | 'required';
 export type AccessibilityPresetId =
@@ -80,6 +80,17 @@ const CRITERION_LABELS: Record<CriterionKey, string> = {
   restroomMode: 'Nhà vệ sinh tiếp cận',
   parking: 'Chỗ đỗ xe tiếp cận',
   tactile: 'Chỉ dẫn xúc giác',
+};
+
+/**
+ * Mapping from filter criterion to canonical backend AccessibilityFeatureType:
+ * Ramp = 1, Elevator = 2, AccessibleRestroom = 3, EntranceDoor = 5.
+ */
+export const CRITERION_CANONICAL_FEATURE_TYPE: Partial<Record<CriterionKey, AccessibilityFeatureType>> = {
+  ramp: AccessibilityFeatureType.Ramp,
+  elevatorMode: AccessibilityFeatureType.Elevator,
+  restroomMode: AccessibilityFeatureType.AccessibleRestroom,
+  wideEntrance: AccessibilityFeatureType.EntranceDoor,
 };
 
 export const PRESET_CONFIGS: Record<

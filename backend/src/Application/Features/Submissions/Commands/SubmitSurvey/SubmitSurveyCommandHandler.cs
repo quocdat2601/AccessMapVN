@@ -80,13 +80,13 @@ public class SubmitSurveyCommandHandler : IRequestHandler<SubmitSurveyCommand, S
         // Áp dụng khi người dùng có điểm AI >= 80% VÀ có ít nhất 1 đóng góp đã duyệt trước đó
         var priorSubmissions = await _submissionRepository.GetByUserIdAsync(request.UserId, cancellationToken);
         var priorPublishedCount = priorSubmissions?.Count(s =>
-            s.Status == SubmissionStatus.Published || s.Status == SubmissionStatus.AutoVerified) ?? 0;
+            s.Status == SubmissionStatus.Published) ?? 0;
 
         var isAutoApproved = request.ConfidenceScore.HasValue &&
             request.ConfidenceScore.Value >= _options.Thresholds.AutoApproveConfidenceThreshold &&
             priorPublishedCount >= 1;
 
-        var status = isAutoApproved ? SubmissionStatus.AutoVerified : SubmissionStatus.Submitted;
+        var status = isAutoApproved ? SubmissionStatus.Published : SubmissionStatus.Submitted;
         var pointsAwarded = isAutoApproved ? 50 : 0;
 
         var submission = new Submission
@@ -153,7 +153,7 @@ public class SubmitSurveyCommandHandler : IRequestHandler<SubmitSurveyCommand, S
         return new SubmitSurveyResult
         {
             SubmissionId = code,
-            Status = isAutoApproved ? "AutoVerified" : "Submitted",
+            Status = isAutoApproved ? "Published" : "Submitted",
             Message = message,
             PointsAwarded = pointsAwarded,
             CreatedAt = submission.CreatedAt,

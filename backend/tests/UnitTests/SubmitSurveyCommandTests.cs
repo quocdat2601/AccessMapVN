@@ -1284,5 +1284,107 @@ public class SubmitSurveyCommandTests
         submission.Status.Should().Be(AccessMapVN.Domain.Enums.SubmissionStatus.PendingModeration);
         repoMock.Verify(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
     }
+
+    [Fact]
+    public async Task SubmissionVerificationJob_WhenAiFailsOrMediaUnreachable_RecordsFailedObservationsAndKeepsPendingModeration()
+    {
+        var submissionId = Guid.NewGuid();
+        var submission = new Submission
+        {
+            Id = submissionId,
+            PlaceId = "place-42",
+            MediaUrls = new List<string> { "file:///local/photo.jpg" },
+            TextDescription = "Có dốc",
+            Status = AccessMapVN.Domain.Enums.SubmissionStatus.PendingModeration,
+        };
+
+        var repoMock = new Mock<ISubmissionRepository>();
+        repoMock.Setup(r => r.GetByIdAsync(submissionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(submission);
+
+        var aiClientMock = new Mock<IAiServiceClient>();
+        var loggerMock = new Mock<ILogger<AccessMapVN.Infrastructure.Services.SubmissionVerificationJob>>();
+
+        var job = new AccessMapVN.Infrastructure.Services.SubmissionVerificationJob(
+            repoMock.Object,
+            aiClientMock.Object,
+            loggerMock.Object);
+
+        await job.RunAsync(submissionId, CancellationToken.None);
+
+        aiClientMock.Verify(c => c.VerifySubmissionRawAsync(
+            It.IsAny<Guid>(), It.IsAny<List<string>>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        submission.Status.Should().Be(AccessMapVN.Domain.Enums.SubmissionStatus.PendingModeration);
+        using var doc = JsonDocument.Parse(submission.AiObservationsJson!);
+        doc.RootElement.GetProperty("analysis_status").GetString().Should().Be("failed");
+        doc.RootElement.GetProperty("warnings")[0].GetString().Should().Be("AI_VERIFICATION_FAILED");
+        repoMock.Verify(r => r.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SubmissionVerificationJob_FiltersLocalUrisAndForwardsPlaceId()
+    {
+        var submissionId = Guid.NewGuid();
+        var submission = new Submission
+        {
+            Id = submissionId,
+            PlaceId = "place-ben-thanh",
+            MediaUrls = new List<string> { "file:///local/skip.jpg", "https://example.com/ramp.jpg" },
+            TextDescription = "Có ramp",
+            Status = AccessMapVN.Domain.Enums.SubmissionStatus.PendingModeration,
+        };
+
+        var repoMock = new Mock<ISubmissionRepository>();
+        repoMock.Setup(r => r.GetByIdAsync(submissionId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(submission);
+
+        var aiClientMock = new Mock<IAiServiceClient>();
+        aiClientMock.Setup(c => c.VerifySubmissionRawAsync(
+                submissionId,
+                It.Is<List<string>>(urls => urls.Count == 1 && urls[0] == "https://example.com/ramp.jpg"),
+                "Có ramp",
+                "place-ben-thanh",
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync("{\"overall_confidence_score\": 0.72}");
+
+        var loggerMock = new Mock<ILogger<AccessMapVN.Infrastructure.Services.SubmissionVerificationJob>>();
+        var job = new AccessMapVN.Infrastructure.Services.SubmissionVerificationJob(
+            repoMock.Object, aiClientMock.Object, loggerMock.Object);
+
+        await job.RunAsync(submissionId, CancellationToken.None);
+
+        submission.ConfidenceScore.Should().Be(0.72);
+        submission.Status.Should().Be(AccessMapVN.Domain.Enums.SubmissionStatus.PendingModeration);
+    }
+
+    [Fact]
+    public async Task AiServiceClient_LeavesNullLocationIdInsteadOfFabricatingGuid()
+    {
+        string? capturedBody = null;
+        var handler = new StubHttpMessageHandler(async req =>
+        {
+            capturedBody = await req.Content!.ReadAsStringAsync();
+            return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"overall_confidence_score\": 0.5}", Encoding.UTF8, "application/json")
+            };
+        });
+        var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost:8000") };
+        var client = new AccessMapVN.Infrastructure.Services.AiServiceClient(
+            httpClient,
+            Mock.Of<ILogger<AccessMapVN.Infrastructure.Services.AiServiceClient>>());
+
+        await client.VerifySubmissionRawAsync(Guid.NewGuid(), new List<string> { "https://example.com/a.jpg" }, null, null);
+
+        capturedBody.Should().NotBeNull();
+        using var doc = JsonDocument.Parse(capturedBody!);
+        doc.RootElement.GetProperty("location_id").ValueKind.Should().Be(JsonValueKind.Null);
+    }
+
+    private sealed class StubHttpMessageHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> responder) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => responder(request);
+    }
 }
 

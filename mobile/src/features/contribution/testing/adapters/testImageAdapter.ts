@@ -8,6 +8,8 @@ export interface PickerImageInput {
   fileName?: string;
   fileSize?: number;
   base64?: string;
+  type?: 'photo' | 'video';
+  durationSeconds?: number;
 }
 
 /**
@@ -41,10 +43,11 @@ export function adaptPickerImageToMediaResult(
 
   return {
     id: `test-gallery-${now}-${Math.random().toString(36).slice(2, 7)}`,
-    type: 'photo',
-    uri: input.uri,
+    type: input.type ?? 'photo',
     width: input.width ?? 1280,
     height: input.height ?? 720,
+    durationSeconds: input.durationSeconds,
+    uri: input.uri,
     base64: input.base64,
     capturedAt: now,
     locationId: targetPoiId,

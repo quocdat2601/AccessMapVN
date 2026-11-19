@@ -8,6 +8,8 @@ is returned; otherwise the raw bytes are streamed back.
 """
 from __future__ import annotations
 
+import hashlib
+
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from fastapi.responses import Response
 
@@ -51,6 +53,9 @@ async def blur_image(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty image.")
 
     blurred_bytes, face_count = _blurrer.blur(raw)
+    original_hash = hashlib.sha256(raw).hexdigest()
+    derivative_hash = hashlib.sha256(blurred_bytes).hexdigest()
+    media_id = image.filename or original_hash[:12]
     logger.info("blur: detected %d face(s) in %s", face_count, image.filename)
 
     # Try to upload to S3 if credentials are available
@@ -60,11 +65,27 @@ async def blur_image(
             key = f"blurred/{uuid.uuid4().hex}.jpg"
             url = await upload_bytes(blurred_bytes, key, content_type="image/jpeg")
             return Response(
-                content=BlurResponse(faces_detected=face_count, blurred_image_url=url).model_dump_json(),
+                content=BlurResponse(
+                    media_id=media_id,
+                    faces_detected=face_count,
+                    blurred_image_url=url,
+                    original_hash=original_hash,
+                    derivative_hash=derivative_hash,
+                    content_type="image/jpeg",
+                    file_size_bytes=len(blurred_bytes),
+                ).model_dump_json(),
                 media_type="application/json",
             )
         except Exception as exc:
             logger.warning("S3 upload failed, falling back to streaming: %s", exc)
 
-    # Fallback: stream bytes
-    return Response(content=blurred_bytes, media_type="image/jpeg")
+    # Fallback: stream bytes with cryptographic provenance headers
+    return Response(
+        content=blurred_bytes,
+        media_type="image/jpeg",
+        headers={
+            "X-Faces-Detected": str(face_count),
+            "X-Original-Sha256": original_hash,
+            "X-Derivative-Sha256": derivative_hash,
+        },
+    )

@@ -10,6 +10,8 @@ import os
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_SERVICE_ROOT = Path(__file__).resolve().parent.parent
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
@@ -20,7 +22,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     # ── Model paths ────────────────────────────────────────────────────────────
-    models_dir: Path = Path("models")
+    models_dir: Path = _SERVICE_ROOT / "models"
 
     # YOLOv8 weights (relative to models_dir)
     yolo_ramp_weights: str = "yolo/ramp.pt"
@@ -31,7 +33,7 @@ class Settings(BaseSettings):
     yolo_tactile_weights: str = "yolo/tactile.pt"
 
     # PhoBERT (HuggingFace local path or hub id)
-    phobert_model_path: str = "models/phobert"
+    phobert_model_path: str = str(_SERVICE_ROOT / "models" / "phobert")
     phobert_classifier_labels: list[str] = ["not_accessibility", "accessibility"]
 
     # ── CV pipeline ────────────────────────────────────────────────────────────
@@ -44,9 +46,9 @@ class Settings(BaseSettings):
 
     # Video pre-scan (proposed starting values; calibrate on real entrance/ramp clips)
     video_max_bytes: int = 30 * 1024 * 1024
-    video_min_duration_s: float = 4.5          # 5 s policy minus tolerance for container rounding
-    video_max_duration_s: float = 10.5         # 10 s policy plus tolerance
-    video_allowed_codecs: list[str] = ["h264"]
+    video_min_duration_s: float = 3.8          # 5 s policy minus tolerance for mobile encoder startup latency
+    video_max_duration_s: float = 11.5         # 10 s policy plus tolerance for muxer flush
+    video_allowed_codecs: list[str] = ["h264", "hevc", "mpeg4", "vp8", "vp9"]
     video_min_side_px: int = 240
     video_max_side_px: int = 4096
     video_max_candidates: int = 10             # frames sampled at keyframe_fps

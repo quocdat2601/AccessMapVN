@@ -27,79 +27,110 @@ class Mention:
     value: bool | str   # detected value
     confidence: float   # extraction confidence 0–1
     snippet: str = ""   # matched text fragment
+    start: int = 0
+    end: int = 0
 
 
 # ── Rule patterns ──────────────────────────────────────────────────────────────
 #
 # Each entry: (feature_key, value, confidence, [regex patterns])
-# Patterns are tried in order; first match wins for that feature.
+# Negative rules precede positive rules per feature so negations like
+# "không có đường dốc tiếp cận" are never misclassified as positive.
 #
 _RULES: list[tuple[str, bool | str, float, list[str]]] = [
+    # Ramp negative
+    (
+        "exterior_ramp_present", False, 0.85,
+        [
+            r"(?:không|chưa|chẳng)\s+(?:hề\s+|thấy\s+|còn\s+)?(?:có\s+)?(?:ramp|ram\s+dốc|đường\s+dốc(?:\s+tiếp\s+cận)?|lối\s+dốc|dốc)",
+            r"thiếu\s+(?:ramp|ram\s+dốc|đường\s+dốc|lối\s+dốc)",
+        ],
+    ),
     # Ramp positive
     (
         "exterior_ramp_present", True, 0.80,
         [
-            r"có\s+ramp", r"có\s+đường\s+dốc", r"có\s+lối\s+dốc",
-            r"ramp\s+(?:lối|vào|ra|bên)", r"đường\s+dốc\s+tiếp\s+cận",
+            r"(?<!không\s)(?<!chưa\s)(?<!chẳng\s)(?<!thiếu\s)\bcó\s+(?:ramp|ram\s+dốc|đường\s+dốc|lối\s+dốc)",
+            r"(?<!không\s)(?<!chưa\s)(?<!chẳng\s)(?<!có\s)\b(?:ramp\s+(?:lối|vào|ra|bên|tiếp\s+cận)|đường\s+dốc\s+tiếp\s+cận|ram\s+dốc)",
         ],
     ),
-    # Ramp negative
+    # Steps negative
     (
-        "exterior_ramp_present", False, 0.80,
+        "steps_present", False, 0.80,
         [
-            r"không\s+(?:có)?\s*ramp", r"không\s+(?:có)?\s*đường\s+dốc",
-            r"không\s+(?:có)?\s*dốc", r"chưa\s+(?:có)?\s*dốc", r"chưa\s+(?:có)?\s*ramp",
+            r"(?:không|chưa|chẳng)\s+(?:hề\s+|thấy\s+|còn\s+)?(?:có\s+)?(?:bậc(?:\s+thang|\s+thềm|\s+tam\s+cấp)?|cầu\s+thang)",
+            r"bằng\s+phẳng\s*,?\s*không\s+bậc",
         ],
     ),
     # Steps positive
     (
         "steps_present", True, 0.78,
-        [r"có\s+bậc", r"có\s+cầu\s+thang", r"nhiều\s+bậc", r"bậc\s+thềm"],
-    ),
-    # Steps negative
-    (
-        "steps_present", False, 0.75,
-        [r"không\s+(?:có)?\s*bậc", r"không\s+(?:có)?\s*cầu\s+thang"],
-    ),
-    # Elevator positive
-    (
-        "elevator_present", True, 0.82,
-        [r"có\s+thang\s+máy", r"thang\s+máy\s+hoạt\s+động", r"thang\s+máy\s+(?:cho|dành)"],
+        [
+            r"(?<!không\s)(?<!chưa\s)(?<!chẳng\s)\bcó\s+(?:bậc(?:\s+thang|\s+thềm|\s+tam\s+cấp)?|cầu\s+thang)",
+            r"\bnhiều\s+bậc",
+            r"(?<!không\s)(?<!có\s)\bbậc\s+(?:thềm|tam\s+cấp|thang)",
+        ],
     ),
     # Elevator negative
     (
         "elevator_present", False, 0.82,
-        [r"không\s+(?:có)?\s*thang\s+máy", r"chưa\s+(?:có)?\s*thang\s+máy"],
+        [
+            r"(?:không|chưa|chẳng|thiếu)\s+(?:hề\s+|thấy\s+|còn\s+)?(?:có\s+)?thang\s+máy(?:\s+(?:cho|dành)\s+[^\.,;]+)?",
+        ],
+    ),
+    # Elevator positive
+    (
+        "elevator_present", True, 0.82,
+        [
+            r"(?<!không\s)(?<!chưa\s)(?<!chẳng\s)\bcó\s+thang\s+máy",
+            r"\bthang\s+máy\s+(?:hoạt\s+động|rộng|dành|cho|tiếp\s+cận)",
+        ],
+    ),
+    # Door narrow
+    (
+        "door_width_ok", False, 0.75,
+        [
+            r"cửa\s+(?:hơi\s+|rất\s+|khá\s+|quá\s+)?(?:hẹp|nhỏ|chật)",
+            r"cửa\s+(?:không|chưa)\s+(?:đủ\s+)?rộng",
+        ],
     ),
     # Door OK
     (
         "door_width_ok", True, 0.70,
-        [r"cửa\s+rộng", r"cửa\s+đủ\s+rộng", r"cửa\s+to"],
+        [
+            r"cửa\s+(?:khá\s+|rất\s+)?(?:đủ\s+)?rộng",
+            r"cửa\s+to",
+        ],
     ),
-    # Door narrow
+    # Accessible restroom signage negative
     (
-        "door_width_ok", False, 0.72,
-        [r"cửa\s+(?:hơi\s+)?hẹp", r"cửa\s+nhỏ", r"cửa\s+chật"],
+        "accessible_restroom_sign", False, 0.78,
+        [
+            r"(?:không|chưa|chẳng|thiếu)\s+(?:hề\s+|thấy\s+)?(?:có\s+)?biển\s+(?:nhà\s+vệ\s+sinh|toilet|wc)(?:\s+(?:khuyết\s+tật|người\s+khuyết|tiếp\s+cận))?",
+            r"(?:không|chưa|chẳng|thiếu)\s+(?:hề\s+|thấy\s+)?(?:có\s+)?(?:nhà\s+vệ\s+sinh|toilet|wc)\s+(?:tiếp\s+cận|dành\s+cho|khuyết\s+tật)",
+        ],
     ),
-    # Accessible restroom signage
+    # Accessible restroom signage positive
     (
         "accessible_restroom_sign", True, 0.75,
-        [r"có\s+biển\s+(?:nhà\s+vệ\s+sinh|toilet)\s+(?:khuyết\s+tật|người\s+khuyết)",
-         r"có\s+nhà\s+vệ\s+sinh\s+(?:tiếp\s+cận|dành\s+cho)"],
+        [
+            r"(?<!không\s)(?<!chưa\s)\bcó\s+biển\s+(?:nhà\s+vệ\s+sinh|toilet|wc)\s+(?:khuyết\s+tật|người\s+khuyết|tiếp\s+cận)",
+            r"(?<!không\s)(?<!chưa\s)\bcó\s+(?:nhà\s+vệ\s+sinh|toilet|wc)\s+(?:tiếp\s+cận|dành\s+cho)",
+        ],
     ),
+    # Tactile paving negative
     (
-        "accessible_restroom_sign", False, 0.70,
-        [r"không\s+(?:có)?\s*biển\s+(?:nhà\s+vệ\s+sinh|wc)",
-         r"không\s+(?:có)?\s*nhà\s+vệ\s+sinh\s+(?:tiếp\s+cận|dành\s+cho)"],
+        "tactile_paving_present", False, 0.75,
+        [
+            r"(?:không|chưa|chẳng|thiếu)\s+(?:hề\s+|thấy\s+)?(?:có\s+)?(?:gạch\s+tactile|vỉa\s+hè\s+nổi|lối\s+dẫn\s+(?:hướng\s+)?cho\s+người\s+mù|gạch\s+nổi)",
+        ],
     ),
-    # Tactile paving
+    # Tactile paving positive
     (
         "tactile_paving_present", True, 0.72,
-        [r"có\s+gạch\s+tactile", r"có\s+vỉa\s+hè\s+nổi", r"có\s+lối\s+dẫn\s+cho\s+người\s+mù"],
-    ),
-    (
-        "tactile_paving_present", False, 0.70,
-        [r"không\s+(?:có)?\s*gạch\s+tactile", r"không\s+(?:có)?\s*vỉa\s+hè\s+nổi"],
+        [
+            r"(?<!không\s)(?<!chưa\s)\bcó\s+(?:gạch\s+tactile|vỉa\s+hè\s+nổi|lối\s+dẫn\s+(?:hướng\s+)?cho\s+người\s+mù|gạch\s+nổi)",
+        ],
     ),
 ]
 
@@ -145,6 +176,8 @@ class MentionExtractor:
                         value=value,
                         confidence=confidence,
                         snippet=m.group(0),
+                        start=m.start(),
+                        end=m.end(),
                     )
                     break
 

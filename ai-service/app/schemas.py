@@ -81,11 +81,27 @@ class VisualSuggestionItem(BaseModel):
     bbox_normalized: list[float] | None = None # [xmin, ymin, xmax, ymax] on EXIF-oriented image
 
 
+class MediaQualityResult(BaseModel):
+    """Per-media image integrity and quality assessment."""
+    media_id:           str
+    sha256:             str
+    width:              int
+    height:             int
+    laplacian_variance: float
+    brightness:         float
+    is_blur:            bool
+    quality_codes:      list[str] = Field(default_factory=list)
+    action:             str = "ok"
+    quality_assessment: str = "good"
+
+
 class UserClaimItem(BaseModel):
     """Structured information extracted from user text description."""
     feature: str
     claim: str                              # "reported_present" | "reported_absent" | "unknown"
     snippet: str | None = None
+    start: int | None = None
+    end: int | None = None
 
 
 # ── Pre-scan ───────────────────────────────────────────────────────────────────
@@ -98,6 +114,7 @@ class PreScanResponse(BaseModel):
     model_id:                   str | None = None
     model_version:              str | None = None
     image_reference:            str = "exif_corrected_original"
+    media_results:              list[MediaQualityResult] = Field(default_factory=list)
     visual_suggestions:         list[VisualSuggestionItem] = Field(default_factory=list)
     user_claims:                list[UserClaimItem] = Field(default_factory=list)
     requires_user_confirmation: bool = True
@@ -157,6 +174,7 @@ class VerifyResponse(BaseModel):
     model_id:                   str | None = None
     model_version:              str | None = None
     image_reference:            str = "exif_corrected_original"
+    media_results:              list[MediaQualityResult] = Field(default_factory=list)
     visual_suggestions:         list[VisualSuggestionItem] = Field(default_factory=list)
     user_claims:                list[UserClaimItem] = Field(default_factory=list)
     requires_user_confirmation: bool = True
@@ -172,8 +190,13 @@ class VerifyResponse(BaseModel):
 
 class BlurResponse(BaseModel):
     """Response from POST /api/v1/ai/blur"""
+    media_id: str | None = None
     faces_detected: int
     blurred_image_url: str | None = None   # set when uploaded to S3
+    original_hash: str | None = None
+    derivative_hash: str | None = None
+    content_type: str = "image/jpeg"
+    file_size_bytes: int | None = None
     # If not uploaded, raw bytes are returned directly (application/octet-stream)
 
 

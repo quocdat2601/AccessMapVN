@@ -36,7 +36,7 @@ import {
   type VerificationMatrixResult,
   type VerificationMatrixInput,
 } from '../../lib/verificationEngine';
-import { runAiPreScan, type PreScanFeatureTag } from '../../api/aiPreScanService';
+import { runAiPreScan, runAiVideoPreScan, type PreScanFeatureTag } from '../../api/aiPreScanService';
 import { matchSelectedTagsWithCvDetections } from '../../model/tagReviewModel';
 import { getPoiAnchorCoords } from '../../testing/mocks/mockPoiAnchor';
 import { TestGalleryPickerButton } from '../../testing/components/TestGalleryPickerButton';
@@ -279,10 +279,19 @@ function ActiveCameraContributionScreen() {
 
   useEffect(() => {
     if (!isRecording) return;
+    let stopTriggered = false;
     const interval = setInterval(() => {
-      if (recordingStartedAt.current != null) {
-        setRecordingSeconds(Math.floor((Date.now() - recordingStartedAt.current) / 1000));
+      if (recordingStartedAt.current == null) return;
+      const elapsedSeconds = Math.floor((Date.now() - recordingStartedAt.current) / 1000);
+      if (elapsedSeconds >= 10) {
+        setRecordingSeconds(10);
+        if (!stopTriggered) {
+          stopTriggered = true;
+          cameraRef.current?.stopRecording();
+        }
+        return;
       }
+      setRecordingSeconds(elapsedSeconds);
     }, 250);
     return () => clearInterval(interval);
   }, [isRecording]);
@@ -345,14 +354,15 @@ function ActiveCameraContributionScreen() {
     [capturedMedia]
   );
 
-  const startPreScanForPhoto = useCallback((media: CapturedContributionMedia) => {
+  const startPreScanForMedia = useCallback((media: CapturedContributionMedia) => {
     setCapturedMedia(media);
     setWorkflowStep('tag_review');
     setIsPreScanning(true);
     setPreScanTags([]);
     setAiSummary(null);
 
-    void runAiPreScan(media.uri).then((result) => {
+    const request = media.type === 'video' ? runAiVideoPreScan(media.uri) : runAiPreScan(media.uri);
+    void request.then((result) => {
       if (!mounted.current) return;
       setPreScanTags(result.features);
       setAiSummary(result.summary);
@@ -365,7 +375,7 @@ function ActiveCameraContributionScreen() {
     setIsCapturing(true);
     setMessage(null);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.55, skipProcessing: true, base64: true });
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.75, skipProcessing: false, base64: true });
       if (!mounted.current) return;
       const media: CapturedContributionMedia = {
         id: createMediaId(),
@@ -379,13 +389,13 @@ function ActiveCameraContributionScreen() {
         locationName: targetLocationName,
         gps: targetCoords ? { latitude: targetCoords.latitude, longitude: targetCoords.longitude, accuracy: 5.0, timestamp: Date.now() } : gps,
       };
-      startPreScanForPhoto(media);
+      startPreScanForMedia(media);
     } catch {
       setMessage('Không thể chụp ảnh. Hãy giữ thiết bị ổn định và thử lại.');
     } finally {
       if (mounted.current) setIsCapturing(false);
     }
-  }, [cameraReady, gps, isCapturing, startPreScanForPhoto, targetCoords, targetLocationId, targetLocationName]);
+  }, [cameraReady, gps, isCapturing, startPreScanForMedia, targetCoords, targetLocationId, targetLocationName]);
 
   const startVideoRecording = useCallback(async () => {
     if (!cameraRef.current || !cameraReady || isCapturing) return;
@@ -394,25 +404,11 @@ function ActiveCameraContributionScreen() {
     setRecordingSeconds(0);
     recordingStartedAt.current = Date.now();
 
-    const timer = setInterval(() => {
-      if (!mounted.current) return;
-      setRecordingSeconds((prev) => {
-        if (prev >= 10) {
-          cameraRef.current?.stopRecording();
-          return 10;
-        }
-        return prev + 1;
-      });
-    }, 1000);
-
     try {
-      const result = await cameraRef.current.recordAsync({
-        maxDuration: 10,
-        mute: true,
-      });
-      const durationSeconds = recordingStartedAt.current == null
-        ? 0
-        : Math.max(1, Math.round((Date.now() - recordingStartedAt.current) / 1000));
+      const recordOptions = Platform.OS === 'ios' ? { maxDuration: 10, codec: 'avc1' as const } : { maxDuration: 10 };
+      const result = await cameraRef.current.recordAsync(recordOptions);
+      const elapsedMs = recordingStartedAt.current == null ? 0 : Date.now() - recordingStartedAt.current;
+      const durationSeconds = Math.min(10, Math.floor(elapsedMs / 1000));
 
       if (durationSeconds < 5) {
         if (mounted.current) {
@@ -422,7 +418,7 @@ function ActiveCameraContributionScreen() {
       }
 
       if (result?.uri && mounted.current) {
-        setCapturedMedia({
+        startPreScanForMedia({
           id: createMediaId(),
           type: 'video',
           uri: result.uri,
@@ -432,19 +428,17 @@ function ActiveCameraContributionScreen() {
           locationName: targetLocationName,
           gps: targetCoords ? { latitude: targetCoords.latitude, longitude: targetCoords.longitude, accuracy: 5.0, timestamp: Date.now() } : gps,
         });
-        setWorkflowStep('video_preview');
       }
     } catch {
       if (mounted.current) setMessage('Không thể hoàn tất video. Vui lòng thử quay lại.');
     } finally {
-      clearInterval(timer);
       recordingStartedAt.current = null;
       if (mounted.current) {
         setIsRecording(false);
         setRecordingSeconds(0);
       }
     }
-  }, [cameraReady, gps, isCapturing, targetCoords, targetLocationId, targetLocationName]);
+  }, [cameraReady, gps, isCapturing, startPreScanForMedia, targetCoords, targetLocationId, targetLocationName]);
 
   const handleCapture = useCallback(() => {
     if (isRecording) {
@@ -701,9 +695,10 @@ function ActiveCameraContributionScreen() {
                 locationId={targetLocationId}
                 locationName={targetLocationName}
                 targetCoordinates={targetCoords ?? targetPoiCoords}
+                mode={mode}
                 disabled={isRecording || isCapturing}
                 onMediaPicked={(media) => {
-                  startPreScanForPhoto(media);
+                  startPreScanForMedia(media);
                 }}
               />
             ) : null

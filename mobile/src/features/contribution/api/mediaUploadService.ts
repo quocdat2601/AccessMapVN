@@ -45,6 +45,23 @@ async function resolveBase64(uri: string, existingBase64?: string): Promise<stri
   }
 }
 
+function getMediaFileInfo(uri: string): { ext: string; mimeType: string; isVideo: boolean } {
+  const cleanPath = uri.split('?')[0].toLowerCase();
+  if (cleanPath.endsWith('.mp4')) {
+    return { ext: 'mp4', mimeType: 'video/mp4', isVideo: true };
+  }
+  if (cleanPath.endsWith('.mov')) {
+    return { ext: 'mov', mimeType: 'video/quicktime', isVideo: true };
+  }
+  if (cleanPath.endsWith('.webm')) {
+    return { ext: 'webm', mimeType: 'video/webm', isVideo: true };
+  }
+  if (cleanPath.endsWith('.png')) {
+    return { ext: 'png', mimeType: 'image/png', isVideo: false };
+  }
+  return { ext: 'jpg', mimeType: 'image/jpeg', isVideo: false };
+}
+
 /**
  * Uploads a local photo (from camera capture or picker) to Supabase Cloud Storage (primary)
  * or to the local backend as a fallback.
@@ -54,29 +71,37 @@ export async function uploadMediaToBackend(
   uri: string,
   base64?: string
 ): Promise<string> {
-  const ext = uri.endsWith('.png') ? 'png' : 'jpg';
-  const mimeType = ext === 'png' ? 'image/png' : 'image/jpeg';
+  const { ext, mimeType, isVideo } = getMediaFileInfo(uri);
   const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${ext}`;
-  const effectiveBase64 = await resolveBase64(uri, base64);
+  const effectiveBase64 = isVideo ? undefined : await resolveBase64(uri, base64);
 
   // 1. Try Supabase Storage first (Cloud storage accessible by everyone globally)
-  if (isSupabaseConfigured && effectiveBase64) {
+  if (isSupabaseConfigured && (isVideo || effectiveBase64)) {
     try {
-      const fileBytes = base64ToUint8Array(effectiveBase64);
-      const { data, error } = await supabase.storage
-        .from('contributions-media')
-        .upload(fileName, fileBytes, {
-          contentType: mimeType,
-          upsert: true,
-        });
+      let fileBody: Uint8Array | ArrayBuffer | undefined;
+      if (isVideo) {
+        const res = await fetch(uri);
+        fileBody = await res.arrayBuffer();
+      } else if (effectiveBase64) {
+        fileBody = base64ToUint8Array(effectiveBase64);
+      }
 
-      if (!error && data) {
-        const { data: publicUrlData } = supabase.storage
+      if (fileBody) {
+        const { data, error } = await supabase.storage
           .from('contributions-media')
-          .getPublicUrl(fileName);
+          .upload(fileName, fileBody, {
+            contentType: mimeType,
+            upsert: true,
+          });
 
-        if (publicUrlData?.publicUrl) {
-          return publicUrlData.publicUrl;
+        if (!error && data) {
+          const { data: publicUrlData } = supabase.storage
+            .from('contributions-media')
+            .getPublicUrl(fileName);
+
+          if (publicUrlData?.publicUrl) {
+            return publicUrlData.publicUrl;
+          }
         }
       }
     } catch (e) {
@@ -86,7 +111,7 @@ export async function uploadMediaToBackend(
 
   // 2. Fallback to backend upload if Supabase Storage failed or offline
   const baseUrl = resolveServiceUrl(5256, process.env.EXPO_PUBLIC_API_URL);
-  if (effectiveBase64) {
+  if (!isVideo && effectiveBase64) {
     try {
       const response = await fetch(`${baseUrl}/api/v1/media/upload-base64`, {
         method: 'POST',
@@ -96,7 +121,7 @@ export async function uploadMediaToBackend(
         },
         body: JSON.stringify({
           fileName,
-          base64Data: base64,
+          base64Data: effectiveBase64,
         }),
       });
 

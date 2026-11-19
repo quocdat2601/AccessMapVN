@@ -103,12 +103,15 @@ class NLPPipeline:
             "summary":                summary,
             "is_accessibility":       is_access,
             "classifier_confidence":  cls_confidence,
+            "nlp_engine":             cls_result.get("engine", "keyword_rule"),
             "mentions": [
                 {
                     "feature":    m.feature,
                     "value":      m.value,
                     "confidence": m.confidence,
                     "snippet":    m.snippet,
+                    "start":      m.start,
+                    "end":        m.end,
                 }
                 for m in mentions
             ],

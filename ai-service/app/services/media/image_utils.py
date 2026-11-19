@@ -11,17 +11,80 @@ Responsibilities
 """
 from __future__ import annotations
 
+import hashlib
+import io
+from typing import Any
+
 import cv2
 import numpy as np
+from PIL import Image, ImageOps
 
+from app.config import settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
 
+def _decode_exif_corrected(image_bytes: bytes) -> np.ndarray:
+    """Decode *image_bytes* into a BGR ndarray with EXIF orientation applied."""
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as pil_img:
+            transposed = ImageOps.exif_transpose(pil_img)
+            rgb = transposed.convert("RGB")
+            return cv2.cvtColor(np.array(rgb), cv2.COLOR_RGB2BGR)
+    except Exception:
+        arr = np.frombuffer(image_bytes, dtype=np.uint8)
+        img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+        if img is None:
+            raise ValueError("Could not decode image bytes. Make sure the file is a valid image.")
+        return img
+
+
+def assess_image_quality(raw_bytes: bytes, media_id: str | None = None) -> dict[str, Any]:
+    """Compute SHA-256 and image quality metrics on the EXIF-oriented image."""
+    sha256 = hashlib.sha256(raw_bytes).hexdigest()
+    img = _decode_exif_corrected(raw_bytes)
+    h, w = img.shape[:2]
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    laplacian_variance = round(float(cv2.Laplacian(gray, cv2.CV_64F).var()), 2)
+    brightness = round(float(gray.mean()), 2)
+    is_blur = laplacian_variance < settings.blur_laplacian_threshold
+
+    quality_codes: list[str] = []
+    if is_blur:
+        quality_codes.append("IMAGE_BLURRY")
+    if w < 300 or h < 300:
+        quality_codes.append("LOW_RESOLUTION")
+    if brightness < 40.0:
+        quality_codes.append("IMAGE_TOO_DARK")
+    elif brightness > 240.0:
+        quality_codes.append("IMAGE_OVEREXPOSED")
+
+    action = "warn" if quality_codes else "ok"
+    if "IMAGE_BLURRY" in quality_codes and "LOW_RESOLUTION" in quality_codes:
+        quality_assessment = "poor"
+    elif quality_codes:
+        quality_assessment = "warning"
+    else:
+        quality_assessment = "good"
+
+    return {
+        "media_id": media_id or sha256[:12],
+        "sha256": sha256,
+        "width": w,
+        "height": h,
+        "laplacian_variance": laplacian_variance,
+        "brightness": brightness,
+        "is_blur": is_blur,
+        "quality_codes": quality_codes,
+        "action": action,
+        "quality_assessment": quality_assessment,
+    }
+
+
 def validate_and_preprocess(image_bytes: bytes, max_dim: int = 1024) -> bytes:
     """
-    Validate, resize (if needed), and normalise *image_bytes* to JPEG.
+    Validate, apply EXIF orientation, resize (if needed), and normalise *image_bytes* to JPEG.
 
     Parameters
     ----------
@@ -41,12 +104,7 @@ def validate_and_preprocess(image_bytes: bytes, max_dim: int = 1024) -> bytes:
     ValueError
         If the bytes cannot be decoded as an image.
     """
-    arr = np.frombuffer(image_bytes, dtype=np.uint8)
-    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-
-    if img is None:
-        raise ValueError("Could not decode image bytes. Make sure the file is a valid image.")
-
+    img = _decode_exif_corrected(image_bytes)
     img = _resize_if_needed(img, max_dim)
     _, buf = cv2.imencode(".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 90])
     return buf.tobytes()

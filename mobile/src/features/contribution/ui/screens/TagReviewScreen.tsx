@@ -224,7 +224,21 @@ export function TagReviewScreen({
         >
           {/* Media Preview Card */}
           <View style={styles.mediaCard}>
-            <Image source={{ uri: media.uri }} style={styles.mediaImage} contentFit="cover" />
+            {media.type === 'video' ? (
+              <View style={styles.videoPreviewPlaceholder}>
+                <MaterialCommunityIcons name="video-check-outline" size={38} color="#004e58" />
+                <Text style={styles.videoPreviewTitle}>
+                  Video bằng chứng ({media.durationSeconds ?? 5}s)
+                </Text>
+                <Text style={styles.videoPreviewSubtitle}>
+                  {isPreScanning
+                    ? 'Đang trích xuất & phân tích khung hình…'
+                    : 'AI đã quét khung hình đại diện'}
+                </Text>
+              </View>
+            ) : (
+              <Image source={{ uri: media.uri }} style={styles.mediaImage} contentFit="cover" />
+            )}
             <View style={styles.mediaOverlay}>
               <Pressable
                 style={({ pressed }) => [styles.locationPill, pressed && { opacity: 0.8 }]}
@@ -519,6 +533,24 @@ const styles = StyleSheet.create({
   mediaImage: {
     width: '100%',
     height: '100%',
+  },
+  videoPreviewPlaceholder: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ecfeff',
+    paddingBottom: 32,
+    gap: 4,
+  },
+  videoPreviewTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#004e58',
+  },
+  videoPreviewSubtitle: {
+    fontSize: 12,
+    color: '#0f766e',
   },
   mediaOverlay: {
     position: 'absolute',

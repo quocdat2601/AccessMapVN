@@ -108,6 +108,7 @@ class PhoBERTClassifier:
         return {
             "label":      best["label"].lower(),
             "confidence": round(float(best["score"]), 4),
+            "engine":     "phobert",
         }
 
 
@@ -118,7 +119,7 @@ class KeywordRuleClassifier:
         lower = text.lower()
         hits  = sum(1 for kw in _ACCESSIBILITY_KEYWORDS if kw in lower)
         if hits >= 2:
-            return {"label": "accessibility", "confidence": round(min(0.5 + hits * 0.05, 0.9), 4)}
+            return {"label": "accessibility", "confidence": round(min(0.5 + hits * 0.05, 0.9), 4), "engine": "keyword_rule"}
         elif hits == 1:
-            return {"label": "accessibility", "confidence": 0.55}
-        return {"label": "not_accessibility", "confidence": 0.80}
+            return {"label": "accessibility", "confidence": 0.55, "engine": "keyword_rule"}
+        return {"label": "not_accessibility", "confidence": 0.80, "engine": "keyword_rule"}

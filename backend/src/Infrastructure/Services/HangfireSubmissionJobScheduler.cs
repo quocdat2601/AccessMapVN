@@ -53,10 +53,56 @@ public sealed class SubmissionVerificationJob
             return;
         }
 
-        var json = await _aiClient.VerifySubmissionRawAsync(submission.Id, submission.MediaUrls, submission.TextDescription, cancellationToken);
+        var allUrls = submission.MediaUrls ?? new List<string>();
+        var webMediaUrls = new List<string>();
+        foreach (var url in allUrls)
+        {
+            if (url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                webMediaUrls.Add(url);
+            }
+        }
+
+        // Keep original list reference when every URL is already HTTP/HTTPS.
+        var urlsToVerify = webMediaUrls.Count == allUrls.Count ? allUrls : webMediaUrls;
+
+        string? json = null;
+        if (urlsToVerify.Count > 0)
+        {
+            if (string.IsNullOrWhiteSpace(submission.PlaceId))
+            {
+                json = await _aiClient.VerifySubmissionRawAsync(
+                    submission.Id,
+                    urlsToVerify,
+                    submission.TextDescription,
+                    cancellationToken);
+            }
+            else
+            {
+                json = await _aiClient.VerifySubmissionRawAsync(
+                    submission.Id,
+                    urlsToVerify,
+                    submission.TextDescription,
+                    submission.PlaceId,
+                    cancellationToken);
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(json))
         {
-            _logger.LogWarning("AI verification returned empty result for submission {SubmissionId}.", submissionId);
+            _logger.LogWarning("AI verification returned empty result for submission {SubmissionId}; recording failed diagnostic state.", submissionId);
+            submission.AiObservationsJson = JsonSerializer.Serialize(new
+            {
+                analysis_status = "failed",
+                analysis_method = "unavailable",
+                requires_user_confirmation = true,
+                warnings = new[] { "AI_VERIFICATION_FAILED" },
+                visual_suggestions = Array.Empty<object>(),
+                user_claims = Array.Empty<object>(),
+            });
+            submission.Status = SubmissionStatus.PendingModeration;
+            await _submissionRepository.SaveChangesAsync(cancellationToken);
             return;
         }
 

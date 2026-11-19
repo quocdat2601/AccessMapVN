@@ -98,7 +98,8 @@ def probe_video(path: str) -> dict:
     try:
         info = json.loads(proc.stdout or b"{}")
         stream = info["streams"][0]
-        duration = float(info["format"]["duration"])
+        raw_duration = info.get("format", {}).get("duration") or stream.get("duration")
+        duration = float(raw_duration)
         width, height = int(stream["width"]), int(stream["height"])
     except (KeyError, IndexError, ValueError, TypeError) as exc:
         raise VideoValidationError("not_a_video", "File has no readable video stream.") from exc
@@ -161,6 +162,63 @@ def _extract_candidates(path: str, workdir: str) -> list[Frame]:
     return frames
 
 
+def _extract_candidates_with_opencv(path: str) -> list[Frame]:
+    """Fallback decoder using OpenCV's bundled video backend when ffmpeg CLI is unavailable."""
+    cap = cv2.VideoCapture(path)
+    try:
+        fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+        if not cap.isOpened() or fps <= 0 or frame_count <= 0 or width <= 0 or height <= 0:
+            raise FfmpegUnavailableError("ffprobe/ffmpeg not found and OpenCV could not open video")
+
+        duration = frame_count / fps
+        if not settings.video_min_duration_s <= duration <= settings.video_max_duration_s:
+            raise VideoValidationError(
+                "invalid_duration",
+                f"Duration {duration:.1f}s outside {settings.video_min_duration_s}-{settings.video_max_duration_s}s.",
+            )
+        if not (settings.video_min_side_px <= min(width, height) and max(width, height) <= settings.video_max_side_px):
+            raise VideoValidationError("unsupported_resolution", f"Resolution {width}x{height} is not supported.")
+
+        step = max(1, int(round(fps / settings.keyframe_fps)))
+        frames: list[Frame] = []
+        frame_index = 0
+        sample_index = 0
+
+        while sample_index < settings.video_max_candidates:
+            ok, bgr = cap.read()
+            if not ok:
+                break
+            if frame_index % step == 0:
+                h, w = bgr.shape[:2]
+                if max(h, w) > 960:
+                    scale = 960.0 / max(h, w)
+                    bgr = cv2.resize(bgr, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+                encoded, buf = cv2.imencode(".jpg", bgr)
+                if encoded:
+                    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+                    frames.append(
+                        Frame(
+                            frame_id=f"frame_{sample_index + 1:03d}",
+                            timestamp_seconds=round(sample_index / settings.keyframe_fps, 2),
+                            jpeg=buf.tobytes(),
+                            sharpness=float(cv2.Laplacian(gray, cv2.CV_64F).var()),
+                            brightness=float(gray.mean()),
+                            dhash=_dhash(gray),
+                        )
+                    )
+                    sample_index += 1
+            frame_index += 1
+    finally:
+        cap.release()
+
+    if not frames:
+        raise VideoValidationError("decode_failed", "No frames could be extracted.")
+    return frames
+
+
 def select_frames(candidates: list[Frame]) -> FrameSelection:
     """Drop poor frames and near-duplicates, then spread up to N picks over time."""
     warnings: list[str] = []
@@ -195,8 +253,12 @@ def select_video_frames(video_bytes: bytes) -> FrameSelection:
     try:
         with open(path, "wb") as fh:
             fh.write(video_bytes)
-        probe_video(path)
-        return select_frames(_extract_candidates(path, workdir))
+        try:
+            probe_video(path)
+            candidates = _extract_candidates(path, workdir)
+        except FfmpegUnavailableError:
+            candidates = _extract_candidates_with_opencv(path)
+        return select_frames(candidates)
     finally:
         for name in os.listdir(workdir):
             try:

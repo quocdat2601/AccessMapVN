@@ -30,6 +30,32 @@ interface AiPreScanPayload {
   summary?: string;
 }
 
+interface AiVideoSuggestionPayload {
+  value?: string;
+  evidence?: Array<{
+    frame_id?: string;
+    timestamp_seconds?: number;
+    detector_confidence?: number;
+  }>;
+}
+
+interface AiVideoPreScanPayload {
+  processing_status?: string;
+  frames_sampled?: number;
+  frames_analyzed?: number;
+  suggestions?: Record<string, AiVideoSuggestionPayload>;
+  warnings?: string[];
+}
+
+const VIDEO_SUGGESTION_KEY_MAP: Record<string, string> = {
+  ramp_present: 'exterior_ramp_present',
+  steps_present: 'steps_present',
+  elevator_present: 'elevator_present',
+  door_detected: 'door_detected',
+  accessible_restroom_sign: 'accessible_restroom_sign',
+  tactile_paving_present: 'tactile_paving_present',
+};
+
 const FEATURE_LABEL_MAP: Record<string, string> = {
   exterior_ramp_present: 'Ram dốc',
   ramp_slope_compliant: 'Dốc thoải',
@@ -109,6 +135,64 @@ export async function runAiPreScan(imageUri: string, textDescription?: string): 
     clearTimeout(timeoutId);
     console.warn('[runAiPreScan] FAILED:', error);
     // Graceful fallback allows instant testing on device even if ai-service is not currently launched locally
+    return generateFallbackResult();
+  }
+}
+
+export async function runAiVideoPreScan(videoUri: string): Promise<PreScanResult> {
+  try {
+    const isMov = videoUri.split('?')[0].toLowerCase().endsWith('.mov');
+    const formData = new FormData();
+    formData.append('video', {
+      uri: videoUri,
+      name: isMov ? 'clip.mov' : 'clip.mp4',
+      type: isMov ? 'video/quicktime' : 'video/mp4',
+    } as any);
+
+    const aiBaseUrl = resolveServiceUrl(8000, process.env.EXPO_PUBLIC_AI_SERVICE_URL);
+    console.log('[runAiVideoPreScan] Calling:', `${aiBaseUrl}/api/v1/ai/pre-scan/video`, 'with videoUri:', videoUri);
+    const data = await postMultipart<AiVideoPreScanPayload>(`${aiBaseUrl}/api/v1/ai/pre-scan/video`, formData, 60000);
+
+    const rawSuggestions = data.suggestions || {};
+    const features: PreScanFeatureTag[] = Object.entries(VIDEO_SUGGESTION_KEY_MAP).map(
+      ([suggestionKey, featureKey]) => {
+        const item = rawSuggestions[suggestionKey];
+        const suggestedPresent = item?.value === 'suggested_present';
+        const evidenceList = item?.evidence || [];
+        const maxConfidence = evidenceList.reduce(
+          (best, e) => Math.max(best, typeof e.detector_confidence === 'number' ? e.detector_confidence : 0),
+          0
+        );
+        const status: FeatureStatus = suggestedPresent ? 'present' : 'unknown';
+
+        return {
+          key: featureKey,
+          label: FEATURE_LABEL_MAP[featureKey] ?? featureKey,
+          status,
+          detected: suggestedPresent,
+          confidence: maxConfidence,
+          reason: suggestedPresent
+            ? `Phát hiện trên ${evidenceList.length} khung hình video`
+            : 'Chưa rõ từ khung hình video, vui lòng xác nhận thực tế',
+        };
+      }
+    );
+
+    const detectedLabels = features.filter((f) => f.detected).map((f) => f.label);
+    const summary =
+      data.processing_status === 'insufficient_visual_quality'
+        ? 'Video chưa đủ chất lượng hình ảnh để phân tích. Vui lòng tự chọn đặc điểm hoặc quay lại video rõ hơn.'
+        : detectedLabels.length > 0
+        ? `AI gợi ý từ ${data.frames_analyzed ?? 0}/${data.frames_sampled ?? 0} khung hình video: ${detectedLabels.join(', ')}. Người khảo sát cần xác nhận thực tế.`
+        : `Đã phân tích ${data.frames_analyzed ?? 0} khung hình video nhưng chưa phát hiện đặc điểm rõ ràng. Vui lòng tự chọn bên dưới nếu có.`;
+
+    return {
+      features,
+      summary,
+      isMockFallback: false,
+    };
+  } catch (error) {
+    console.warn('[runAiVideoPreScan] FAILED:', error);
     return generateFallbackResult();
   }
 }

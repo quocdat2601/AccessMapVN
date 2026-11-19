@@ -21,6 +21,7 @@ interface TestGalleryPickerButtonProps {
   locationId: string;
   locationName: string;
   targetCoordinates?: { latitude: number; longitude: number } | null;
+  mode?: 'photo' | 'video';
   disabled?: boolean;
   onMediaPicked: (media: CapturedContributionMedia) => void;
 }
@@ -34,6 +35,7 @@ export function TestGalleryPickerButton({
   locationId,
   locationName,
   targetCoordinates,
+  mode = 'photo',
   disabled = false,
   onMediaPicked,
 }: TestGalleryPickerButtonProps) {
@@ -67,10 +69,10 @@ export function TestGalleryPickerButton({
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: [mode === 'video' ? 'videos' : 'images'],
         allowsEditing: false,
         quality: 0.7,
-        base64: true,
+        base64: mode !== 'video',
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -80,9 +82,11 @@ export function TestGalleryPickerButton({
             uri: asset.uri,
             width: asset.width,
             height: asset.height,
-            fileName: asset.fileName ?? 'gallery-test.jpg',
+            fileName: asset.fileName ?? (mode === 'video' ? 'gallery-test.mp4' : 'gallery-test.jpg'),
             fileSize: asset.fileSize,
             base64: asset.base64 ?? undefined,
+            type: mode,
+            durationSeconds: mode === 'video' ? (asset.duration ? Math.round(asset.duration / 1000) : 6) : undefined,
           },
           locationId,
           locationName,

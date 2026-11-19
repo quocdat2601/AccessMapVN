@@ -15,11 +15,11 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 
 from app.config import settings
 from app.core.logging import get_logger
-from app.schemas import PreScanResponse
+from app.schemas import MediaQualityResult, PreScanResponse
 from app.services.cv.pipeline import CVPipeline
 from app.services.nlp.pipeline import NLPPipeline
 from app.services.scoring.scorer import Scorer
-from app.services.media.image_utils import validate_and_preprocess
+from app.services.media.image_utils import assess_image_quality, validate_and_preprocess
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["pre-scan"])
@@ -58,7 +58,8 @@ async def pre_scan(
 
     # ── Read & preprocess images ─────────────────────────────────────────────
     image_bytes_list: list[bytes] = []
-    for upload in images:
+    media_results: list[MediaQualityResult] = []
+    for idx, upload in enumerate(images):
         raw = await upload.read()
         if len(raw) > settings.pre_scan_max_bytes:
             raise HTTPException(
@@ -66,6 +67,8 @@ async def pre_scan(
                 detail=f"Image '{upload.filename}' exceeds 10 MB limit.",
             )
         try:
+            media_id = upload.filename or f"media-{idx}"
+            media_results.append(MediaQualityResult(**assess_image_quality(raw, media_id=media_id)))
             preprocessed = validate_and_preprocess(raw, max_dim=1024)
             image_bytes_list.append(preprocessed)
         except ValueError as exc:
@@ -112,6 +115,7 @@ async def pre_scan(
         model_id="yolov8n-accessmap-v1" if analysis_method == "model" else None,
         model_version="1.0.0" if analysis_method == "model" else None,
         image_reference="exif_corrected_original",
+        media_results=media_results,
         visual_suggestions=visual_suggestions,
         user_claims=user_claims,
         requires_user_confirmation=True,

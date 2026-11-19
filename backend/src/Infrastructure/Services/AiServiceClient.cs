@@ -40,7 +40,7 @@ public class AiServiceClient : IAiServiceClient
         var requestPayload = new
         {
             submission_id = submissionId.ToString(),
-            location_id = Guid.TryParse(locationId, out var g) ? g.ToString() : Guid.NewGuid().ToString(),
+            location_id = string.IsNullOrWhiteSpace(locationId) ? null : locationId.Trim(),
             media_urls = mediaUrls,
             text_description = textDescription,
         };

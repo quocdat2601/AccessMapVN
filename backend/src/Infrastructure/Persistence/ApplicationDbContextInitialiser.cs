@@ -85,6 +85,9 @@ public class ApplicationDbContextInitialiser
                 ALTER TABLE submissions ADD COLUMN IF NOT EXISTS geofence_policy VARCHAR(50) NULL;
                 ALTER TABLE submissions ADD COLUMN IF NOT EXISTS allowed_radius_meters DOUBLE PRECISION NULL;
                 ALTER TABLE submissions ADD COLUMN IF NOT EXISTS is_mocked BOOLEAN NULL;
+                ALTER TABLE submissions ADD COLUMN IF NOT EXISTS revision INTEGER NOT NULL DEFAULT 1;
+                ALTER TABLE submissions ADD COLUMN IF NOT EXISTS resubmission_count INTEGER NOT NULL DEFAULT 0;
+                ALTER TABLE submissions ADD COLUMN IF NOT EXISTS last_resubmitted_at TIMESTAMPTZ NULL;
 
                 ALTER TABLE places ADD COLUMN IF NOT EXISTS entrance_lat DOUBLE PRECISION NULL;
                 ALTER TABLE places ADD COLUMN IF NOT EXISTS entrance_lng DOUBLE PRECISION NULL;

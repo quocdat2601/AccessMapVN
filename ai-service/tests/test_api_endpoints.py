@@ -28,8 +28,30 @@ def create_dummy_image_bytes(format="JPEG", color=(200, 200, 200), size=(300, 30
 class TestAiServiceEndpoints(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        from app.api.pre_scan import _cv_pipeline
+
+        cls._patchers = []
+        if not _cv_pipeline._ramp.model_loaded:
+            class _EmptyYoloResult:
+                boxes = []
+
+            fake_model = MagicMock()
+            fake_model.predict.return_value = [_EmptyYoloResult()]
+            for detector in (_cv_pipeline._ramp, _cv_pipeline._step, _cv_pipeline._door):
+                detector._engine = "yolo"
+                detector._initialization_attempted = True
+                detector._model = fake_model
+                patcher = patch.object(detector, "_load_model", return_value=fake_model)
+                patcher.start()
+                cls._patchers.append(patcher)
+
         cls.client = TestClient(app)
         cls.scorer = Scorer()
+
+    @classmethod
+    def tearDownClass(cls):
+        for patcher in getattr(cls, "_patchers", []):
+            patcher.stop()
 
     def test_pre_scan_missing_image_returns_422(self):
         """Request without image payload must return HTTP 422."""
@@ -311,6 +333,72 @@ class TestAiServiceEndpoints(unittest.TestCase):
             data = res.json()
             self.assertEqual(data["analysis_method"], "model")
             self.assertEqual(data["analysis_status"], "completed")
+
+    def test_nlp_vietnamese_negation_precedence_and_spans(self):
+        """Negative Vietnamese phrasings must win over positive substrings and return valid character spans."""
+        text = "Không có ramp, không có đường dốc tiếp cận, không có thang máy cho người khuyết tật, không có nhà vệ sinh tiếp cận"
+        valid_img = create_dummy_image_bytes()
+        res = self.client.post(
+            "/api/v1/ai/pre-scan",
+            files=[("images", ("photo.jpg", valid_img, "image/jpeg"))],
+            data={"text_description": text},
+        )
+        self.assertEqual(res.status_code, 200)
+        claims = {c["feature"]: c for c in res.json()["user_claims"]}
+        for feat in ("exterior_ramp_present", "elevator_present", "accessible_restroom_sign"):
+            self.assertIn(feat, claims)
+            self.assertEqual(claims[feat]["claim"], "reported_absent")
+            start, end = claims[feat]["start"], claims[feat]["end"]
+            self.assertIsInstance(start, int)
+            self.assertIsInstance(end, int)
+            self.assertEqual(text[start:end], claims[feat]["snippet"])
+
+    def test_uncorroborated_positive_text_never_promotes_feature_to_present(self):
+        """Positive user text alone on a blank image must stay unknown/unverified rather than faking CV present."""
+        valid_img = create_dummy_image_bytes()
+        res = self.client.post(
+            "/api/v1/ai/pre-scan",
+            files=[("images", ("photo.jpg", valid_img, "image/jpeg"))],
+            data={"text_description": "Lối vào có ramp và cửa đủ rộng"},
+        )
+        self.assertEqual(res.status_code, 200)
+        data = res.json()
+        ramp = data["features"]["exterior_ramp_present"]
+        self.assertEqual(ramp["value"], "unknown")
+        self.assertEqual(ramp["confidence"], 0.0)
+        claims = {c["feature"]: c for c in data["user_claims"]}
+        self.assertEqual(claims["exterior_ramp_present"]["claim"], "reported_present")
+
+    def test_pre_scan_returns_media_quality_results(self):
+        """Pre-scan response must include per-media SHA-256 hash and blur/resolution metrics."""
+        valid_img = create_dummy_image_bytes(size=(300, 300))
+        res = self.client.post(
+            "/api/v1/ai/pre-scan",
+            files=[("images", ("entrance.jpg", valid_img, "image/jpeg"))],
+        )
+        self.assertEqual(res.status_code, 200)
+        media_results = res.json()["media_results"]
+        self.assertEqual(len(media_results), 1)
+        m = media_results[0]
+        self.assertEqual(m["media_id"], "entrance.jpg")
+        self.assertEqual(len(m["sha256"]), 64)
+        self.assertEqual(m["width"], 300)
+        self.assertEqual(m["height"], 300)
+        self.assertTrue(m["is_blur"])
+        self.assertIn("IMAGE_BLURRY", m["quality_codes"])
+        self.assertEqual(m["action"], "warn")
+
+    def test_blur_endpoint_returns_hashes_and_face_count_headers(self):
+        """Blur endpoint streams JPEG with face count and original/derivative SHA-256 headers."""
+        valid_img = create_dummy_image_bytes()
+        res = self.client.post(
+            "/api/v1/ai/blur",
+            files=[("image", ("face_test.jpg", valid_img, "image/jpeg"))],
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.headers["x-faces-detected"], "0")
+        self.assertEqual(len(res.headers["x-original-sha256"]), 64)
+        self.assertEqual(len(res.headers["x-derivative-sha256"]), 64)
 
 
 if __name__ == "__main__":

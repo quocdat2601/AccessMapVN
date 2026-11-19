@@ -31,9 +31,9 @@ from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-# Optional DNN model paths (relative to project root)
-_DNN_PROTOTXT = Path("models/opencv/deploy.prototxt")
-_DNN_WEIGHTS  = Path("models/opencv/res10_300x300_ssd_iter_140000.caffemodel")
+# Optional DNN model paths (anchored to configured models directory)
+_DNN_PROTOTXT = settings.models_dir / "opencv" / "deploy.prototxt"
+_DNN_WEIGHTS  = settings.models_dir / "opencv" / "res10_300x300_ssd_iter_140000.caffemodel"
 
 
 class FaceBlurrer:
@@ -66,16 +66,22 @@ class FaceBlurrer:
             except Exception as exc:
                 logger.warning("DNN detector failed to load: %s – falling back to Haar.", exc)
 
-        # Default: Haar cascade (always available with OpenCV)
-        cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-        cascade = cv2.CascadeClassifier(cascade_path)
-        if cascade.empty():
-            logger.error("Haar cascade could not be loaded – face blurring will be a no-op.")
-            self._detector = _NoOpDetector()
-        else:
-            self._detector = _HaarDetector(cascade)
-            logger.info("FaceBlurrer: using OpenCV Haar cascade face detector.")
+        # Default: Haar cascades when available in this OpenCV build (frontal + profile)
+        cascade_cls = getattr(cv2, "CascadeClassifier", None)
+        data_mod = getattr(cv2, "data", None)
+        if cascade_cls is not None and data_mod is not None and hasattr(data_mod, "haarcascades"):
+            frontal = cascade_cls(data_mod.haarcascades + "haarcascade_frontalface_default.xml")
+            profile = cascade_cls(data_mod.haarcascades + "haarcascade_profileface.xml")
+            if not frontal.empty() or not profile.empty():
+                self._detector = _HaarDetector(frontal, None if profile.empty() else profile)
+                logger.info("FaceBlurrer: using OpenCV Haar cascade face detector (frontal+profile).")
+                return self._detector
 
+        logger.warning(
+            "No compatible OpenCV face detector available (OpenCV %s) – face blurring will be a no-op.",
+            cv2.__version__,
+        )
+        self._detector = _NoOpDetector()
         return self._detector
 
     # ── Public API ─────────────────────────────────────────────────────────────
@@ -124,15 +130,47 @@ class _BaseDetector:
 
 
 class _HaarDetector(_BaseDetector):
-    def __init__(self, cascade: cv2.CascadeClassifier) -> None:
-        self._cascade = cascade
+    def __init__(
+        self,
+        frontal_cascade: cv2.CascadeClassifier,
+        profile_cascade: cv2.CascadeClassifier | None = None,
+    ) -> None:
+        self._frontal = frontal_cascade
+        self._profile = profile_cascade
+
+    @staticmethod
+    def _iou(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> float:
+        ax1, ay1, aw, ah = a
+        bx1, by1, bw, bh = b
+        ax2, ay2 = ax1 + aw, ay1 + ah
+        bx2, by2 = bx1 + bw, by1 + bh
+        ix1, iy1 = max(ax1, bx1), max(ay1, by1)
+        ix2, iy2 = min(ax2, bx2), min(ay2, by2)
+        inter = max(0, ix2 - ix1) * max(0, iy2 - iy1)
+        if inter == 0:
+            return 0.0
+        union = aw * ah + bw * bh - inter
+        return inter / union if union > 0 else 0.0
 
     def detect(self, img_bgr: np.ndarray) -> list[tuple[int, int, int, int]]:
-        gray  = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-        faces = self._cascade.detectMultiScale(
-            gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30)
-        )
-        return [tuple(f) for f in faces] if len(faces) > 0 else []
+        gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+        candidates: list[tuple[int, int, int, int]] = []
+        if not self._frontal.empty():
+            faces = self._frontal.detectMultiScale(
+                gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30)
+            )
+            if len(faces) > 0:
+                candidates.extend(tuple(int(v) for v in f) for f in faces)
+        if self._profile is not None and not self._profile.empty():
+            profiles = self._profile.detectMultiScale(
+                gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30)
+            )
+            if len(profiles) > 0:
+                for p in profiles:
+                    box = tuple(int(v) for v in p)
+                    if not any(self._iou(box, existing) > 0.35 for existing in candidates):
+                        candidates.append(box)
+        return candidates
 
 
 class _DNNDetector(_BaseDetector):

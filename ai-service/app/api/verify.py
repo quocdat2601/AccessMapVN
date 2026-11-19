@@ -11,24 +11,20 @@ from __future__ import annotations
 import asyncio
 import time
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, status
+from typing import Any
 
+from fastapi import APIRouter, HTTPException, status
+
+from app.api.pre_scan import _cv_pipeline, _nlp_pipeline, _scorer
 from app.config import settings
 from app.core.logging import get_logger
 from app.core.s3_client import download_url
-from app.schemas import VerifyRequest, VerifyResponse
-from app.services.cv.pipeline import CVPipeline
-from app.services.media.image_utils import validate_and_preprocess
+from app.schemas import MediaQualityResult, VerifyRequest, VerifyResponse
+from app.services.media.image_utils import assess_image_quality, validate_and_preprocess
 from app.services.media.video_pipeline import select_video_frames
-from app.services.nlp.pipeline import NLPPipeline
-from app.services.scoring.scorer import Scorer
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["verify"])
-
-_cv_pipeline  = CVPipeline()
-_nlp_pipeline = NLPPipeline()
-_scorer       = Scorer()
 
 # File extension helpers
 _VIDEO_EXTS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
@@ -41,17 +37,23 @@ def _is_video(url: str) -> bool:
     return suffix in _VIDEO_EXTS
 
 
-async def _collect_frames(url: str) -> list[bytes]:
-    """Download a media URL and return a list of image-byte frames."""
+async def _collect_frames(url: str, idx: int) -> tuple[list[bytes], list[dict[str, Any]]]:
+    """Download a media URL and return image-byte frames plus quality assessments."""
     raw = await download_url(url)
+    base_name = url.split("?")[0].rsplit("/", 1)[-1] or f"media-{idx}"
     if _is_video(url):
         selection = await asyncio.to_thread(select_video_frames, raw)
         frames = [frame.jpeg for frame in selection.selected]
+        metrics = [
+            assess_image_quality(frame_bytes, media_id=f"{base_name}#frame-{f_idx}")
+            for f_idx, frame_bytes in enumerate(frames)
+        ]
         logger.info("Selected %d representative frames from video %s", len(frames), url)
-        return frames
+        return frames, metrics
     # Plain image
     try:
-        return [validate_and_preprocess(raw, max_dim=1280)]
+        metrics = [assess_image_quality(raw, media_id=base_name)]
+        return [validate_and_preprocess(raw, max_dim=1280)], metrics
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -77,16 +79,19 @@ async def verify(payload: VerifyRequest) -> VerifyResponse:
 
     # ── Download & unpack all media concurrently ─────────────────────────────
     frame_batches = await asyncio.gather(
-        *[_collect_frames(url) for url in payload.media_urls],
+        *[_collect_frames(url, idx) for idx, url in enumerate(payload.media_urls)],
         return_exceptions=True,
     )
 
     all_frames: list[bytes] = []
+    media_results: list[MediaQualityResult] = []
     for idx, result in enumerate(frame_batches):
         if isinstance(result, Exception):
             logger.warning("Failed to download media[%d]: %s", idx, result)
         else:
-            all_frames.extend(result)
+            frames, metrics = result
+            all_frames.extend(frames)
+            media_results.extend(MediaQualityResult(**m) for m in metrics)
 
     if not all_frames:
         raise HTTPException(
@@ -136,6 +141,7 @@ async def verify(payload: VerifyRequest) -> VerifyResponse:
         model_id="yolov8n-accessmap-v1" if analysis_method == "model" else None,
         model_version="1.0.0" if analysis_method == "model" else None,
         image_reference="exif_corrected_original",
+        media_results=media_results,
         visual_suggestions=visual_suggestions,
         user_claims=user_claims,
         requires_user_confirmation=True,

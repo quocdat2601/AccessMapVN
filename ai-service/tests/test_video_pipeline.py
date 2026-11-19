@@ -1,9 +1,11 @@
 import shutil
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import cv2
 import numpy as np
 
 ai_service_root = Path(__file__).resolve().parent.parent
@@ -143,6 +145,61 @@ class TestVideoEndpoint(unittest.TestCase):
             self.assertEqual(result["processing_status"], "completed")
             self.assertIn("ramp_present", result["suggestions"])
 
+
+class TestProbeVideo(unittest.TestCase):
+    def test_accepts_hevc_and_stream_level_duration_fallback(self):
+        payload = {
+            "streams": [{"codec_name": "hevc", "width": 720, "height": 1280, "duration": "4.0"}],
+            "format": {},
+        }
+        fake_proc = type("Proc", (), {"stdout": vp.json.dumps(payload).encode()})()
+        with patch.object(vp, "_run", return_value=fake_proc):
+            meta = vp.probe_video("clip.mp4")
+        self.assertEqual(meta["codec"], "hevc")
+        self.assertAlmostEqual(meta["duration"], 4.0)
+
+    def test_rejects_unsupported_codec_and_out_of_range_duration(self):
+        bad_codec = type(
+            "Proc",
+            (),
+            {"stdout": vp.json.dumps({"streams": [{"codec_name": "av1", "width": 720, "height": 1280}], "format": {"duration": "6.0"}}).encode()},
+        )()
+        with patch.object(vp, "_run", return_value=bad_codec):
+            with self.assertRaises(vp.VideoValidationError) as ctx:
+                vp.probe_video("clip.mp4")
+        self.assertEqual(ctx.exception.code, "unsupported_codec")
+
+        bad_dur = type(
+            "Proc",
+            (),
+            {"stdout": vp.json.dumps({"streams": [{"codec_name": "h264", "width": 720, "height": 1280}], "format": {"duration": "2.5"}}).encode()},
+        )()
+        with patch.object(vp, "_run", return_value=bad_dur):
+            with self.assertRaises(vp.VideoValidationError) as ctx:
+                vp.probe_video("clip.mp4")
+        self.assertEqual(ctx.exception.code, "invalid_duration")
+
+    def test_opencv_fallback_extracts_frames_when_ffmpeg_cli_missing(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            video_path = str(Path(tmpdir) / "sample.mp4")
+            writer = cv2.VideoWriter(video_path, cv2.VideoWriter_fourcc(*"mp4v"), 5.0, (320, 240))
+            if not writer.isOpened():
+                self.skipTest("OpenCV VideoWriter mp4v encoder unavailable")
+            try:
+                for idx in range(25):
+                    frame = np.full((240, 320, 3), 40 + (idx * 7) % 180, dtype=np.uint8)
+                    cv2.putText(frame, f"F{idx}", (30, 120), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (255, 255, 255), 3)
+                    writer.write(frame)
+            finally:
+                writer.release()
+
+            raw_bytes = Path(video_path).read_bytes()
+
+        with patch.object(vp, "_run", side_effect=vp.FfmpegUnavailableError("ffprobe not found")):
+            selection = vp.select_video_frames(raw_bytes)
+        self.assertGreater(selection.frames_sampled, 0)
+        self.assertGreater(len(selection.selected), 0)
+        self.assertLessEqual(len(selection.selected), 4)
 
 
 if __name__ == "__main__":

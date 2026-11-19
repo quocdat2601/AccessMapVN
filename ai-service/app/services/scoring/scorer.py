@@ -85,22 +85,28 @@ def _build_feature_result(
     nlp_conf = nlp_m.get("confidence", 0.0) if nlp_m else 0.0
     has_conflict = False
 
-    if nlp_m is not None:
-        cv_is_present = cv_val in (True, "present")
-        nlp_is_absent = nlp_m.get("value") in (False, "absent")
-        cv_is_absent  = cv_val in (False, "absent")
-        nlp_is_present = nlp_m.get("value") in (True, "present")
+    cv_is_present  = cv_val in (True, "present")
+    cv_is_absent   = cv_val in (False, "absent")
+    nlp_is_absent  = nlp_m is not None and nlp_m.get("value") in (False, "absent")
+    nlp_is_present = nlp_m is not None and nlp_m.get("value") in (True, "present")
+    method = cv_data.get("method", "detector")
 
+    if nlp_m is not None:
         if (cv_is_present and nlp_is_absent) or (cv_is_absent and nlp_is_present):
             has_conflict = True
             fused_conf = round(max(0.20, abs(cv_conf - nlp_conf) * 0.5), 4)
             value = FeatureStatus.unknown.value
-        else:
+        elif cv_is_present and nlp_is_present:
             fused_conf = _fuse_confidence(cv_conf, nlp_conf)
-            if cv_val in (False, "unknown") and nlp_conf > 0.65:
-                value = nlp_m["value"]
-            else:
-                value = cv_val
+            value = cv_val
+        elif cv_val in (False, "absent", "unknown") and nlp_is_absent:
+            fused_conf = _fuse_confidence(cv_conf, nlp_conf)
+            value = FeatureStatus.absent.value
+            method = "user_report"
+        else:
+            # Never promote an uncorroborated positive text claim into a visual detection.
+            fused_conf = cv_conf
+            value = cv_val
     else:
         fused_conf = cv_conf
         value = cv_val
@@ -109,16 +115,20 @@ def _build_feature_result(
         value = FeatureStatus.unknown.value
 
     val_str = _normalize_val(value)
-    method = cv_data.get("method", "detector")
 
     if feature_key == "steps_present":
-        reason_step = "Phát hiện mâu thuẫn giữa phân tích hình ảnh và mô tả văn bản" if has_conflict else (
-            "Phát hiện bậc thang trong ảnh" if val_str == "present" else "Chưa đủ dữ liệu để kết luận từ ảnh này"
-        )
+        if has_conflict:
+            reason_step = "Phát hiện mâu thuẫn giữa phân tích hình ảnh và mô tả văn bản"
+        elif val_str == "present":
+            reason_step = "Phát hiện bậc thang trong ảnh"
+        elif val_str == "absent":
+            reason_step = "Không phát hiện trong ảnh hoặc người dùng xác nhận không có"
+        else:
+            reason_step = cv_data.get("reason") or "Chưa đủ dữ liệu để kết luận từ ảnh này"
         return StepFeatureResult(
             value=val_str,
             confidence=fused_conf,
-            method="detector",
+            method=method,
             reason=reason_step,
             step_count_estimate=None,
         )
@@ -350,6 +360,8 @@ class Scorer:
                     feature=feat,
                     claim=claim_type,
                     snippet=m.get("snippet"),
+                    start=m.get("start"),
+                    end=m.get("end"),
                 )
             )
 

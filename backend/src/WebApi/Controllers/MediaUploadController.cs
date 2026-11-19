@@ -122,6 +122,8 @@ public class MediaUploadController : ControllerBase
             ".png" => "image/png",
             ".webp" => "image/webp",
             ".mp4" => "video/mp4",
+            ".mov" => "video/quicktime",
+            ".webm" => "video/webm",
             _ => "application/octet-stream"
         };
 

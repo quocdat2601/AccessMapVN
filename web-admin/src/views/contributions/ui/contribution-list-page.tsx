@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertCircle, Check, ChevronLeft, ChevronRight, Clock3, FilterX, MapPinned, RefreshCw, Search, ShieldCheck, TriangleAlert } from "lucide-react";
+import { AlertCircle, Check, ChevronLeft, ChevronRight, Clock3, FilterX, MapPinned, RefreshCw, Search, ShieldCheck, TriangleAlert, Zap } from "lucide-react";
 import type { AccessibilityCategory, ContributionDateFilter, ContributionQueueView, ContributionSort, ContributionStatus, ContributionType, ContributionWarningFilter } from "@/entities/contribution";
-import { accessibilityCategories } from "@/entities/contribution/lib/presentation";
+import { accessibilityCategories, formatDateTime } from "@/entities/contribution/lib/presentation";
 import { useContributionQueue } from "@/features/contribution-queue/model/use-contribution-queue";
 import { ContributionTable } from "@/widgets/contribution-list";
 import { Badge } from "@/shared/ui/badge";
@@ -24,16 +24,16 @@ export function ContributionListPage() {
   const [warning, setWarning] = useState<ContributionWarningFilter>("all");
   const [date, setDate] = useState<ContributionDateFilter>("all");
   const [view, setView] = useState<ContributionQueueView>("all");
-  const [sort, setSort] = useState<ContributionSort>("oldest");
+  const [sort, setSort] = useState<ContributionSort>("newest");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(8);
 
   const query = useMemo(() => ({ search, status, type, category, warning, date, view, sort, page, pageSize }), [search, status, type, category, warning, date, view, sort, page, pageSize]);
-  const { data, error, isLoading } = useContributionQueue(query);
+  const { data, error, isLoading, isRefreshing, refresh } = useContributionQueue(query);
   const hasFilters = search || status !== "all" || type !== "all" || category !== "all" || warning !== "all" || date !== "all" || view !== "all";
 
   const resetPage = () => setPage(1);
-  const resetFilters = () => { setSearch(""); setStatus("all"); setType("all"); setCategory("all"); setWarning("all"); setDate("all"); setView("all"); setSort("oldest"); setPage(1); };
+  const resetFilters = () => { setSearch(""); setStatus("all"); setType("all"); setCategory("all"); setWarning("all"); setDate("all"); setView("all"); setSort("newest"); setPage(1); };
 
   const tabs: Array<{ value: StatusTab; label: string; count: number }> = [
     { value: "all", label: "Tất cả", count: data?.summary.total ?? 0 },
@@ -47,7 +47,7 @@ export function ContributionListPage() {
     <div className="mx-auto w-full max-w-[1600px] space-y-4 p-4 sm:p-5 xl:p-6">
       <header className="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
         <div><p className="text-xs font-medium text-slate-400">Admin <span className="mx-1">›</span> Kiểm duyệt <span className="mx-1">›</span> Hồ sơ đóng góp</p><h1 className="mt-1.5 text-2xl font-extrabold tracking-tight text-slate-950">Hồ sơ đóng góp</h1><p className="mt-1 text-sm text-slate-500">Kiểm duyệt các đóng góp dữ liệu tiếp cận cần xác minh thủ công.</p></div>
-        <div className="flex items-center gap-2"><Badge variant="teal" className="gap-1.5 px-3 py-1.5"><span className="size-2 rounded-full bg-teal-600" />{data?.summary.active ?? "—"} hồ sơ cần hành động</Badge><span className="hidden items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs text-slate-400 sm:flex"><RefreshCw className="size-3.5" />Cập nhật 1 phút trước</span></div>
+        <div className="flex items-center gap-2"><Badge variant="teal" className="gap-1.5 px-3 py-1.5"><span className="size-2 rounded-full bg-teal-600" />{data?.summary.active ?? "—"} hồ sơ cần hành động</Badge><button type="button" onClick={refresh} disabled={isRefreshing} className="hidden items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 hover:text-slate-900 disabled:opacity-60 sm:flex"><RefreshCw className={cn("size-3.5", isRefreshing && "animate-spin text-teal-700")} />{data?.updatedAt ? `Cập nhật ${formatDateTime(data.updatedAt)}` : "Đang tải..."}</button></div>
       </header>
 
       <Card className="overflow-hidden">
@@ -66,8 +66,8 @@ export function ContributionListPage() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Chế độ xem</span>
-            {[{ value: "all", label: "Tất cả", icon: Check }, { value: "waiting_long", label: "Chờ lâu >2 giờ", icon: Clock3 }, { value: "warning", label: "Có cảnh báo", icon: TriangleAlert }, { value: "new_place", label: "Địa điểm mới", icon: MapPinned }].map((option) => { const Icon = option.icon; return <button key={option.value} onClick={() => { setView(option.value as ContributionQueueView); resetPage(); }} className={cn("inline-flex h-7 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 text-[11px] font-semibold text-slate-600 hover:border-slate-300", view === option.value && "border-teal-700 bg-teal-700 text-white")}><Icon className="size-3" />{option.label}</button>; })}
-            <select className={cn(selectClass, "ml-auto")} value={sort} onChange={(event) => { setSort(event.target.value as ContributionSort); resetPage(); }} aria-label="Sắp xếp"><option value="oldest">Sắp xếp: Chờ lâu nhất</option><option value="newest">Mới nhất</option><option value="lowest_confidence">AI tin cậy thấp nhất</option><option value="highest_reputation">Uy tín cao nhất</option></select>
+            {[{ value: "all", label: "Tất cả", icon: Check }, { value: "fast_track", label: "Duyệt nhanh (AI ≥ 80%)", icon: Zap }, { value: "waiting_long", label: "Chờ lâu >2 giờ", icon: Clock3 }, { value: "warning", label: "Có cảnh báo", icon: TriangleAlert }, { value: "new_place", label: "Địa điểm mới", icon: MapPinned }].map((option) => { const Icon = option.icon; return <button key={option.value} onClick={() => { setView(option.value as ContributionQueueView); resetPage(); }} className={cn("inline-flex h-7 items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 text-[11px] font-semibold text-slate-600 hover:border-slate-300", view === option.value && "border-teal-700 bg-teal-700 text-white")}><Icon className="size-3" />{option.label}</button>; })}
+            <select className={cn(selectClass, "ml-auto")} value={sort} onChange={(event) => { setSort(event.target.value as ContributionSort); resetPage(); }} aria-label="Sắp xếp"><option value="newest">Sắp xếp: Mới nhất</option><option value="highest_confidence">AI tin cậy cao nhất</option><option value="oldest">Chờ lâu nhất</option><option value="lowest_confidence">AI tin cậy thấp nhất</option><option value="highest_reputation">Uy tín cao nhất</option></select>
             {hasFilters && <Button variant="ghost" size="sm" onClick={resetFilters}><FilterX className="size-3.5" />Xóa lọc</Button>}
           </div>
         </div>

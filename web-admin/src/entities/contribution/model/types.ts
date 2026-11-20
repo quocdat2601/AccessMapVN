@@ -2,8 +2,8 @@ export type ContributionStatus = "pending" | "needs_supplement" | "published" | 
 export type ContributionType = "new_place" | "place_update";
 export type ContributionReason = "new_accessibility_data" | "information_update" | "evidence_correction";
 export type ContributionPriority = "normal" | "high";
-export type ContributionSort = "oldest" | "newest" | "lowest_confidence" | "highest_reputation";
-export type ContributionQueueView = "all" | "waiting_long" | "warning" | "new_place";
+export type ContributionSort = "newest" | "oldest" | "highest_confidence" | "lowest_confidence" | "highest_reputation";
+export type ContributionQueueView = "all" | "fast_track" | "waiting_long" | "warning" | "new_place";
 export type ContributionDateFilter = "all" | "today" | "7d" | "30d";
 export type ContributionWarningFilter = "all" | "warning" | "over_sla";
 export type VerificationOutcome = "needs_review" | "matched" | "missing_evidence" | "needs_cross_check" | "publishable" | "not_publishable";
@@ -26,7 +26,7 @@ export interface ContributionPlace {
   name: string;
   address: string;
   district: string;
-  city: "TP.HCM" | "Hà Nội";
+  city: string;
 }
 
 export interface ContributorSummary {

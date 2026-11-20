@@ -145,6 +145,10 @@ export function FinalScorecardScreen({
       setShowLoginModal(true);
       return;
     }
+    if (!media.gps) {
+      setSubmitError('Chưa xác định được tọa độ địa điểm. Vui lòng bật GPS hoặc chọn lại địa điểm.');
+      return;
+    }
     setIsSubmitting(true);
     setSubmitError(null);
     setIsConflictError(false);
@@ -210,8 +214,8 @@ export function FinalScorecardScreen({
                 status: 'not_measured',
               },
         },
-        gps_lat: media.gps ? media.gps.latitude : 10.8454,
-        gps_lng: media.gps ? media.gps.longitude : 106.8373,
+        gps_lat: media.gps.latitude,
+        gps_lng: media.gps.longitude,
         accuracy_meters: media.gps?.accuracy ?? 5.0,
         is_mocked: (media.gps as any)?.mocked ?? false,
         client_timestamp: media.gps?.timestamp ?? Date.now(),

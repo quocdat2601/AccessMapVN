@@ -22,6 +22,7 @@ import type {
   AccessibilityFeatureType,
   CommunityFeatureInput,
   CommunityFeatureState,
+  PublishedFeatureStatus,
 } from '@/features/community';
 import { fetchCommunityState } from '@/features/community';
 import { runAiPreScan } from '@/features/contribution/api/aiPreScanService';
@@ -100,6 +101,7 @@ export interface ReportFormData {
   description: string;
   featureIds: string[];
   imageUri?: string;
+  proposedStatus?: PublishedFeatureStatus;
 }
 
 interface ReportFormModalProps {
@@ -148,6 +150,7 @@ export function ReportFormModal({
   const { user } = useAuth();
   const [selectedReason, setSelectedReason] = useState<FormReasonType>('Changed');
   const [selectedFeatureIds, setSelectedFeatureIds] = useState<string[]>(['ramp']);
+  const [proposedStatus, setProposedStatus] = useState<PublishedFeatureStatus>('Limited');
   const [description, setDescription] = useState('');
   const [featureStates, setFeatureStates] = useState<Partial<Record<AccessibilityFeatureType, CommunityFeatureState>>>({});
   const [pickedAsset, setPickedAsset] = useState<ImagePicker.ImagePickerAsset | null>(null);
@@ -181,6 +184,14 @@ export function ReportFormModal({
         setSelectedReason(initialFormData.reason);
       } else {
         setSelectedReason('Changed');
+      }
+
+      if (initialFormData?.proposedStatus) {
+        setProposedStatus(initialFormData.proposedStatus);
+      } else if (initialFormData?.reason === 'Blocked' || initialFormData?.reason === 'Incorrect') {
+        setProposedStatus('NotAvailable');
+      } else {
+        setProposedStatus('Limited');
       }
 
       if (initialFormData?.featureIds && initialFormData.featureIds.length > 0) {
@@ -439,6 +450,7 @@ export function ReportFormModal({
         description: description.trim(),
         featureIds: selectedFeatureIds,
         imageUri: uploadedMediaUrl || evidence?.uri || pickedAsset?.uri,
+        proposedStatus,
       });
       resetAndClose();
 
@@ -503,7 +515,10 @@ export function ReportFormModal({
                   <TouchableOpacity
                     key={item.type}
                     style={[styles.reasonCard, isSelected && styles.reasonCardSelected]}
-                    onPress={() => setSelectedReason(item.type)}
+                    onPress={() => {
+                      setSelectedReason(item.type);
+                      setProposedStatus(item.type === 'Blocked' || item.type === 'Incorrect' ? 'NotAvailable' : 'Limited');
+                    }}
                     activeOpacity={0.8}
                   >
                     <View style={styles.reasonCardTop}>
@@ -542,6 +557,38 @@ export function ReportFormModal({
                     )}
                     <Text style={[styles.featureChipText, isSelected && styles.featureChipTextSelected]}>
                       {f.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Hiện trạng thực tế của tiện ích */}
+            <View style={styles.stepHeaderRow}>
+              <Text style={styles.stepTitle}>Hiện trạng thực tế tại chỗ</Text>
+              <Text style={styles.stepHint}>Gửi cùng phiếu báo thay đổi</Text>
+            </View>
+            <View style={styles.featureChipsRow}>
+              {(
+                [
+                  { status: 'Limited' as PublishedFeatureStatus, label: 'Sử dụng hạn chế' },
+                  { status: 'NotAvailable' as PublishedFeatureStatus, label: 'Không dùng được / Bị chặn' },
+                  { status: 'Available' as PublishedFeatureStatus, label: 'Hoạt động bình thường' },
+                ] as const
+              ).map((opt) => {
+                const isSelected = proposedStatus === opt.status;
+                return (
+                  <TouchableOpacity
+                    key={opt.status}
+                    style={[styles.featureChip, isSelected && styles.featureChipSelected]}
+                    onPress={() => setProposedStatus(opt.status)}
+                    activeOpacity={0.8}
+                  >
+                    {isSelected && (
+                      <MaterialCommunityIcons name="check" size={13} color="#FFFFFF" style={{ marginRight: 3 }} />
+                    )}
+                    <Text style={[styles.featureChipText, isSelected && styles.featureChipTextSelected]}>
+                      {opt.label}
                     </Text>
                   </TouchableOpacity>
                 );

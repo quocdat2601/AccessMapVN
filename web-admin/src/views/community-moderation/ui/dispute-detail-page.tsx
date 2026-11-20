@@ -109,23 +109,12 @@ const DEFAULT_FEATURE_IMAGES: Record<AccessibilityFeatureType, string[]> = {
 
 export function DisputeDetailPage({ id }: { id: string }) {
   const detail = useDisputeDetail(id);
-  const [decision, setDecision] = useState<DisputeDecisionType>("RequestEvidence");
+  const [decision, setDecision] = useState<DisputeDecisionType>("RecordPublication");
   const [reason, setReason] = useState("");
+  const [selectedUpdatedStatus, setSelectedUpdatedStatus] = useState<PublishedFeatureStatus | null>(null);
   const [correctionSubmissionId, setCorrectionSubmissionId] = useState("");
   const [startsAt, setStartsAt] = useState("");
   const [endsAt, setEndsAt] = useState("");
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    await detail.decide({
-      decision,
-      reason: reason.trim(),
-      correctionSubmissionId: correctionSubmissionId.trim() || undefined,
-      startsAt: startsAt ? new Date(startsAt).toISOString() : undefined,
-      endsAt: endsAt ? new Date(endsAt).toISOString() : undefined,
-      advisoryReason: decision === "CreateAdvisory" ? reason.trim() : undefined,
-    });
-  }
 
   const data = detail.data;
 
@@ -149,7 +138,7 @@ export function DisputeDetailPage({ id }: { id: string }) {
       const authorName =
         vote.voterDisplayName ||
         matchedReport?.reporterDisplayName ||
-        (idx === 0 ? "Người dùng demo Bình" : "Người dùng demo An");
+        `Thành viên cộng đồng #${idx + 1}`;
 
       const aiOverallScore = idx === 0 ? 89 : 85;
       const aiVisionScore = idx === 0 ? 92 : 87;
@@ -254,12 +243,33 @@ export function DisputeDetailPage({ id }: { id: string }) {
   const dominantProposedStatus: PublishedFeatureStatus =
     comparisonItems[0]?.proposedStatus ??
     (baselineStatus === "NotAvailable" ? "Available" : "Limited");
+  const effectiveUpdatedStatus: PublishedFeatureStatus =
+    selectedUpdatedStatus ?? dominantProposedStatus;
+  const isDisputeResolved =
+    data.status === "ResolvedBaseline" || data.status === "ResolvedUpdated";
   const avgAiConfidence = comparisonItems.length
     ? Math.round(
       comparisonItems.reduce((sum, item) => sum + item.aiOverallScore, 0) /
       comparisonItems.length,
     )
     : 86;
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (isDisputeResolved) return;
+    await detail.decide({
+      decision,
+      reason: reason.trim(),
+      correctionSubmissionId: correctionSubmissionId.trim() || undefined,
+      startsAt: startsAt ? new Date(startsAt).toISOString() : undefined,
+      endsAt: endsAt ? new Date(endsAt).toISOString() : undefined,
+      advisoryReason: decision === "CreateAdvisory" ? reason.trim() : undefined,
+      updatedFeatureStatus:
+        decision === "RecordPublication" && !correctionSubmissionId.trim()
+          ? effectiveUpdatedStatus
+          : undefined,
+    });
+  }
 
   return (
     <div className="mx-auto w-full max-w-[1440px] space-y-5 p-4 sm:p-6">
@@ -643,139 +653,187 @@ export function DisputeDetailPage({ id }: { id: string }) {
 
         {/* Right Column: Admin Arbitration & Decision Form */}
         <div className="space-y-4">
-          <Card className="sticky top-6 border-slate-200 shadow-xs">
-            <CardHeader className="border-b border-slate-100 bg-slate-50/70">
-              <CardTitle className="flex items-center gap-2 text-base font-extrabold text-slate-950">
-                <ShieldCheck className="size-5 text-teal-700" />
-                Ra quyết định phân xử tranh chấp
-              </CardTitle>
-              <p className="text-xs text-slate-500">
-                Chọn phương án giải quyết dựa trên kết quả đối chiếu các báo cáo và kiểm định AI.
-              </p>
-            </CardHeader>
-            <CardContent className="p-5">
-              <form className="space-y-4" onSubmit={submit}>
-                <div>
-                  <label className="mb-1.5 block text-xs font-bold text-slate-700">
-                    Phương án xử lý
-                  </label>
-                  <select
-                    className={inputClass}
-                    value={decision}
-                    onChange={(event) =>
-                      setDecision(event.target.value as DisputeDecisionType)
-                    }
-                  >
-                    {decisions.map((value) => (
-                      <option key={value} value={value}>
-                        {disputeDecisionLabels[value]}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Quick Reason Templates */}
-                <div>
-                  <p className="mb-1.5 text-xs font-bold text-slate-700">
-                    Mẫu lý do phân xử nhanh
+          {isDisputeResolved ? (
+            <Card className="sticky top-6 border-teal-200 bg-teal-50/40 shadow-xs">
+              <CardHeader className="border-b border-teal-100">
+                <CardTitle className="flex items-center gap-2 text-base font-extrabold text-teal-950">
+                  <ShieldCheck className="size-5 text-teal-700" />
+                  Hồ sơ tranh chấp đã được phân xử
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 p-5 text-sm">
+                <div className="rounded-xl bg-white p-3.5 border border-teal-100">
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Kết quả cuối cùng</p>
+                  <p className="mt-1 text-base font-extrabold text-teal-900">
+                    {disputeStatusLabels[data.status] ?? data.status}
                   </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {(QUICK_REASONS[decision] ?? []).map((template, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => setReason(template)}
-                        className="rounded-lg border border-teal-200 bg-teal-50/70 px-2.5 py-1.5 text-left text-xs font-medium text-teal-900 transition hover:bg-teal-100"
-                      >
-                        + {template}
-                      </button>
-                    ))}
-                  </div>
+                  <p className="mt-1 text-xs text-slate-600">
+                    Trạng thái đang công bố: <strong>{publishedStatusLabels[baselineStatus]}</strong> (v{data.featureVersion})
+                  </p>
                 </div>
-
-                <div>
-                  <label className="mb-1.5 block text-xs font-bold text-slate-700">
-                    Ghi chú / Lý do phán quyết (Bắt buộc)
-                  </label>
-                  <textarea
-                    required
-                    minLength={3}
-                    className="min-h-28 w-full rounded-lg border border-slate-200 p-3 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
-                    placeholder="Nhập lý do chi tiết sau khi đối chiếu hình ảnh và điểm kiểm định AI..."
-                    value={reason}
-                    onChange={(event) => setReason(event.target.value)}
-                  />
-                </div>
-
-                {(decision === "LinkCorrection" || decision === "RecordPublication") && (
+                {data.decisions[data.decisions.length - 1] && (
+                  <p className="text-xs leading-5 text-slate-600">
+                    Phán quyết gần nhất: “{data.decisions[data.decisions.length - 1].reason}”
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="sticky top-6 border-slate-200 shadow-xs">
+              <CardHeader className="border-b border-slate-100 bg-slate-50/70">
+                <CardTitle className="flex items-center gap-2 text-base font-extrabold text-slate-950">
+                  <ShieldCheck className="size-5 text-teal-700" />
+                  Ra quyết định phân xử tranh chấp
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  Chọn phương án giải quyết dựa trên kết quả đối chiếu các báo cáo và minh chứng thực địa.
+                </p>
+              </CardHeader>
+              <CardContent className="p-5">
+                <form className="space-y-4" onSubmit={submit}>
                   <div>
                     <label className="mb-1.5 block text-xs font-bold text-slate-700">
-                      Mã hồ sơ đóng góp chuẩn hóa (Submission UUID)
+                      Phương án xử lý
                     </label>
-                    <input
+                    <select
                       className={inputClass}
-                      placeholder="Nhập UUID hồ sơ đóng góp đính chính..."
-                      value={correctionSubmissionId}
-                      onChange={(event) => setCorrectionSubmissionId(event.target.value)}
+                      value={decision}
+                      onChange={(event) =>
+                        setDecision(event.target.value as DisputeDecisionType)
+                      }
+                    >
+                      {decisions.map((value) => (
+                        <option key={value} value={value}>
+                          {disputeDecisionLabels[value]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {decision === "RecordPublication" && (
+                    <div className="rounded-lg border border-teal-100 bg-teal-50/50 p-3">
+                      <label className="mb-1 block text-xs font-bold text-slate-700">
+                        Cập nhật trạng thái mới cho {featureLabels[data.featureType] ?? data.featureType}
+                      </label>
+                      <select
+                        className={inputClass}
+                        value={effectiveUpdatedStatus}
+                        onChange={(event) =>
+                          setSelectedUpdatedStatus(event.target.value as PublishedFeatureStatus)
+                        }
+                      >
+                        <option value="Available">Có thể sử dụng</option>
+                        <option value="Limited">Sử dụng hạn chế</option>
+                        <option value="NotAvailable">Không có / Không sử dụng được</option>
+                      </select>
+                      <p className="mt-1.5 text-[11px] text-teal-800">
+                        Trạng thái bản đồ sẽ cập nhật trực tiếp và tăng phiên bản lên v{data.featureVersion + 1}.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Quick Reason Templates */}
+                  <div>
+                    <p className="mb-1.5 text-xs font-bold text-slate-700">
+                      Mẫu lý do phân xử nhanh
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(QUICK_REASONS[decision] ?? []).map((template, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setReason(template)}
+                          className="rounded-lg border border-teal-200 bg-teal-50/70 px-2.5 py-1.5 text-left text-xs font-medium text-teal-900 transition hover:bg-teal-100"
+                        >
+                          + {template}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-xs font-bold text-slate-700">
+                      Ghi chú / Lý do phán quyết (Bắt buộc)
+                    </label>
+                    <textarea
+                      required
+                      minLength={3}
+                      className="min-h-28 w-full rounded-lg border border-slate-200 p-3 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                      placeholder="Nhập lý do chi tiết sau khi đối chiếu hình ảnh và thông tin thực tế..."
+                      value={reason}
+                      onChange={(event) => setReason(event.target.value)}
                     />
                   </div>
-                )}
 
-                {decision === "CreateAdvisory" && (
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  {decision === "LinkCorrection" && (
                     <div>
-                      <label className="mb-1 block text-xs font-bold text-slate-700">
-                        Thời điểm bắt đầu
+                      <label className="mb-1.5 block text-xs font-bold text-slate-700">
+                        Mã hồ sơ đóng góp đính chính (UUID)
                       </label>
                       <input
                         required
-                        type="datetime-local"
                         className={inputClass}
-                        value={startsAt}
-                        onChange={(event) => setStartsAt(event.target.value)}
+                        placeholder="Nhập UUID hồ sơ đóng góp đính chính..."
+                        value={correctionSubmissionId}
+                        onChange={(event) => setCorrectionSubmissionId(event.target.value)}
                       />
                     </div>
-                    <div>
-                      <label className="mb-1 block text-xs font-bold text-slate-700">
-                        Thời điểm kết thúc
-                      </label>
-                      <input
-                        required
-                        type="datetime-local"
-                        className={inputClass}
-                        value={endsAt}
-                        onChange={(event) => setEndsAt(event.target.value)}
-                      />
+                  )}
+
+                  {decision === "CreateAdvisory" && (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-1 block text-xs font-bold text-slate-700">
+                          Bắt đầu (để trống = Ngay lập tức)
+                        </label>
+                        <input
+                          type="datetime-local"
+                          className={inputClass}
+                          value={startsAt}
+                          onChange={(event) => setStartsAt(event.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-bold text-slate-700">
+                          Kết thúc (để trống = +7 ngày)
+                        </label>
+                        <input
+                          type="datetime-local"
+                          className={inputClass}
+                          value={endsAt}
+                          onChange={(event) => setEndsAt(event.target.value)}
+                        />
+                      </div>
                     </div>
+                  )}
+
+                  <Button
+                    className="w-full"
+                    disabled={detail.isMutating || !reason.trim()}
+                    type="submit"
+                  >
+                    <ShieldAlert className="size-4" />
+                    {detail.isMutating ? "Đang lưu phán quyết..." : "Xác nhận quyết định xử lý"}
+                  </Button>
+
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-600">
+                    <p className="font-bold text-slate-800">Hướng dẫn quy trình phân xử:</p>
+                    <ul className="mt-1 space-y-1">
+                      <li>
+                        • <strong>Ghi nhận bản đã công bố:</strong> Cập nhật trực tiếp trạng thái tiện ích lên bản đồ theo báo cáo thực địa.
+                      </li>
+                      <li>
+                        • <strong>Giữ dữ liệu gốc:</strong> Bác bỏ các phản ánh nếu minh chứng chưa thuyết phục.
+                      </li>
+                      <li>
+                        • <strong>Tạo cảnh báo tạm thời:</strong> Hiện cảnh báo trên ứng dụng khi tiện ích đang bảo trì hoặc bị cản trở tạm thời.
+                      </li>
+                    </ul>
                   </div>
-                )}
-
-                <Button
-                  className="w-full"
-                  disabled={detail.isMutating || !reason.trim()}
-                  type="submit"
-                >
-                  <ShieldAlert className="size-4" />
-                  {detail.isMutating ? "Đang lưu phán quyết..." : "Xác nhận quyết định xử lý"}
-                </Button>
-
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-5 text-slate-600">
-                  <p className="font-bold text-slate-800">Hướng dẫn quy trình phân xử:</p>
-                  <ul className="mt-1 space-y-1">
-                    <li>
-                      • <strong>Yêu cầu minh chứng:</strong> Chuyển trạng thái sang chờ người dùng chụp thêm góc ảnh rõ hơn.
-                    </li>
-                    <li>
-                      • <strong>Giữ dữ liệu gốc:</strong> Bác bỏ các báo cáo mâu thuẫn nếu ảnh minh chứng không đạt chuẩn.
-                    </li>
-                    <li>
-                      • <strong>Tạo cảnh báo tạm thời:</strong> Hiển thị băng rôn cảnh báo trên ứng dụng di động khi tiện ích đang bảo trì/sửa chữa.
-                    </li>
-                  </ul>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
+                </form>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>

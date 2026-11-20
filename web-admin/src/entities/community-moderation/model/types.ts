@@ -153,6 +153,7 @@ export interface DisputeDecisionInput {
   startsAt?: string;
   endsAt?: string;
   advisoryReason?: string;
+  updatedFeatureStatus?: PublishedFeatureStatus;
 }
 
 export interface ReportQueueItem {
@@ -222,6 +223,9 @@ export interface ReportTransitionInput {
   linkedSubmissionId?: string;
   resolution?: ReportResolution;
   publicResolutionNote?: string;
+  updatedFeatureStatus?: PublishedFeatureStatus;
+  advisoryEndsAt?: string;
+  advisoryReason?: string;
 }
 
 export interface MetadataCorrectionInput {

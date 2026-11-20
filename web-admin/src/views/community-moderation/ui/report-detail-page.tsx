@@ -8,8 +8,10 @@ import {
   formatAdminDate,
   reportReasonLabels,
   reportStatusLabels,
+  type PublishedFeatureStatus,
   type ReportDecision,
   type ReportResolution,
+  type ReportStatus,
 } from "@/entities/community-moderation";
 import { useReportDetail } from "@/features/community-moderation/model/use-report-detail";
 import { Badge } from "@/shared/ui/badge";
@@ -18,30 +20,75 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/shared/ui/card";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { Skeleton } from "@/shared/ui/skeleton";
 
-const decisions: ReportDecision[] = ["StartReview", "RequestEvidence", "LinkDispute", "Resolve", "Reject"];
 const decisionLabels: Record<ReportDecision, string> = {
-  StartReview: "Bắt đầu xem xét",
+  Resolve: "Hoàn tất xử lý & cập nhật bản đồ",
+  StartReview: "Chuyển sang Đang xem xét",
   RequestEvidence: "Yêu cầu bổ sung minh chứng",
   LinkDispute: "Liên kết hồ sơ tranh chấp",
-  Resolve: "Hoàn tất xử lý",
   Reject: "Từ chối báo cáo",
 };
+
+function getAvailableDecisions(status: ReportStatus): ReportDecision[] {
+  if (status === "Submitted") {
+    return ["Resolve", "RequestEvidence", "LinkDispute", "StartReview", "Reject"];
+  }
+  if (status === "UnderReview") {
+    return ["Resolve", "RequestEvidence", "LinkDispute", "Reject"];
+  }
+  if (status === "LinkedToDispute") {
+    return ["Resolve", "StartReview"];
+  }
+  if (status === "AwaitingMoreInfo") {
+    return ["StartReview", "Reject"];
+  }
+  return [];
+}
+
+const resolutionDescriptions: Record<Exclude<ReportResolution, "MetadataCorrected">, string> = {
+  BaselineRetained: "Giữ nguyên trạng thái tiện ích đang công bố và đóng báo cáo.",
+  CorrectionPublished: "Cập nhật trực tiếp trạng thái tiện ích này trên bản đồ ngay sau khi lưu.",
+  AdvisoryCreated: "Hiển thị cảnh báo tạm thời ngay trên bản đồ và trang chi tiết địa điểm (mặc định 7 ngày).",
+};
+
+const resolutionLabels: Record<ReportResolution, string> = {
+  BaselineRetained: "Giữ nguyên dữ liệu hiện tại",
+  AdvisoryCreated: "Phát hành cảnh báo tạm thời",
+  CorrectionPublished: "Cập nhật trạng thái tiện ích trên bản đồ",
+  MetadataCorrected: "Đã chỉnh sửa địa chỉ / tọa độ địa điểm",
+};
+
 const inputClass =
   "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100";
 
 export function ReportDetailPage({ id }: { id: string }) {
   const detail = useReportDetail(id);
-  const [decision, setDecision] = useState<ReportDecision>("StartReview");
+  const [selectedDecision, setSelectedDecision] = useState<ReportDecision | null>(null);
   const [note, setNote] = useState("");
-  const [resolution, setResolution] = useState<ReportResolution>("BaselineRetained");
+  const [selectedResolution, setSelectedResolution] = useState<ReportResolution | null>(null);
+  const [updatedFeatureStatus, setUpdatedFeatureStatus] = useState<PublishedFeatureStatus | null>(null);
+  const [advisoryEndsAt, setAdvisoryEndsAt] = useState("");
   const [linkedId, setLinkedId] = useState("");
   const [address, setAddress] = useState("");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
 
+  const availableDecisions = detail.data ? getAvailableDecisions(detail.data.status) : [];
+  const decision: ReportDecision =
+    selectedDecision && availableDecisions.includes(selectedDecision)
+      ? selectedDecision
+      : (availableDecisions[0] ?? "Resolve");
+  const defaultResolution: ReportResolution =
+    detail.data?.reason === "IncorrectFeature" || detail.data?.reason === "MissingFeature" || detail.data?.reason === "OutdatedInformation"
+      ? "CorrectionPublished"
+      : "BaselineRetained";
+  const resolution = selectedResolution ?? defaultResolution;
+  const defaultFeatureStatus: PublishedFeatureStatus =
+    detail.data?.reason === "MissingFeature" ? "Available" : "Limited";
+  const effectiveFeatureStatus = updatedFeatureStatus ?? defaultFeatureStatus;
+
   async function transition(event: FormEvent) {
     event.preventDefault();
-    if (!detail.data) return;
+    if (!detail.data || availableDecisions.length === 0) return;
     await detail.transition({
       decision,
       note: note.trim(),
@@ -49,6 +96,18 @@ export function ReportDetailPage({ id }: { id: string }) {
       resolution: decision === "Resolve" ? resolution : undefined,
       linkedDisputeCaseId: decision === "LinkDispute" ? linkedId.trim() || undefined : undefined,
       linkedSubmissionId: resolution === "CorrectionPublished" ? linkedId.trim() || undefined : undefined,
+      updatedFeatureStatus:
+        decision === "Resolve" && resolution === "CorrectionPublished" && !linkedId.trim()
+          ? effectiveFeatureStatus
+          : undefined,
+      advisoryEndsAt:
+        decision === "Resolve" && resolution === "AdvisoryCreated" && advisoryEndsAt
+          ? new Date(advisoryEndsAt).toISOString()
+          : undefined,
+      advisoryReason:
+        decision === "Resolve" && resolution === "AdvisoryCreated"
+          ? note.trim()
+          : undefined,
     });
   }
 
@@ -161,9 +220,9 @@ export function ReportDetailPage({ id }: { id: string }) {
                     <div className="rounded-lg border border-teal-100 bg-teal-50/60 p-3">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
-                          <span className="flex size-2 animate-pulse rounded-full bg-teal-600" />
+                          <span className="flex size-2 rounded-full bg-teal-600" />
                           <span className="text-xs font-bold uppercase tracking-wide text-teal-800">
-                            Đánh giá AI từ Mobile
+                            Phân tích minh chứng thực địa
                           </span>
                         </div>
                         <span className="text-xs text-slate-500">
@@ -172,7 +231,7 @@ export function ReportDetailPage({ id }: { id: string }) {
                       </div>
                       <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">
                         {item.description ||
-                          "Tệp minh chứng đã được AI thẩm định độ tin cậy."}
+                          "Ảnh chụp hiện trường đính kèm từ người báo cáo."}
                       </p>
                     </div>
                     {item.mediaUrl && (
@@ -212,61 +271,146 @@ export function ReportDetailPage({ id }: { id: string }) {
           </Card>
         </div>
         <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Chuyển trạng thái</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form className="space-y-3" onSubmit={transition}>
-                <select
-                  className={inputClass}
-                  value={decision}
-                  onChange={(event) => setDecision(event.target.value as ReportDecision)}
-                >
-                  {decisions.map((value) => (
-                    <option key={value} value={value}>
-                      {decisionLabels[value]}
-                    </option>
-                  ))}
-                </select>
-                <textarea
-                  required
-                  className="min-h-24 w-full rounded-lg border border-slate-200 p-3 text-sm"
-                  placeholder="Ghi chú / lý do bắt buộc"
-                  value={note}
-                  onChange={(event) => setNote(event.target.value)}
-                />
-                {decision === "Resolve" && (
-                  <select
-                    className={inputClass}
-                    value={resolution}
-                    onChange={(event) =>
-                      setResolution(event.target.value as ReportResolution)
-                    }
+          {data.status === "Resolved" || data.status === "Rejected" ? (
+            <Card className="border-slate-200">
+              <CardHeader>
+                <CardTitle>
+                  {data.status === "Resolved" ? "Báo cáo đã hoàn tất xử lý" : "Báo cáo đã bị từ chối"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2.5 text-sm">
+                <div className="rounded-lg bg-slate-50 p-3">
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Trạng thái cuối</p>
+                  <p className="mt-1 font-bold text-slate-900">{reportStatusLabels[data.status]}</p>
+                  {data.resolution && (
+                    <p className="mt-1 text-xs text-teal-800">
+                      Kết quả: {resolutionLabels[data.resolution] ?? data.resolution}
+                    </p>
+                  )}
+                </div>
+                {data.publicResolutionNote && (
+                  <p className="text-xs leading-5 text-slate-600">
+                    Ghi chú công khai: “{data.publicResolutionNote}”
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Xử lý báo cáo</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <form className="space-y-3" onSubmit={transition}>
+                  <div>
+                    <label className="mb-1 block text-xs font-bold text-slate-700">Hành động</label>
+                    <select
+                      className={inputClass}
+                      value={decision}
+                      onChange={(event) => setSelectedDecision(event.target.value as ReportDecision)}
+                    >
+                      {availableDecisions.map((value) => (
+                        <option key={value} value={value}>
+                          {decisionLabels[value]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {decision === "Resolve" && (
+                    <div className="space-y-2.5 rounded-lg border border-teal-100 bg-teal-50/40 p-3">
+                      <label className="block text-xs font-bold text-slate-700">Kết quả áp dụng lên bản đồ</label>
+                      <select
+                        className={inputClass}
+                        value={resolution}
+                        onChange={(event) =>
+                          setSelectedResolution(event.target.value as ReportResolution)
+                        }
+                      >
+                        <option value="CorrectionPublished">Cập nhật trạng thái tiện ích trên bản đồ</option>
+                        <option value="AdvisoryCreated">Phát hành cảnh báo tạm thời trên bản đồ</option>
+                        <option value="BaselineRetained">Giữ nguyên dữ liệu hiện tại</option>
+                      </select>
+                      <p className="text-xs leading-4 text-teal-900">
+                        {resolution !== "MetadataCorrected" ? resolutionDescriptions[resolution] : ""}
+                      </p>
+
+                      {resolution === "CorrectionPublished" && (
+                        <div>
+                          <label className="mb-1 block text-xs font-bold text-slate-700">
+                            Trạng thái mới của{" "}
+                            {data.featureType ? featureLabels[data.featureType] : "tiện ích"}
+                          </label>
+                          <select
+                            className={inputClass}
+                            value={effectiveFeatureStatus}
+                            onChange={(event) =>
+                              setUpdatedFeatureStatus(event.target.value as PublishedFeatureStatus)
+                            }
+                          >
+                            <option value="Available">Có thể sử dụng</option>
+                            <option value="Limited">Sử dụng hạn chế</option>
+                            <option value="NotAvailable">Không có / Không sử dụng được</option>
+                          </select>
+                        </div>
+                      )}
+
+                      {resolution === "AdvisoryCreated" && (
+                        <div>
+                          <label className="mb-1 block text-xs font-bold text-slate-700">
+                            Hiệu lực cảnh báo đến (để trống = 7 ngày)
+                          </label>
+                          <input
+                            type="datetime-local"
+                            className={inputClass}
+                            value={advisoryEndsAt}
+                            onChange={(event) => setAdvisoryEndsAt(event.target.value)}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {decision === "LinkDispute" && (
+                    <div>
+                      <label className="mb-1 block text-xs font-bold text-slate-700">
+                        Mã hồ sơ tranh chấp liên quan (UUID)
+                      </label>
+                      <input
+                        required
+                        className={inputClass}
+                        placeholder="Nhập UUID tranh chấp..."
+                        value={linkedId}
+                        onChange={(event) => setLinkedId(event.target.value)}
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="mb-1 block text-xs font-bold text-slate-700">
+                      Ghi chú / Lý do xử lý <span className="text-red-600">*</span>
+                    </label>
+                    <textarea
+                      required
+                      className="min-h-24 w-full rounded-lg border border-slate-200 p-3 text-sm"
+                      placeholder="Nêu rõ kết quả kiểm tra thực tế hoặc lý do cảnh báo..."
+                      value={note}
+                      onChange={(event) => setNote(event.target.value)}
+                    />
+                  </div>
+
+                  <Button
+                    className="w-full"
+                    disabled={detail.isMutating || !note.trim()}
+                    type="submit"
                   >
-                    <option value="BaselineRetained">Giữ nguyên dữ liệu gốc</option>
-                    <option value="AdvisoryCreated">Tạo cảnh báo tạm thời</option>
-                    <option value="CorrectionPublished">Đã công bố bản sửa đổi</option>
-                  </select>
-                )}
-                {(decision === "LinkDispute" || resolution === "CorrectionPublished") && (
-                  <input
-                    className={inputClass}
-                    placeholder="Mã UUID Tranh chấp / Hồ sơ đóng góp"
-                    value={linkedId}
-                    onChange={(event) => setLinkedId(event.target.value)}
-                  />
-                )}
-                <Button
-                  className="w-full"
-                  disabled={detail.isMutating || !note.trim()}
-                  type="submit"
-                >
-                  <ShieldCheck className="size-4" /> Lưu trạng thái
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
+                    <ShieldCheck className="size-4" />{" "}
+                    {detail.isMutating ? "Đang lưu..." : "Xác nhận & Lưu trạng thái"}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          )}
           {data.reason === "WrongAddressOrPin" && (
             <Card>
               <CardHeader>

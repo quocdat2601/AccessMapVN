@@ -1,4 +1,8 @@
 import { apiClient } from '@/shared/api/client';
+import {
+  fallbackGeocodeFromMocks,
+  fallbackReverseGeocodeFromMocks,
+} from '../lib/geocodeFallback';
 import { MOCK_S901_PLACES } from '../model/mockS901Places';
 import type { BoundingBox, GeocodeResult, PlaceDto, PoiCategory } from '../model/types';
 
@@ -205,7 +209,7 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string |
       },
       signal: AbortSignal.timeout(3500),
     });
-    if (!res.ok) return null;
+    if (!res.ok) return fallbackReverseGeocodeFromMocks(lat, lng);
     const data = await res.json();
     const formatted = formatNominatim(data);
     if (formatted) {
@@ -216,9 +220,9 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string |
       geocodeCache.set(cacheKey, formatted);
       return formatted;
     }
-    return null;
+    return fallbackReverseGeocodeFromMocks(lat, lng);
   } catch {
-    return null;
+    return fallbackReverseGeocodeFromMocks(lat, lng);
   }
 }
 
@@ -249,11 +253,12 @@ export async function forwardGeocode(
         'User-Agent': 'AccessMapVN/1.0 (https://accessmap.vn)',
         'Accept-Language': 'vi,en;q=0.9',
       },
+      signal: AbortSignal.timeout(2500),
     });
 
-    if (!res.ok) return [];
+    if (!res.ok) return fallbackGeocodeFromMocks(trimmed, limit);
     const data = await res.json();
-    if (!Array.isArray(data)) return [];
+    if (!Array.isArray(data)) return fallbackGeocodeFromMocks(trimmed, limit);
 
     const results: GeocodeResult[] = data.map((item: any) => ({
       id: String(item.place_id ?? `${item.lat},${item.lon}`),
@@ -264,6 +269,10 @@ export async function forwardGeocode(
       type: item.type || item.class,
     }));
 
+    if (results.length === 0) {
+      return fallbackGeocodeFromMocks(trimmed, limit);
+    }
+
     if (forwardGeocodeCache.size > 100) {
       const firstKey = forwardGeocodeCache.keys().next().value;
       if (firstKey) forwardGeocodeCache.delete(firstKey);
@@ -272,7 +281,7 @@ export async function forwardGeocode(
 
     return results;
   } catch {
-    return [];
+    return fallbackGeocodeFromMocks(trimmed, limit);
   }
 }
 

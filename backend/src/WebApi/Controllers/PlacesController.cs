@@ -95,34 +95,6 @@ public class PlacesController : ControllerBase
             .Take(15)
             .ToListAsync(cancellationToken);
 
-        if (place != null && place.AccessibilityScore == null && submissions.Count > 0)
-        {
-            var targetPlace = await _db.Places.FirstOrDefaultAsync(p => p.Id == place.Id, cancellationToken);
-            if (targetPlace != null)
-            {
-                var allTags = submissions.SelectMany(s => s.FeatureTags).ToList();
-                foreach (var tag in allTags)
-                {
-                    var lower = tag.ToLowerInvariant();
-                    if (lower.Contains("ramp")) targetPlace.HasRamp = true;
-                    if (lower.Contains("door") || lower.Contains("entrance")) targetPlace.DoorWidthOk = true;
-                    if (lower.Contains("elevator")) targetPlace.HasAccessibleElevator = true;
-                    if (lower.Contains("restroom")) targetPlace.HasAccessibleRestroom = true;
-                    if (lower.Contains("tactile")) targetPlace.HasTactilePaving = true;
-                }
-                var count = 0;
-                if (targetPlace.HasRamp == true) count++;
-                if (targetPlace.DoorWidthOk == true) count++;
-                if (targetPlace.HasAccessibleElevator == true) count++;
-                if (targetPlace.HasAccessibleRestroom == true) count++;
-                if (targetPlace.HasTactilePaving == true) count++;
-
-                targetPlace.AccessibilityScore = Math.Round((decimal)count / 5.0m * 10.0m, 1);
-                targetPlace.LastVerifiedAt = submissions.Max(s => s.CreatedAt).UtcDateTime;
-                await _db.SaveChangesAsync(cancellationToken);
-            }
-        }
-
         var results = new List<PlaceEvidenceResponse>();
         var seenUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 

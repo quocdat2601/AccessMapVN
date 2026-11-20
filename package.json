@@ -16,7 +16,7 @@
     "device:ports": "node scripts/android-reverse.mjs",
     "check:backend": "dotnet test backend/AccessMapVN.sln --configuration Release",
     "check:mobile": "npm --prefix mobile run typecheck && npm --prefix mobile run lint && npm --prefix mobile run test:unit && npm --prefix mobile run doctor",
-    "check:web": "npm --prefix web-admin run typecheck && npm --prefix web-admin run lint && npm --prefix web-admin run build",
+    "check:web": "npm --prefix web-admin run typecheck && npm --prefix web-admin run lint && npm --prefix web-admin run build && npm --prefix web-admin test",
     "check": "npm run check:backend && npm run check:mobile && npm run check:web",
     "dev:backend": "node scripts/dev-backend.mjs",
     "dev:ai": "docker compose -f ai-service/docker-compose.yml up ai-service",

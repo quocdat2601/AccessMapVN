@@ -766,14 +766,14 @@ public sealed class CommunityReportService : ICommunityReportService
                 break;
 
             case AdminReportDecision.RequestEvidence:
-                RequireTransition(report, InaccurateReportStatus.UnderReview);
+                RequireTransition(report, InaccurateReportStatus.Submitted, InaccurateReportStatus.UnderReview);
                 report.Status = InaccurateReportStatus.AwaitingMoreInfo;
                 report.ReporterActionNote = request.Note.Trim();
                 publicNote = report.ReporterActionNote;
                 break;
 
             case AdminReportDecision.LinkDispute:
-                RequireTransition(report, InaccurateReportStatus.UnderReview);
+                RequireTransition(report, InaccurateReportStatus.Submitted, InaccurateReportStatus.UnderReview);
                 if (request.LinkedDisputeCaseId is not Guid disputeId)
                 {
                     throw new CommunityValidationException(
@@ -795,7 +795,7 @@ public sealed class CommunityReportService : ICommunityReportService
                 break;
 
             case AdminReportDecision.Resolve:
-                RequireTransition(report, InaccurateReportStatus.UnderReview, InaccurateReportStatus.LinkedToDispute);
+                RequireTransition(report, InaccurateReportStatus.Submitted, InaccurateReportStatus.UnderReview, InaccurateReportStatus.LinkedToDispute);
                 if (request.Resolution is not InaccurateReportResolution resolution)
                 {
                     throw new CommunityValidationException(
@@ -815,42 +815,77 @@ public sealed class CommunityReportService : ICommunityReportService
                 if (resolution == InaccurateReportResolution.CorrectionPublished)
                 {
                     var publicationSubmissionId = request.LinkedSubmissionId ?? report.LinkedSubmissionId;
-                    if (publicationSubmissionId is not Guid publishedSubmissionId)
+                    if (publicationSubmissionId is Guid publishedSubmissionId)
                     {
-                        throw new CommunityValidationException(
-                            "PUBLICATION_REQUIRED",
-                            "A published contribution submission is required for this resolution.",
-                            409);
+                        await ValidateAdminSubmissionLinkAsync(report, publishedSubmissionId, true, cancellationToken);
+                        report.LinkedSubmissionId = publishedSubmissionId;
                     }
+                    else
+                    {
+                        var targetFeatureType = report.FeatureType ?? AccessibilityFeatureType.Ramp;
+                        var newStatus = request.UpdatedFeatureStatus is PublishedFeatureStatus s && s != PublishedFeatureStatus.Unknown
+                            ? s
+                            : (report.Reason == InaccurateReportReason.MissingFeature
+                                ? PublishedFeatureStatus.Available
+                                : PublishedFeatureStatus.Limited);
 
-                    await ValidateAdminSubmissionLinkAsync(report, publishedSubmissionId, true, cancellationToken);
-                    report.LinkedSubmissionId = publishedSubmissionId;
+                        await ApplyDirectFeaturePublicationAsync(
+                            report.LocationId,
+                            report.ScopeId,
+                            targetFeatureType,
+                            newStatus,
+                            moderatorId,
+                            request.Note.Trim(),
+                            now,
+                            cancellationToken);
+                    }
                 }
 
                 if (resolution == InaccurateReportResolution.AdvisoryCreated)
                 {
-                    if (request.AdvisoryId is not Guid advisoryId)
+                    if (request.AdvisoryId is Guid advisoryId)
                     {
-                        throw new CommunityValidationException(
-                            "ADVISORY_REQUIRED",
-                            "advisoryId is required for AdvisoryCreated.",
-                            422);
+                        var validAdvisory = await _db.TemporaryAccessAdvisories.AsNoTracking()
+                            .Join(
+                                _db.LocationFeatures.AsNoTracking(),
+                                advisory => advisory.LocationFeatureId,
+                                feature => feature.Id,
+                                (advisory, feature) => new { advisory, feature })
+                            .AnyAsync(
+                                item => item.advisory.Id == advisoryId &&
+                                        item.feature.LocationId == report.LocationId &&
+                                        item.advisory.Status != AdvisoryStatus.Revoked,
+                                cancellationToken);
+                        if (!validAdvisory)
+                        {
+                            throw new CommunityValidationException("ADVISORY_NOT_FOUND", "The advisory was not found for this location.", 404);
+                        }
                     }
-
-                    var validAdvisory = await _db.TemporaryAccessAdvisories.AsNoTracking()
-                        .Join(
-                            _db.LocationFeatures.AsNoTracking(),
-                            advisory => advisory.LocationFeatureId,
-                            feature => feature.Id,
-                            (advisory, feature) => new { advisory, feature })
-                        .AnyAsync(
-                            item => item.advisory.Id == advisoryId &&
-                                    item.feature.LocationId == report.LocationId &&
-                                    item.advisory.Status != AdvisoryStatus.Revoked,
-                            cancellationToken);
-                    if (!validAdvisory)
+                    else
                     {
-                        throw new CommunityValidationException("ADVISORY_NOT_FOUND", "The advisory was not found for this location.", 404);
+                        var targetFeatureType = report.FeatureType ?? AccessibilityFeatureType.Ramp;
+                        var (feature, _) = await EnsureFeatureAsync(report.LocationId, report.ScopeId, targetFeatureType, now, cancellationToken);
+                        var endsAt = request.AdvisoryEndsAt is DateTimeOffset ends && ends > now
+                            ? ends
+                            : now.AddDays(7);
+                        var createdAdvisory = new TemporaryAccessAdvisory
+                        {
+                            LocationFeatureId = feature.Id,
+                            Status = AdvisoryStatus.Active,
+                            Reason = string.IsNullOrWhiteSpace(request.AdvisoryReason)
+                                ? request.Note.Trim()
+                                : request.AdvisoryReason.Trim(),
+                            StartsAt = now,
+                            EndsAt = endsAt,
+                            CreatedById = moderatorId,
+                        };
+                        _db.TemporaryAccessAdvisories.Add(createdAdvisory);
+                        _db.OutboxMessages.Add(new OutboxMessage
+                        {
+                            Type = "TemporaryAccessAdvisoryCreated",
+                            PayloadJson = JsonSerializer.Serialize(new { advisoryId = createdAdvisory.Id, featureId = feature.Id }, JsonOptions),
+                            OccurredAt = now,
+                        });
                     }
                 }
 
@@ -989,7 +1024,7 @@ public sealed class CommunityReportService : ICommunityReportService
             throw ReportVersionChanged(report);
         }
         if (report.Reason != InaccurateReportReason.WrongAddressOrPin ||
-            report.Status is not (InaccurateReportStatus.UnderReview or InaccurateReportStatus.LinkedToDispute))
+            report.Status is not (InaccurateReportStatus.Submitted or InaccurateReportStatus.UnderReview or InaccurateReportStatus.LinkedToDispute))
         {
             throw new CommunityValidationException(
                 "INVALID_REPORT_TRANSITION",
@@ -1082,6 +1117,92 @@ public sealed class CommunityReportService : ICommunityReportService
         }
         await transaction.CommitAsync(cancellationToken);
         return response;
+    }
+
+    private async Task<(LocationFeature Feature, bool IsNew)> EnsureFeatureAsync(
+        Guid locationId,
+        Guid? scopeId,
+        AccessibilityFeatureType featureType,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var feature = await _db.LocationFeatures.SingleOrDefaultAsync(
+            item => item.LocationId == locationId &&
+                    item.ScopeId == scopeId &&
+                    item.FeatureType == featureType,
+            cancellationToken);
+        if (feature is not null)
+        {
+            return (feature, false);
+        }
+
+        feature = new LocationFeature
+        {
+            LocationId = locationId,
+            ScopeId = scopeId,
+            FeatureType = featureType,
+            CurrentStatus = PublishedFeatureStatus.Available,
+            VerifiedAt = now,
+            IsPublished = true,
+            Version = 1,
+        };
+        _db.LocationFeatures.Add(feature);
+        return (feature, true);
+    }
+
+    private async Task ApplyDirectFeaturePublicationAsync(
+        Guid locationId,
+        Guid? scopeId,
+        AccessibilityFeatureType featureType,
+        PublishedFeatureStatus newStatus,
+        Guid moderatorId,
+        string reason,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var (feature, isNew) = await EnsureFeatureAsync(locationId, scopeId, featureType, now, cancellationToken);
+        feature.CurrentStatus = newStatus;
+        feature.IsPublished = true;
+        feature.VerifiedAt = now;
+        if (!isNew)
+        {
+            feature.Version += 1;
+            feature.UpdatedAtUtc = now.UtcDateTime;
+        }
+
+        _db.LocationFeatureHistories.Add(new LocationFeatureHistory
+        {
+            LocationFeatureId = feature.Id,
+            FeatureVersion = feature.Version,
+            Status = newStatus,
+            PublishedById = moderatorId,
+            Reason = reason,
+            EffectiveAt = now,
+        });
+
+        var location = await _db.Places.SingleOrDefaultAsync(item => item.Id == locationId, cancellationToken);
+        if (location is not null)
+        {
+            LocationFeaturePublicationService.ApplyLegacyProjection(location, featureType, newStatus, now);
+        }
+
+        var state = await _db.FeatureCommunityStates.SingleOrDefaultAsync(
+            item => item.LocationFeatureId == feature.Id,
+            cancellationToken);
+        if (state is not null)
+        {
+            state.FeatureVersion = feature.Version;
+            state.Label = FeatureCommunityLabel.Fresh;
+            state.WeightedAgreement = null;
+            state.EligibleVoterCount = 0;
+            state.ContradictingVoterCount = 0;
+            state.LastTrustedReconfirmedAt = now;
+            state.FreshnessFactor = 1m;
+            state.ActiveDisputeCaseId = null;
+            state.ComputedAt = now;
+            state.Version += 1;
+            state.UpdatedAtUtc = now.UtcDateTime;
+        }
     }
 
     private async Task ValidateDisputeLinkAsync(

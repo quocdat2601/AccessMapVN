@@ -1,6 +1,7 @@
 import type {
   AccessibilityFeatureType,
   CommunityCommentStatus,
+  FeatureCommunityLabel,
   PublishedFeatureStatus,
 } from '@/features/community';
 
@@ -32,6 +33,12 @@ export interface AccessibilityDetailFeature {
   confirmations?: number;
   status?: string;
   description?: string;
+  communityLabel?: FeatureCommunityLabel;
+  eligibleVoterCount?: number;
+  contradictingVoterCount?: number;
+  freshnessPercent?: number;
+  advisory?: { reason: string; endsAt: string } | null;
+  featureVersion?: number;
 }
 
 export interface EvidenceItem {

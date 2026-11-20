@@ -92,7 +92,8 @@ public sealed record DecideDisputeRequest(
     Guid? CorrectionSubmissionId = null,
     DateTimeOffset? StartsAt = null,
     DateTimeOffset? EndsAt = null,
-    string? AdvisoryReason = null);
+    string? AdvisoryReason = null,
+    PublishedFeatureStatus? UpdatedFeatureStatus = null);
 
 public interface ICommunityDisputeService
 {

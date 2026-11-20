@@ -162,7 +162,10 @@ public sealed record ModerateReportRequest(
     Guid? LinkedSubmissionId = null,
     Guid? AdvisoryId = null,
     InaccurateReportResolution? Resolution = null,
-    string? PublicResolutionNote = null);
+    string? PublicResolutionNote = null,
+    PublishedFeatureStatus? UpdatedFeatureStatus = null,
+    DateTimeOffset? AdvisoryEndsAt = null,
+    string? AdvisoryReason = null);
 
 public sealed record ModerateReportResponse(
     Guid ReportId,

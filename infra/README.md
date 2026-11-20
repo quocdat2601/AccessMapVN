@@ -36,3 +36,23 @@ so it does not write to a Supabase connection that may be saved in your .NET use
 
 The checked-in defaults are development-only. Production credentials and Supabase/Firebase keys
 must be supplied through the deployment secret store and must not be committed.
+
+## IaC Reproducibility & Clean-Machine Rehearsal
+
+To reset and reproduce the local PostGIS + Adminer stack cleanly on a fresh machine (from repo root):
+
+```bash
+docker compose -f infra/docker-compose.yml down -v
+docker compose -f infra/docker-compose.yml up -d
+npm run db:migrate:local
+npm run db:seed:community
+npm run db:tables
+```
+
+- **PostgreSQL + PostGIS**: `localhost:5432` (credentials configured in local `.env` / `infra/docker-compose.yml`).
+- **Adminer UI**: `http://localhost:8082` (inspect migrated tables and seeded WF-01/WF-02 records).
+- Verify all four application layers after infrastructure startup:
+  - Backend: `dotnet test backend/tests/UnitTests/AccessMapVN.UnitTests.csproj`
+  - AI Service: `python -m unittest discover -s ai-service/tests -p "test_*.py"`
+  - Mobile: `npm --prefix mobile run typecheck && npm --prefix mobile test`
+  - Web Admin: `npm run check:web`

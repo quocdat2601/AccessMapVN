@@ -15,9 +15,10 @@ export async function resolve(specifier, context, nextResolve) {
     }
     if (specifier.startsWith('@/')) {
       const rel = specifier.replace('@/', './src/');
+      const packageRoot = new URL('../', import.meta.url);
       for (const ext of ['', '.ts', '.tsx', '/index.ts']) {
         try {
-          return await nextResolve(new URL(rel + ext, context.parentURL || 'file://' + process.cwd() + '/').href, context);
+          return await nextResolve(new URL(rel + ext, packageRoot).href, context);
         } catch {}
       }
     }

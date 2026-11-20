@@ -184,49 +184,11 @@ public sealed class AdminSubmissionsController : ControllerBase
                 if (!string.IsNullOrWhiteSpace(json))
                 {
                     submission.AiObservationsJson = json;
-                    try
-                    {
-                        await _db.SaveChangesAsync(cancellationToken);
-                    }
-                    catch
-                    {
-                        // Graceful fallback on save conflict
-                    }
                 }
             }
         }
 
         var place = await FindPlaceAsync(submission.PlaceId, cancellationToken);
-        if (place == null && submission.Status == SubmissionStatus.Published)
-        {
-            var placeName = !string.IsNullOrWhiteSpace(submission.TextDescription) && !submission.TextDescription.Contains("file:")
-                ? submission.TextDescription.Split(new[] { '\r', '\n', '.' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Trim() ?? "Địa điểm đóng góp thực địa"
-                : "Địa điểm đóng góp thực địa";
-
-            place = new Place
-            {
-                Name = placeName,
-                Category = "other",
-                Address = "Vị trí khảo sát thực địa",
-                Lat = submission.GpsLat,
-                Lng = submission.GpsLng,
-                Status = LocationStatus.Active,
-                MetadataVersion = 1,
-            };
-            _db.Places.Add(place);
-            await _db.SaveChangesAsync(cancellationToken);
-
-            submission.PlaceId = place.Id.ToString();
-            await _db.SaveChangesAsync(cancellationToken);
-        }
-
-        if (place != null && submission.Status == SubmissionStatus.Published)
-        {
-            ApplyPublicationCriteria(place, submission, submission.CreatedAt);
-            await SyncLocationFeaturesAsync(place, submission, submission.CreatedAt, cancellationToken);
-            await _db.SaveChangesAsync(cancellationToken);
-        }
-
         var appUser = await FindAppUserAsync(submission.UserId, cancellationToken);
 
         return Ok(MapToDetail(submission, place, appUser));

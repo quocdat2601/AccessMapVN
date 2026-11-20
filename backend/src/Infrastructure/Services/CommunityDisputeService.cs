@@ -186,27 +186,57 @@ public sealed class CommunityDisputeService : ICommunityDisputeService
 
             case DisputeDecisionType.RecordPublication:
                 var publicationId = request.CorrectionSubmissionId ?? dispute.CorrectionSubmissionId;
-                if (publicationId is not Guid publishedId)
+                if (publicationId is Guid publishedId)
                 {
-                    throw new CommunityValidationException("PUBLICATION_REQUIRED", "A linked correction publication is required.", 409);
+                    await ValidateCorrectionAsync(publishedId, feature, true, cancellationToken);
+                    if (feature.Version <= dispute.FeatureVersion || feature.SourceSubmissionId != publishedId)
+                    {
+                        throw new CommunityValidationException("PUBLICATION_REQUIRED", "The linked correction has not published a newer feature version.", 409);
+                    }
+                    dispute.CorrectionSubmissionId = publishedId;
                 }
-                await ValidateCorrectionAsync(publishedId, feature, true, cancellationToken);
-                if (feature.Version <= dispute.FeatureVersion || feature.SourceSubmissionId != publishedId)
+                else
                 {
-                    throw new CommunityValidationException("PUBLICATION_REQUIRED", "The linked correction has not published a newer feature version.", 409);
+                    var newStatus = request.UpdatedFeatureStatus is PublishedFeatureStatus s && s != PublishedFeatureStatus.Unknown
+                        ? s
+                        : (feature.CurrentStatus == PublishedFeatureStatus.Available
+                            ? PublishedFeatureStatus.Limited
+                            : PublishedFeatureStatus.Available);
+
+                    feature.CurrentStatus = newStatus;
+                    feature.IsPublished = true;
+                    feature.VerifiedAt = now;
+                    feature.Version += 1;
+                    feature.UpdatedAtUtc = now.UtcDateTime;
+
+                    _db.LocationFeatureHistories.Add(new LocationFeatureHistory
+                    {
+                        LocationFeatureId = feature.Id,
+                        FeatureVersion = feature.Version,
+                        Status = newStatus,
+                        PublishedById = moderatorId,
+                        Reason = request.Reason.Trim(),
+                        EffectiveAt = now,
+                    });
+
+                    var location = await _db.Places.SingleOrDefaultAsync(item => item.Id == feature.LocationId, cancellationToken);
+                    if (location is not null)
+                    {
+                        LocationFeaturePublicationService.ApplyLegacyProjection(location, feature.FeatureType, newStatus, now);
+                    }
                 }
-                dispute.CorrectionSubmissionId = publishedId;
                 dispute.Status = DisputeStatus.ResolvedUpdated;
                 dispute.ResolvedAt = now;
                 break;
 
             case DisputeDecisionType.CreateAdvisory:
-                var startsAt = request.StartsAt ?? now;
-                var endsAt = request.EndsAt ?? throw new CommunityValidationException("INVALID_ADVISORY", "endsAt is required.", 422);
-                if (startsAt < now.AddMinutes(-5) || endsAt <= startsAt ||
+                var rawStart = request.StartsAt ?? now;
+                var startsAt = rawStart < now ? now : rawStart;
+                var endsAt = request.EndsAt ?? now.AddDays(7);
+                if (endsAt <= startsAt ||
                     endsAt - startsAt > TimeSpan.FromDays(_options.Advisory.MaxDurationDays))
                 {
-                    throw new CommunityValidationException("INVALID_ADVISORY", $"The advisory must be future-facing and no longer than {_options.Advisory.MaxDurationDays} days.", 422);
+                    throw new CommunityValidationException("INVALID_ADVISORY", $"The advisory must end after start time and be no longer than {_options.Advisory.MaxDurationDays} days.", 422);
                 }
                 var advisory = new TemporaryAccessAdvisory
                 {
@@ -260,6 +290,14 @@ public sealed class CommunityDisputeService : ICommunityDisputeService
                 state.Label = request.Decision == DisputeDecisionType.RecordPublication
                     ? FeatureCommunityLabel.Fresh
                     : FeatureCommunityLabel.Reinforced;
+                if (state.FeatureVersion != feature.Version)
+                {
+                    state.WeightedAgreement = null;
+                    state.EligibleVoterCount = 0;
+                    state.ContradictingVoterCount = 0;
+                    state.LastTrustedReconfirmedAt = now;
+                    state.FreshnessFactor = 1m;
+                }
                 state.FeatureVersion = feature.Version;
                 state.ComputedAt = now;
                 state.Version += 1;

@@ -28,10 +28,14 @@ import { useAuth } from '@/features/auth';
 import { LoginRequiredModal } from '@/shared/ui/LoginRequiredModal';
 import {
   castCommunityVote,
+  fetchCommunityState,
   FeatureVerificationModal,
   fetchCommunityComments,
   type AccessibilityFeatureType,
   type CommunityFeatureInput,
+  type CommunityFeatureState,
+  type FeatureCommunityLabel,
+  type PublishedFeatureStatus,
   type SubmittedObservation,
 } from '@/features/community';
 import {
@@ -48,7 +52,12 @@ import { CommunityReviewsSection } from './CommunityReviewsSection';
 import { ContributionCTA } from './ContributionCTA';
 import { EvidenceGallerySection } from './EvidenceGallerySection';
 import { LocationHeader } from './LocationHeader';
-import type { AccessibilityDetailFeature, CommunityReview, EvidenceItem } from './types';
+import type {
+  AccessibilityDetailFeature,
+  CommunityReview,
+  EvidenceItem,
+  FeatureVerificationLevel,
+} from './types';
 
 interface LocationDetailSheetProps {
   place: PlaceDto;
@@ -165,6 +174,9 @@ export function LocationDetailSheet({
   const [reportInitialFeature, setReportInitialFeature] = useState<AccessibilityFeatureType | undefined>(undefined);
   const [reportInitialData, setReportInitialData] = useState<ReportFormData | undefined>(undefined);
   const [verificationRefreshKey, setVerificationRefreshKey] = useState(0);
+  const [liveFeatureStates, setLiveFeatureStates] = useState<
+    Partial<Record<AccessibilityFeatureType, CommunityFeatureState>>
+  >({});
 
   const myCommentsStorageKey = `@accessmap_my_comments_${place.id}`;
 
@@ -238,8 +250,8 @@ export function LocationDetailSheet({
 
     // WF-02 reads its truth from published LocationFeature rows.
     // Differentiate features that have verified compliant specs from presence-only reports.
-    return definitions.map(({ value, ...definition }) => {
-      let verificationLevel: import('./types').FeatureVerificationLevel = 'unknown';
+    return definitions.map(({ value, ...definition }): AccessibilityDetailFeature => {
+      let verificationLevel: FeatureVerificationLevel = 'unknown';
       let status = 'Chưa rõ';
       let specLabel: string | undefined;
 
@@ -276,20 +288,53 @@ export function LocationDetailSheet({
         status = 'Chưa rõ';
       }
 
+      const publishedStatus: PublishedFeatureStatus =
+        verificationLevel === 'verified_compliant' || verificationLevel === 'unverified_presence'
+          ? 'Available'
+          : verificationLevel === 'not_available'
+            ? 'NotAvailable'
+            : 'Unknown';
+
       return {
         ...definition,
-        publishedStatus:
-          verificationLevel === 'verified_compliant' || verificationLevel === 'unverified_presence'
-            ? 'Available'
-            : verificationLevel === 'not_available'
-              ? 'NotAvailable'
-              : 'Unknown',
+        publishedStatus,
         verificationLevel,
         status,
         specLabel,
       };
+    }).map((item): AccessibilityDetailFeature => {
+      const liveState = liveFeatureStates[item.featureType];
+      if (!liveState) return item;
+
+      let nextVerificationLevel: FeatureVerificationLevel = item.verificationLevel ?? 'unknown';
+      let nextStatus = item.status;
+      if (liveState.publishedStatus === 'Limited') {
+        nextVerificationLevel = 'limited';
+        nextStatus = 'Hạn chế';
+      } else if (liveState.publishedStatus === 'NotAvailable') {
+        nextVerificationLevel = 'not_available';
+        nextStatus = 'Không có';
+      } else if (liveState.publishedStatus === 'Available') {
+        nextVerificationLevel = isFullyVerified ? 'verified_compliant' : 'unverified_presence';
+        nextStatus = isFullyVerified ? 'Đạt chuẩn' : (item.status === 'Chưa rõ' ? 'Có tiện ích' : item.status);
+      }
+
+      return {
+        ...item,
+        publishedStatus: liveState.publishedStatus,
+        verificationLevel: nextVerificationLevel,
+        status: nextStatus,
+        communityLabel: liveState.label as FeatureCommunityLabel,
+        eligibleVoterCount: liveState.eligibleVoterCount,
+        contradictingVoterCount: liveState.contradictingVoterCount,
+        freshnessPercent: Math.round((liveState.freshnessFactor ?? 1) * 100),
+        advisory: liveState.advisory
+          ? { reason: liveState.advisory.reason, endsAt: liveState.advisory.endsAt }
+          : null,
+        featureVersion: liveState.featureVersion,
+      };
     });
-  }, [place, isFullyVerified]);
+  }, [place, isFullyVerified, liveFeatureStates]);
 
   const hasPublishedAccessibilityInfo =
     !isUnrated && features.some((feature) => feature.publishedStatus !== 'Unknown');
@@ -302,9 +347,7 @@ export function LocationDetailSheet({
   const publishedFeaturesCount = useMemo(() => {
     if (hasDemoCommunityContent) return features.length;
     return verifiableFeatures.filter((feature) => feature.publishedStatus === 'Available' || feature.publishedStatus === 'Limited').length;
-  }, [hasDemoCommunityContent, verifiableFeatures]);
-  const showVerificationSection =
-    !isFullyVerified && (hasDemoCommunityContent || (hasPublishedAccessibilityInfo && publishedFeaturesCount > 0));
+  }, [hasDemoCommunityContent, features.length, verifiableFeatures]);
 
   const displayAccessibilityNote = useMemo(() => {
     if (place.accessibility_note && place.accessibility_note !== 'Chưa có dữ liệu khảo sát tiếp cận') {
@@ -352,13 +395,19 @@ export function LocationDetailSheet({
       formData?: ReportFormData
     ) => {
       if (primaryFeatureType && formData) {
+        const derivedStatus: PublishedFeatureStatus =
+          formData.proposedStatus ??
+          (formData.reason === 'Blocked' || formData.reason === 'Incorrect' ? 'NotAvailable' : 'Limited');
+        const currentVersion = liveFeatureStates[primaryFeatureType]?.featureVersion || 1;
+
         try {
           await castCommunityVote(
             place.id,
             primaryFeatureType,
             {
               voteType: 'Changed',
-              observedFeatureVersion: 1,
+              observedFeatureVersion: currentVersion,
+              proposedStatus: derivedStatus,
               comment: formData.description,
             },
             user?.id ?? 'anon'
@@ -368,7 +417,7 @@ export function LocationDetailSheet({
         const storageKey = `@accessmap_vote_${user?.id ?? 'anon'}_${place.id}_${primaryFeatureType}`;
         const observation: SubmittedObservation = {
           voteType: 'Changed',
-          proposedStatus: 'Limited',
+          proposedStatus: derivedStatus,
           comment: formData.description,
           reportId: report.id,
           reportData: formData,
@@ -382,8 +431,32 @@ export function LocationDetailSheet({
       setVerificationRefreshKey((k) => k + 1);
       setShowVerificationModal(true);
     },
-    [place.id, user]
+    [liveFeatureStates, place.id, user]
   );
+
+  useEffect(() => {
+    let isMounted = true;
+    const coreTypes: AccessibilityFeatureType[] = ['Ramp', 'EntranceDoor', 'Elevator', 'AccessibleRestroom'];
+    void Promise.all(
+      coreTypes.map(async (featureType) => {
+        try {
+          return await fetchCommunityState(place.id, featureType);
+        } catch {
+          return null;
+        }
+      })
+    ).then((results) => {
+      if (!isMounted) return;
+      const next: Partial<Record<AccessibilityFeatureType, CommunityFeatureState>> = {};
+      results.forEach((item) => {
+        if (item) next[item.featureType] = item;
+      });
+      setLiveFeatureStates(next);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [place.id, verificationRefreshKey]);
 
   const [evidenceList, setEvidenceList] = useState<EvidenceItem[]>([]);
   const [communityReviews, setCommunityReviews] = useState<CommunityReview[]>([]);
@@ -761,41 +834,6 @@ export function LocationDetailSheet({
                 isVerified={isFullyVerified}
               />
 
-              {showVerificationSection && (
-                <TouchableOpacity
-                  style={styles.verificationCard}
-                  onPress={() => {
-                    if (!user) {
-                      setLoginModalFeature('xác nhận tiện ích tiếp cận');
-                      setShowLoginModal(true);
-                      return;
-                    }
-                    setShowVerificationModal(true);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Mở danh sách xác nhận thông tin tiếp cận"
-                  activeOpacity={0.82}
-                >
-                  <View style={styles.verificationCardLeft}>
-                    <View style={styles.verificationCardIconBox}>
-                      <MaterialCommunityIcons name="clipboard-check-outline" size={20} color="#007D78" />
-                    </View>
-                    <View style={styles.verificationCardTextContainer}>
-                      <View style={styles.verificationCardTitleRow}>
-                        <Text style={styles.verificationCardTitle}>Giúp xác nhận thông tin tiếp cận</Text>
-                        <View style={styles.verificationBadge}>
-                          <Text style={styles.verificationBadgeText}>{features.length} tiện ích</Text>
-                        </View>
-                      </View>
-                      <Text style={styles.verificationCardSub}>
-                        Kiểm tra và xác nhận thực tế ram dốc, cửa vào, thang máy, WC...
-                      </Text>
-                    </View>
-                  </View>
-                  <MaterialCommunityIcons name="chevron-right" size={22} color="#007D78" />
-                </TouchableOpacity>
-              )}
-
               <ContributionCTA
                 locationId={place.id}
                 locationName={place.name}
@@ -949,64 +987,5 @@ const styles = StyleSheet.create({
   },
   sectionInset: {
     paddingHorizontal: 20,
-  },
-  verificationCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F3FAF8',
-    borderWidth: 1,
-    borderColor: '#BFE7E0',
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 12,
-  },
-  verificationCardLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-    marginRight: 6,
-  },
-  verificationCardIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: '#E6F8F5',
-    borderWidth: 1,
-    borderColor: '#A8E7DC',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  verificationCardTextContainer: {
-    flex: 1,
-  },
-  verificationCardTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 2,
-  },
-  verificationCardTitle: {
-    fontSize: 13.5,
-    fontWeight: '800',
-    color: '#164E4A',
-  },
-  verificationBadge: {
-    backgroundColor: '#E6F8F5',
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 6,
-  },
-  verificationBadgeText: {
-    fontSize: 10.5,
-    fontWeight: '800',
-    color: '#007D78',
-  },
-  verificationCardSub: {
-    fontSize: 11.5,
-    color: '#64748B',
-    lineHeight: 16,
   },
 });

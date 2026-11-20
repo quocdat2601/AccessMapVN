@@ -310,7 +310,7 @@ public sealed class LocationFeaturePublicationService : ILocationFeaturePublicat
         return new PublishLocationFeatureResult(feature.Id, feature.Version, newlyAwardedPoints, feature.VerifiedAt);
     }
 
-    private static void ApplyLegacyProjection(
+    internal static void ApplyLegacyProjection(
         Place location,
         AccessibilityFeatureType featureType,
         PublishedFeatureStatus status,

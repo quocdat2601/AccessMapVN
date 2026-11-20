@@ -23,11 +23,11 @@ logger = get_logger(__name__)
 class RampDetector(BaseYOLODetector):
     """Detects accessibility ramps in images using a fine-tuned YOLOv8 model."""
 
-    TARGET_CLASS: str = "ramp"
+    TARGET_CLASSES: tuple[str, ...] = ("ramp", "wheelchair-ramp")
 
     def __init__(self) -> None:
         weight_path = settings.yolo_weights_path["ramp"]
-        super().__init__(weight_path=weight_path, target_class=self.TARGET_CLASS)
+        super().__init__(weight_path=weight_path, target_classes=self.TARGET_CLASSES)
 
     def detect_ramp(self, image_input: bytes | np.ndarray) -> dict:
         """

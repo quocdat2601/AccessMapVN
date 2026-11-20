@@ -37,7 +37,15 @@ class TestAiServiceEndpoints(unittest.TestCase):
 
             fake_model = MagicMock()
             fake_model.predict.return_value = [_EmptyYoloResult()]
-            for detector in (_cv_pipeline._ramp, _cv_pipeline._step, _cv_pipeline._door):
+            for detector in (
+                _cv_pipeline._ramp,
+                _cv_pipeline._step,
+                _cv_pipeline._door,
+                _cv_pipeline._elevator,
+                _cv_pipeline._signage,
+                _cv_pipeline._acc_ramp,
+                _cv_pipeline._acc_step,
+            ):
                 detector._engine = "yolo"
                 detector._initialization_attempted = True
                 detector._model = fake_model
@@ -288,20 +296,61 @@ class TestAiServiceEndpoints(unittest.TestCase):
             self.assertFalse(data_unready["required_models_loaded"])
 
     def test_strict_model_mode_unsupported_features_guaranteed_unknown(self):
-        """Features marked unsupported (elevator, signage, tactile) are strictly value='unknown', confidence=0.0, method='unsupported'."""
+        """Uncorroborated positive text never promotes detector features, and unsupported tactile stays method='unsupported'."""
         valid_img = create_dummy_image_bytes()
         res = self.client.post(
             "/api/v1/ai/pre-scan",
             files=[("images", ("photo.jpg", valid_img, "image/jpeg"))],
-            data={"text_description": "Tòa nhà có thang máy xịn và nhà vệ sinh tiếp cận"}
+            data={"text_description": "Tòa nhà có thang máy xịn, nhà vệ sinh tiếp cận và lối dẫn xúc giác"}
         )
         self.assertEqual(res.status_code, 200)
         data = res.json()
         features = data["features"]
-        for feat_key in ("elevator_present", "accessible_restroom_sign", "tactile_paving_present"):
+        self.assertEqual(features["tactile_paving_present"]["value"], "unknown")
+        self.assertEqual(features["tactile_paving_present"]["confidence"], 0.0)
+        self.assertEqual(features["tactile_paving_present"]["method"], "unsupported")
+        for feat_key in ("elevator_present", "accessible_restroom_sign"):
             self.assertEqual(features[feat_key]["value"], "unknown")
             self.assertEqual(features[feat_key]["confidence"], 0.0)
-            self.assertEqual(features[feat_key]["method"], "unsupported")
+            self.assertEqual(features[feat_key]["method"], "detector")
+
+    def test_restroom_fixture_suppresses_false_positive_ramp(self):
+        """Indoor restroom fixture detection suppresses false-positive ramp.pt detections."""
+        from app.api.pre_scan import _cv_pipeline
+        from app.services.cv._base import DetectionResult
+
+        valid_img = create_dummy_image_bytes()
+        restroom_hit = {
+            "value": True,
+            "confidence": 0.75,
+            "bbox_normalized": [0.1, 0.1, 0.5, 0.5],
+            "restroom_fixture_detected": True,
+            "engine": "yolo",
+            "status": "completed",
+            "error_code": None,
+        }
+        false_ramp = {
+            "value": True,
+            "confidence": 0.73,
+            "bbox_normalized": [0.2, 0.2, 0.8, 0.8],
+            "engine": "yolo",
+            "status": "completed",
+            "error_code": None,
+        }
+        with (
+            patch.object(_cv_pipeline._signage, "detect_signage", return_value=restroom_hit),
+            patch.object(_cv_pipeline._ramp, "detect_ramp", return_value=false_ramp),
+            patch.object(_cv_pipeline._acc_ramp, "_detect", return_value=DetectionResult.empty(engine="yolo", status="completed")),
+        ):
+            res = self.client.post(
+                "/api/v1/ai/pre-scan",
+                files=[("images", ("restroom.jpg", valid_img, "image/jpeg"))],
+            )
+        self.assertEqual(res.status_code, 200)
+        features = res.json()["features"]
+        self.assertEqual(features["accessible_restroom_sign"]["value"], "present")
+        self.assertEqual(features["exterior_ramp_present"]["value"], "unknown")
+        self.assertEqual(features["exterior_ramp_present"]["confidence"], 0.0)
 
     def test_summary_separates_visual_observations_from_contributor_claims(self):
         """Summary must not overwrite visual observations with user text, clearly attributing contributor claim."""

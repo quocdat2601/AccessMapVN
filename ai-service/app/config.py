@@ -25,11 +25,12 @@ class Settings(BaseSettings):
     models_dir: Path = _SERVICE_ROOT / "models"
 
     # YOLOv8 weights (relative to models_dir)
+    yolo_accessibility_weights: str = "yolo/accessibility_v8s.pt"
     yolo_ramp_weights: str = "yolo/ramp.pt"
     yolo_step_weights: str = "yolo/step.pt"
-    yolo_elevator_weights: str = "yolo/elevator.pt"
-    yolo_door_weights: str = "yolo/door.pt"
-    yolo_signage_weights: str = "yolo/signage.pt"
+    yolo_elevator_weights: str = "yolo/accessibility_v8s.pt"
+    yolo_door_weights: str = "yolo/accessibility_v8s.pt"
+    yolo_signage_weights: str = "yolo/accessibility_v8s.pt"
     yolo_tactile_weights: str = "yolo/tactile.pt"
 
     # PhoBERT (HuggingFace local path or hub id)
@@ -93,11 +94,15 @@ class Settings(BaseSettings):
         step_p = base / self.yolo_step_weights
         if not step_p.exists():
             step_p = base / self.yolo_ramp_weights
+        door_p = base / self.yolo_door_weights
+        if not door_p.exists():
+            door_p = base / "yolo/door.pt"
         return {
+            "accessibility": base / self.yolo_accessibility_weights,
             "ramp":     base / self.yolo_ramp_weights,
             "step":     step_p,
             "elevator": base / self.yolo_elevator_weights,
-            "door":     base / self.yolo_door_weights,
+            "door":     door_p,
             "signage":  base / self.yolo_signage_weights,
             "tactile":  base / self.yolo_tactile_weights,
         }

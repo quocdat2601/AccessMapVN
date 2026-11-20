@@ -68,7 +68,7 @@ def _build_feature_result(
     Build a typed ``FeatureResult`` by fusing CV detection with any NLP mention.
     """
     # Strict rule: unsupported features must unconditionally be unknown and unsupported
-    is_unsupported = feature_key in ("elevator_present", "accessible_restroom_sign", "tactile_paving_present")
+    is_unsupported = feature_key in ("tactile_paving_present",)
     if is_unsupported:
         return FeatureResult(
             value=FeatureStatus.unknown.value,
@@ -200,6 +200,10 @@ def _build_summary(features: FeaturesDict, nlp_result: dict | None) -> str:
     if features.door_detected.value == "present":
         items.append("cửa ra vào")
         unmeasured.append("chiều rộng cửa")
+    if features.elevator_present.value == "present":
+        items.append("thang máy")
+    if features.accessible_restroom_sign.value == "present":
+        items.append("nhà vệ sinh tiếp cận")
 
     if items:
         joined_items = " và ".join(items) if len(items) <= 2 else (", ".join(items[:-1]) + f" và {items[-1]}")

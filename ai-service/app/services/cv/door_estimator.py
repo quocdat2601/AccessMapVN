@@ -27,11 +27,11 @@ _WIDTH_RATIO_THRESHOLD = 0.10
 class DoorEstimator(BaseYOLODetector):
     """Detects doors and estimates whether the width is accessibility-compliant."""
 
-    TARGET_CLASS: str = "door"
+    TARGET_CLASSES: tuple[str, ...] = ("door", "entrance-door")
 
     def __init__(self) -> None:
         weight_path = settings.yolo_weights_path["door"]
-        super().__init__(weight_path=weight_path, target_class=self.TARGET_CLASS)
+        super().__init__(weight_path=weight_path, target_classes=self.TARGET_CLASSES)
 
     def detect_door(self, image_input: bytes | np.ndarray) -> dict:
         """

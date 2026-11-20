@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -58,6 +59,10 @@ class DetectionResult:
 
 
 _MODEL_CACHE: dict[str, Any] = {}
+_SHA256_CACHE: dict[str, str] = {}
+_LAST_PREDICTION_CACHE: dict[tuple[int, int, float], Any] = {}
+_LAST_IMAGE_REF_BY_KEY: dict[tuple[int, float], np.ndarray] = {}
+_PREDICTION_LOCK = threading.Lock()
 
 
 class BaseYOLODetector:
@@ -120,6 +125,7 @@ class BaseYOLODetector:
         cache_key = str(self._weight_path.resolve())
         if cache_key in _MODEL_CACHE:
             self._model = _MODEL_CACHE[cache_key]
+            self._weights_sha256 = _SHA256_CACHE.get(cache_key)
             self._engine = "yolo"
             self._initialization_attempted = True
             return self._model
@@ -153,6 +159,8 @@ class BaseYOLODetector:
                 logger.debug("Model warmup pass skipped: %s", w_exc)
 
             _MODEL_CACHE[cache_key] = model
+            if self._weights_sha256:
+                _SHA256_CACHE[cache_key] = self._weights_sha256
             self._model = model
             self._engine = "yolo"
             self._initialization_attempted = True
@@ -207,14 +215,33 @@ class BaseYOLODetector:
         if self._engine == "unavailable" or model is None:
             return DetectionResult.empty(engine="unavailable", status="unavailable", error_code="weights_missing")
 
-        # Real YOLO inference
+        # Real YOLO inference (reuse cached results across detectors sharing a model and numpy frame)
         try:
-            results = model.predict(
-                source=img,
-                conf=self.effective_conf_threshold,
-                imgsz=settings.yolo_img_size,
-                verbose=False,
-            )
+            if isinstance(image_input, np.ndarray):
+                pred_key = (id(model), id(image_input), self.effective_conf_threshold)
+                with _PREDICTION_LOCK:
+                    results = _LAST_PREDICTION_CACHE.get(pred_key)
+                if results is None:
+                    results = model.predict(
+                        source=img,
+                        conf=self.effective_conf_threshold,
+                        imgsz=settings.yolo_img_size,
+                        verbose=False,
+                    )
+                    with _PREDICTION_LOCK:
+                        ref_key = (id(model), self.effective_conf_threshold)
+                        stale = [k for k in _LAST_PREDICTION_CACHE if k[0] == id(model) and k[2] == self.effective_conf_threshold]
+                        for k in stale:
+                            del _LAST_PREDICTION_CACHE[k]
+                        _LAST_IMAGE_REF_BY_KEY[ref_key] = image_input
+                        _LAST_PREDICTION_CACHE[pred_key] = results
+            else:
+                results = model.predict(
+                    source=img,
+                    conf=self.effective_conf_threshold,
+                    imgsz=settings.yolo_img_size,
+                    verbose=False,
+                )
         except Exception as exc:
             logger.exception("detector=%s engine=yolo inference_error=%s", self.detector_name, exc)
             return DetectionResult.empty(engine="yolo", status="failed", error_code="inference_failed")

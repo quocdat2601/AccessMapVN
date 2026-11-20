@@ -15,8 +15,11 @@ from __future__ import annotations
 
 from app.config import settings
 from app.core.logging import get_logger
+from app.services.cv._base import BaseYOLODetector
 from app.services.cv.door_estimator import DoorEstimator
+from app.services.cv.elevator_detector import ElevatorDetector
 from app.services.cv.ramp_detector import RampDetector
+from app.services.cv.signage_detector import SignageDetector
 from app.services.cv.step_detector import StepDetector
 
 logger = get_logger(__name__)
@@ -50,9 +53,22 @@ class CVPipeline:
         self._ramp = RampDetector()
         self._step = StepDetector()
         self._door = DoorEstimator()
+        self._elevator = ElevatorDetector()
+        self._signage = SignageDetector()
+        acc_weights = settings.yolo_weights_path["accessibility"]
+        self._acc_ramp = BaseYOLODetector(weight_path=acc_weights, target_classes=("wheelchair-ramp", "ramp"))
+        self._acc_step = BaseYOLODetector(weight_path=acc_weights, target_classes=StepDetector.TARGET_CLASSES)
 
         # Warm-up heavy models immediately so the first HTTP request is instantaneous (<0.2s)
-        for detector in (self._ramp, self._step, self._door):
+        for detector in (
+            self._ramp,
+            self._step,
+            self._door,
+            self._elevator,
+            self._signage,
+            self._acc_ramp,
+            self._acc_step,
+        ):
             if detector and hasattr(detector, "_load_model"):
                 try:
                     detector._load_model()
@@ -60,10 +76,12 @@ class CVPipeline:
                     logger.warning("Eager model warm-up skipped: %s", exc)
 
         logger.info(
-            "CV pipeline ready | active detectors: ramp=%s, step=%s, door=%s",
+            "CV pipeline ready | active detectors: ramp=%s, step=%s, door=%s, elevator=%s, signage=%s",
             self._ramp._engine,
             self._step._engine,
             self._door._engine,
+            self._elevator._engine,
+            self._signage._engine,
         )
 
     def run(self, images: list[bytes]) -> dict:
@@ -89,21 +107,23 @@ class CVPipeline:
         """
         # Initialise accumulators
         agg: dict[str, dict] = {
-            "exterior_ramp_present":   {"value": "unknown", "confidence": 0.0, "method": "detector", "reason": "Chưa đủ dữ liệu để kết luận từ ảnh này"},
-            "ramp_slope_compliant":    {"value": "unknown", "confidence": 0.0, "method": "unmeasured", "reason": "Cần đo đạc thực địa hoặc nhập kích thước chiều cao/chiều dài dốc"},
-            "steps_present":           {"value": "unknown", "confidence": 0.0, "method": "detector", "reason": "Chưa đủ dữ liệu để kết luận từ ảnh này", "step_count_estimate": None},
-            "elevator_present":        {"value": "unknown", "confidence": 0.0, "method": "unsupported", "reason": "Chưa hỗ trợ nhận diện đặc tính này trong ảnh"},
-            "door_detected":           {"value": "unknown", "confidence": 0.0, "method": "detector", "reason": "Chưa đủ dữ liệu để kết luận từ ảnh này"},
-            "door_width_compliant":    {"value": "unknown", "confidence": 0.0, "method": "unmeasured", "reason": "Không thể đo chiều rộng chính xác từ ảnh 2D đơn lẻ"},
-            "door_width_ok":           {"value": "unknown", "confidence": 0.0, "method": "unmeasured", "reason": "Legacy field: chỉ suy ra từ số đo đã xác minh"},
-            "accessible_restroom_sign": {"value": "unknown", "confidence": 0.0, "method": "unsupported", "reason": "Chưa hỗ trợ nhận diện đặc tính này trong ảnh"},
-            "tactile_paving_present":  {"value": "unknown", "confidence": 0.0, "method": "unsupported", "reason": "Chưa hỗ trợ nhận diện đặc tính này trong ảnh"},
+            "exterior_ramp_present":    {"value": "unknown", "confidence": 0.0, "method": "detector", "reason": "Chưa đủ dữ liệu để kết luận từ ảnh này"},
+            "ramp_slope_compliant":     {"value": "unknown", "confidence": 0.0, "method": "unmeasured", "reason": "Cần đo đạc thực địa hoặc nhập kích thước chiều cao/chiều dài dốc"},
+            "steps_present":            {"value": "unknown", "confidence": 0.0, "method": "detector", "reason": "Chưa đủ dữ liệu để kết luận từ ảnh này", "step_count_estimate": None},
+            "elevator_present":         {"value": "unknown", "confidence": 0.0, "method": "detector", "reason": "Chưa đủ dữ liệu để kết luận từ ảnh này"},
+            "door_detected":            {"value": "unknown", "confidence": 0.0, "method": "detector", "reason": "Chưa đủ dữ liệu để kết luận từ ảnh này"},
+            "door_width_compliant":     {"value": "unknown", "confidence": 0.0, "method": "unmeasured", "reason": "Không thể đo chiều rộng chính xác từ ảnh 2D đơn lẻ"},
+            "door_width_ok":            {"value": "unknown", "confidence": 0.0, "method": "unmeasured", "reason": "Legacy field: chỉ suy ra từ số đo đã xác minh"},
+            "accessible_restroom_sign": {"value": "unknown", "confidence": 0.0, "method": "detector", "reason": "Chưa đủ dữ liệu để kết luận từ ảnh này"},
+            "tactile_paving_present":   {"value": "unknown", "confidence": 0.0, "method": "unsupported", "reason": "Chưa hỗ trợ nhận diện đặc tính này trong ảnh"},
         }
 
         engines_used: set[str] = set()
         ramp_r: dict = {"status": "completed", "engine": "none"}
         step_r: dict = {"status": "completed", "engine": "none"}
         door_r: dict = {"status": "completed", "engine": "none"}
+        elev_r: dict = {"status": "completed", "engine": "none"}
+        sign_r: dict = {"status": "completed", "engine": "none"}
 
         for idx, img_bytes in enumerate(images):
             logger.debug("CV pipeline processing image %d/%d", idx + 1, len(images))
@@ -114,18 +134,60 @@ class CVPipeline:
                 img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
                 target_input = img if img is not None else img_bytes
 
-                ramp_r = self._ramp.detect_ramp(target_input)
-                step_r = self._step.detect_steps(target_input)
                 door_r = self._door.detect_door(target_input)
+                elev_r = self._elevator.detect_elevator(target_input)
+                sign_r = self._signage.detect_signage(target_input)
 
-                for r in (ramp_r, step_r, door_r):
+                acc_ramp_res = self._acc_ramp._detect(target_input)
+                ramp_r = self._ramp.detect_ramp(target_input)
+                if acc_ramp_res.detected and acc_ramp_res.max_confidence >= ramp_r.get("confidence", 0.0):
+                    ramp_r = {
+                        "value": True,
+                        "confidence": round(acc_ramp_res.max_confidence, 4),
+                        "bbox_normalized": acc_ramp_res.boxes_normalized[0] if acc_ramp_res.boxes_normalized else None,
+                        "engine": acc_ramp_res.engine,
+                        "status": acc_ramp_res.status,
+                        "error_code": acc_ramp_res.error_code,
+                    }
+                elif sign_r.get("restroom_fixture_detected") and sign_r.get("confidence", 0.0) >= 0.35 and not acc_ramp_res.detected:
+                    logger.info(
+                        "Suppressing ramp.pt detection (conf=%.3f) due to indoor restroom fixture (conf=%.3f)",
+                        ramp_r.get("confidence", 0.0),
+                        sign_r.get("confidence", 0.0),
+                    )
+                    ramp_r = {
+                        "value": False,
+                        "confidence": 0.0,
+                        "bbox_normalized": None,
+                        "engine": ramp_r.get("engine", "yolo"),
+                        "status": "completed",
+                        "error_code": None,
+                        "reason": "Triệt tiêu nhận diện nhầm ram dốc trong khu vực nhà vệ sinh",
+                    }
+
+                acc_step_res = self._acc_step._detect(target_input)
+                step_r = self._step.detect_steps(target_input)
+                if acc_step_res.detected and acc_step_res.max_confidence > step_r.get("confidence", 0.0):
+                    step_r = {
+                        "value": True,
+                        "step_count_estimate": acc_step_res.count,
+                        "confidence": round(acc_step_res.max_confidence, 4),
+                        "bbox_normalized": acc_step_res.boxes_normalized[0] if acc_step_res.boxes_normalized else None,
+                        "engine": acc_step_res.engine,
+                        "status": acc_step_res.status,
+                        "error_code": acc_step_res.error_code,
+                    }
+
+                for r in (ramp_r, step_r, door_r, elev_r, sign_r):
                     eng = r.get("engine")
                     if eng and eng not in ("none", "pending", "unavailable"):
                         engines_used.add(eng)
 
-                agg["exterior_ramp_present"] = _merge(agg["exterior_ramp_present"], ramp_r)
-                agg["steps_present"]         = _merge(agg["steps_present"], step_r)
-                agg["door_detected"]          = _merge(agg["door_detected"], door_r)
+                agg["exterior_ramp_present"]    = _merge(agg["exterior_ramp_present"], ramp_r)
+                agg["steps_present"]            = _merge(agg["steps_present"], step_r)
+                agg["door_detected"]            = _merge(agg["door_detected"], door_r)
+                agg["elevator_present"]         = _merge(agg["elevator_present"], elev_r)
+                agg["accessible_restroom_sign"] = _merge(agg["accessible_restroom_sign"], sign_r)
 
             except Exception as exc:
                 logger.exception("CV pipeline error on image %d: %s", idx, exc)

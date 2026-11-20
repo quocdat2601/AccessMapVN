@@ -2,6 +2,37 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabasePublicConfig, isSupabaseConfigured } from "@/shared/config/runtime";
 
+export function hasAdminClaim(claims: Record<string, unknown> | null | undefined): boolean {
+  if (!claims || typeof claims !== "object") {
+    return false;
+  }
+
+  const appMetadata = claims.app_metadata;
+  if (!appMetadata || typeof appMetadata !== "object") {
+    return false;
+  }
+
+  const meta = appMetadata as Record<string, unknown>;
+  if (typeof meta.role === "string") {
+    const normalizedRole = meta.role.trim().toLowerCase();
+    if (normalizedRole === "admin" || normalizedRole === "moderator") {
+      return true;
+    }
+  }
+
+  if (Array.isArray(meta.permissions)) {
+    return meta.permissions.some((permission) => {
+      if (typeof permission !== "string") {
+        return false;
+      }
+      const normalized = permission.trim().toLowerCase();
+      return normalized === "community.moderate" || normalized === "wf02.moderate";
+    });
+  }
+
+  return false;
+}
+
 function copySessionState(source: NextResponse, target: NextResponse) {
   source.cookies.getAll().forEach((cookie) => target.cookies.set(cookie));
   for (const headerName of ["cache-control", "expires", "pragma"]) {
@@ -46,6 +77,7 @@ export async function updateSession(request: NextRequest) {
 
   const { data, error } = await supabase.auth.getClaims();
   const isAuthenticated = Boolean(data?.claims?.sub) && !error;
+  const isAdmin = isAuthenticated && hasAdminClaim(data?.claims as Record<string, unknown> | undefined);
 
   if (isAdminRoute && !isAuthenticated) {
     const loginUrl = request.nextUrl.clone();
@@ -58,7 +90,15 @@ export async function updateSession(request: NextRequest) {
     return copySessionState(response, NextResponse.redirect(loginUrl));
   }
 
-  if (isLoginRoute && isAuthenticated) {
+  if (isAdminRoute && !isAdmin) {
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = "/login";
+    loginUrl.search = "";
+    loginUrl.searchParams.set("reason", "forbidden");
+    return copySessionState(response, NextResponse.redirect(loginUrl));
+  }
+
+  if (isLoginRoute && isAdmin) {
     const adminUrl = request.nextUrl.clone();
     adminUrl.pathname = "/admin";
     adminUrl.search = "";

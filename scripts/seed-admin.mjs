@@ -98,10 +98,15 @@ async function seedAdmin() {
     [userId]
   );
 
-  // 5. Also grant Admin role to quocdat2601@gmail.com in app_users if exists
+  // 5. Also grant Admin role to quocdat2601@gmail.com in app_users and auth.users if exists
   await client.query(`
     UPDATE public.app_users
     SET role = 3, is_active = true, reputation_tier = 'Admin', updated_at_utc = now()
+    WHERE id = '9ee9105a-e995-4256-a0af-86b6a25882cd';
+  `);
+  await client.query(`
+    UPDATE auth.users
+    SET raw_app_meta_data = COALESCE(raw_app_meta_data, '{}'::jsonb) || '{"role":"admin","permissions":["Community.Moderate"]}'::jsonb
     WHERE id = '9ee9105a-e995-4256-a0af-86b6a25882cd';
   `);
 

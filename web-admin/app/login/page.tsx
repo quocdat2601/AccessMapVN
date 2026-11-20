@@ -54,7 +54,11 @@ export default async function LoginPage({
           <p className="mt-2 text-sm leading-6 text-slate-500 sm:text-base">
             Truy cập hệ thống quản trị AccessMapVN
           </p>
-          <LoginForm nextPath={next} configurationMissing={reason === "configuration"} />
+          <LoginForm
+            nextPath={next}
+            configurationMissing={reason === "configuration"}
+            forbidden={reason === "forbidden"}
+          />
         </div>
       </section>
     </main>

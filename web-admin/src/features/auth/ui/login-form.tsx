@@ -4,26 +4,37 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, ArrowRight, Eye, EyeOff, LockKeyhole, UserRound } from "lucide-react";
 import { createBrowserSupabaseClient } from "@/shared/lib/supabase/client";
+import { hasAdminClaim } from "@/shared/lib/supabase/proxy";
 import { Button } from "@/shared/ui/button";
 
 function safeNextPath(value?: string) {
   return value?.startsWith("/admin") ? value : "/admin";
 }
 
+function resolveInitialError(configurationMissing: boolean, forbidden: boolean): string | null {
+  if (configurationMissing) {
+    return "Supabase Auth chưa được cấu hình. Hãy bổ sung các biến môi trường theo .env.example.";
+  }
+  if (forbidden) {
+    return "Tài khoản của bạn không có quyền truy cập hệ thống quản trị.";
+  }
+  return null;
+}
+
 export function LoginForm({
   nextPath,
   configurationMissing = false,
+  forbidden = false,
 }: {
   nextPath?: string;
   configurationMissing?: boolean;
+  forbidden?: boolean;
 }) {
   const router = useRouter();
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(
-    configurationMissing
-      ? "Supabase Auth chưa được cấu hình. Hãy bổ sung các biến môi trường theo .env.example."
-      : null,
+    resolveInitialError(configurationMissing, forbidden),
   );
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -37,8 +48,13 @@ export function LoginForm({
 
     try {
       const supabase = createBrowserSupabaseClient();
-      const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+      const { data: signInData, error: authError } = await supabase.auth.signInWithPassword({ email, password });
       if (authError) throw authError;
+
+      if (!hasAdminClaim({ app_metadata: signInData.user?.app_metadata })) {
+        await supabase.auth.signOut();
+        throw new Error("Tài khoản của bạn không có quyền truy cập hệ thống quản trị.");
+      }
 
       router.replace(safeNextPath(nextPath));
       router.refresh();

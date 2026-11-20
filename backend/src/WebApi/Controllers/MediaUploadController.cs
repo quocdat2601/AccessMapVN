@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AccessMapVN.WebApi.Controllers;
@@ -16,6 +17,7 @@ public class MediaUploadController : ControllerBase
     public record Base64UploadRequest(string? FileName, string? Base64Data, string? ContentType);
 
     [HttpPost("upload")]
+    [Authorize]
     [Consumes("multipart/form-data")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -52,6 +54,7 @@ public class MediaUploadController : ControllerBase
     }
 
     [HttpPost("upload-base64")]
+    [Authorize]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> UploadBase64([FromBody] Base64UploadRequest request, CancellationToken cancellationToken)
@@ -102,6 +105,7 @@ public class MediaUploadController : ControllerBase
 
     [HttpGet("/uploads/{fileName}")]
     [HttpHead("/uploads/{fileName}")]
+    [AllowAnonymous]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public IActionResult GetMedia(string fileName)

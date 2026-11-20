@@ -27,7 +27,7 @@ class StepDetector(BaseYOLODetector):
         super().__init__(
             weight_path=weight_path,
             target_classes=self.TARGET_CLASSES,
-            effective_conf_threshold=effective_conf_threshold,
+            effective_conf_threshold=effective_conf_threshold or settings.yolo_step_conf_threshold,
         )
 
     def detect_steps(self, image_input: bytes | np.ndarray) -> dict:

@@ -215,21 +215,22 @@ class BaseYOLODetector:
             return DetectionResult.empty(engine="unavailable", status="unavailable", error_code="weights_missing")
 
         # Real YOLO inference (reuse cached results across detectors sharing a model and numpy frame)
+        predict_conf = min(settings.yolo_conf_threshold, self.effective_conf_threshold)
         try:
             if isinstance(image_input, np.ndarray):
-                pred_key = (id(model), id(image_input), self.effective_conf_threshold)
+                pred_key = (id(model), id(image_input), predict_conf)
                 with _PREDICTION_LOCK:
                     results = _LAST_PREDICTION_CACHE.get(pred_key)
                 if results is None:
                     results = model.predict(
                         source=img,
-                        conf=self.effective_conf_threshold,
+                        conf=predict_conf,
                         imgsz=settings.yolo_img_size,
                         verbose=False,
                     )
                     with _PREDICTION_LOCK:
-                        ref_key = (id(model), self.effective_conf_threshold)
-                        stale = [k for k in _LAST_PREDICTION_CACHE if k[0] == id(model) and k[2] == self.effective_conf_threshold]
+                        ref_key = (id(model), predict_conf)
+                        stale = [k for k in _LAST_PREDICTION_CACHE if k[0] == id(model) and k[2] == predict_conf]
                         for k in stale:
                             del _LAST_PREDICTION_CACHE[k]
                         _LAST_IMAGE_REF_BY_KEY[ref_key] = image_input
@@ -237,7 +238,7 @@ class BaseYOLODetector:
             else:
                 results = model.predict(
                     source=img,
-                    conf=self.effective_conf_threshold,
+                    conf=predict_conf,
                     imgsz=settings.yolo_img_size,
                     verbose=False,
                 )
@@ -266,6 +267,9 @@ class BaseYOLODetector:
                 cls_id   = int(box.cls[0].item())
                 cls_name = model.names.get(cls_id, str(cls_id))
                 conf     = float(box.conf[0].item())
+
+                if conf < self.effective_conf_threshold:
+                    continue
 
                 # Filter by target class(es) if specified
                 if self._target_classes:

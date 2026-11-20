@@ -13,6 +13,7 @@ ponytail: timestamps are the nominal ``index / fps`` of the ``fps`` filter,
 """
 from __future__ import annotations
 
+import base64
 import json
 import os
 import subprocess
@@ -31,6 +32,7 @@ logger = get_logger(__name__)
 
 _MIN_BRIGHTNESS = 25.0
 _MAX_BRIGHTNESS = 235.0
+_SINGLE_FRAME_MIN_CONF = 0.45
 
 # video-level suggestion key -> CVPipeline feature key
 _SUGGESTION_KEYS = {
@@ -282,6 +284,7 @@ def aggregate_visual_observations(frame_results: list[tuple[Frame, dict]]) -> di
     confidence is kept only as per-frame provenance, never averaged.
     """
     suggestions: dict[str, dict] = {}
+    multi_frame = len(frame_results) >= 2
     for out_key, cv_key in _SUGGESTION_KEYS.items():
         evidence = [
             {
@@ -292,11 +295,107 @@ def aggregate_visual_observations(frame_results: list[tuple[Frame, dict]]) -> di
             for frame, result in frame_results
             if _is_present(result.get(cv_key, {}))
         ]
+        if (
+            multi_frame
+            and len(evidence) == 1
+            and float(evidence[0]["detector_confidence"] or 0.0) < _SINGLE_FRAME_MIN_CONF
+        ):
+            evidence = []
         suggestions[out_key] = {
             "value": "suggested_present" if evidence else "unknown",
             "evidence": evidence,
         }
     return suggestions
+
+
+def _pick_preview_frame(
+    frame_results: list[tuple[Frame, dict]],
+    selected: list[Frame],
+) -> Frame | None:
+    best_frame: Frame | None = None
+    best_conf = -1.0
+    for frame, result in frame_results:
+        for cv_key in _SUGGESTION_KEYS.values():
+            obs = result.get(cv_key, {})
+            if _is_present(obs):
+                conf = float(obs.get("confidence", 0.0) or 0.0)
+                if conf > best_conf:
+                    best_conf = conf
+                    best_frame = frame
+    if best_frame is not None:
+        return best_frame
+    return max(selected, key=lambda f: f.sharpness) if selected else None
+
+
+def _encode_preview_frame(frame: Frame, max_dim: int = 640) -> str:
+    raw_bytes = frame.jpeg
+    arr = np.frombuffer(raw_bytes, dtype=np.uint8)
+    bgr = cv2.imdecode(arr, cv2.IMREAD_COLOR) if arr.size > 0 else None
+    if bgr is not None:
+        h, w = bgr.shape[:2]
+        if max(h, w) > max_dim:
+            scale = max_dim / float(max(h, w))
+            bgr = cv2.resize(bgr, (max(1, int(w * scale)), max(1, int(h * scale))), interpolation=cv2.INTER_AREA)
+        ok, buf = cv2.imencode(".jpg", bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+        if ok:
+            raw_bytes = buf.tobytes()
+    encoded = base64.b64encode(raw_bytes).decode("ascii")
+    return f"data:image/jpeg;base64,{encoded}"
+
+
+def extract_poster_frame(video_bytes: bytes, max_side: int = 720) -> bytes:
+    """Extract a sharp representative JPEG poster frame from raw video bytes."""
+    if not video_bytes:
+        raise VideoValidationError("not_a_video", "Video payload is empty.")
+    if len(video_bytes) > settings.video_max_bytes:
+        raise VideoValidationError("file_too_large", "Video exceeds the size limit.")
+
+    fd, path = tempfile.mkstemp(prefix="poster_", suffix=".mp4")
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(video_bytes)
+        cap = cv2.VideoCapture(path)
+        try:
+            try:
+                cap.set(cv2.CAP_PROP_ORIENTATION_AUTO, 1)
+            except Exception:
+                pass
+            if not cap.isOpened():
+                raise VideoValidationError("decode_failed", "Video could not be opened.")
+
+            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+            target_idx = min(10, frame_count // 4) if frame_count > 10 else 0
+            bgr = None
+            if target_idx > 0:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, target_idx)
+                ok, candidate = cap.read()
+                if ok and candidate is not None and candidate.size > 0:
+                    bgr = candidate
+            if bgr is None:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                ok, first_frame = cap.read()
+                if ok and first_frame is not None and first_frame.size > 0:
+                    bgr = first_frame
+        finally:
+            cap.release()
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+    if bgr is None:
+        raise VideoValidationError("decode_failed", "No readable frame found in video.")
+
+    h, w = bgr.shape[:2]
+    if max(h, w) > max_side:
+        scale = max_side / float(max(h, w))
+        bgr = cv2.resize(bgr, (max(1, int(w * scale)), max(1, int(h * scale))), interpolation=cv2.INTER_AREA)
+
+    ok, buf = cv2.imencode(".jpg", bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 82])
+    if not ok:
+        raise VideoValidationError("decode_failed", "Failed to encode poster JPEG.")
+    return buf.tobytes()
 
 
 def analyze_video(video_bytes: bytes, cv_pipeline: CvRunner) -> dict:
@@ -315,10 +414,14 @@ def analyze_video(video_bytes: bytes, cv_pipeline: CvRunner) -> dict:
         "compliance": {"door_width_compliant": "unknown", "ramp_slope_compliant": "unknown"},
         "warnings": selection.warnings,
         "requires_user_confirmation": True,
+        "preview_frame_data_uri": None,
     }
     if not selection.selected:
         return response
 
     frame_results = [(f, cv_pipeline.run([f.jpeg])) for f in selection.selected]
     response["suggestions"] = aggregate_visual_observations(frame_results)
+    preview_frame = _pick_preview_frame(frame_results, selection.selected)
+    if preview_frame is not None:
+        response["preview_frame_data_uri"] = _encode_preview_frame(preview_frame)
     return response

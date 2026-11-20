@@ -39,13 +39,14 @@ class TestAiServiceEndpoints(unittest.TestCase):
             fake_model.predict.return_value = [_EmptyYoloResult()]
             for detector in (
                 _cv_pipeline._ramp,
+                _cv_pipeline._ramp_fallback,
                 _cv_pipeline._step,
                 _cv_pipeline._door,
                 _cv_pipeline._elevator,
                 _cv_pipeline._signage,
-                _cv_pipeline._acc_ramp,
-                _cv_pipeline._acc_step,
             ):
+                if detector is None:
+                    continue
                 detector._engine = "yolo"
                 detector._initialization_attempted = True
                 detector._model = fake_model
@@ -315,9 +316,8 @@ class TestAiServiceEndpoints(unittest.TestCase):
             self.assertEqual(features[feat_key]["method"], "detector")
 
     def test_restroom_fixture_suppresses_false_positive_ramp(self):
-        """Indoor restroom fixture detection suppresses false-positive ramp.pt detections."""
+        """Indoor restroom fixture detection suppresses false-positive ramp detections."""
         from app.api.pre_scan import _cv_pipeline
-        from app.services.cv._base import DetectionResult
 
         valid_img = create_dummy_image_bytes()
         restroom_hit = {
@@ -340,7 +340,6 @@ class TestAiServiceEndpoints(unittest.TestCase):
         with (
             patch.object(_cv_pipeline._signage, "detect_signage", return_value=restroom_hit),
             patch.object(_cv_pipeline._ramp, "detect_ramp", return_value=false_ramp),
-            patch.object(_cv_pipeline._acc_ramp, "_detect", return_value=DetectionResult.empty(engine="yolo", status="completed")),
         ):
             res = self.client.post(
                 "/api/v1/ai/pre-scan",
@@ -351,6 +350,130 @@ class TestAiServiceEndpoints(unittest.TestCase):
         self.assertEqual(features["accessible_restroom_sign"]["value"], "present")
         self.assertEqual(features["exterior_ramp_present"]["value"], "unknown")
         self.assertEqual(features["exterior_ramp_present"]["confidence"], 0.0)
+
+    def test_indoor_elevator_suppresses_false_positive_ramp(self):
+        """Indoor elevator detection suppresses false-positive ramp detections."""
+        from app.api.pre_scan import _cv_pipeline
+
+        valid_img = create_dummy_image_bytes()
+        elev_hit = {
+            "value": True,
+            "confidence": 0.75,
+            "bbox_normalized": [0.1, 0.1, 0.5, 0.9],
+            "engine": "yolo",
+            "status": "completed",
+            "error_code": None,
+        }
+        false_ramp = {
+            "value": True,
+            "confidence": 0.70,
+            "bbox_normalized": [0.2, 0.2, 0.8, 0.8],
+            "engine": "yolo",
+            "status": "completed",
+            "error_code": None,
+        }
+        with (
+            patch.object(_cv_pipeline._elevator, "detect_elevator", return_value=elev_hit),
+            patch.object(_cv_pipeline._ramp, "detect_ramp", return_value=false_ramp),
+        ):
+            res = self.client.post(
+                "/api/v1/ai/pre-scan",
+                files=[("images", ("indoor_elevator.jpg", valid_img, "image/jpeg"))],
+            )
+        self.assertEqual(res.status_code, 200)
+        features = res.json()["features"]
+        self.assertEqual(features["elevator_present"]["value"], "present")
+        self.assertEqual(features["exterior_ramp_present"]["value"], "unknown")
+        self.assertEqual(features["exterior_ramp_present"]["confidence"], 0.0)
+
+    def test_ramp_fallback_promotes_high_conf_and_respects_indoor_guard(self):
+        """High-confidence ramp fallback promotes missed outdoor ramps, unless indoor elevator is detected."""
+        from app.api.pre_scan import _cv_pipeline
+        from app.services.cv._base import DetectionResult
+
+        valid_img = create_dummy_image_bytes()
+        empty_det = {"value": False, "confidence": 0.0, "bbox_normalized": None, "engine": "yolo", "status": "completed", "error_code": None}
+        fb_ramp_det = DetectionResult(
+            detected=True,
+            max_confidence=0.73,
+            boxes=[[20.0, 40.0, 200.0, 220.0]],
+            boxes_normalized=[[0.07, 0.25, 0.73, 0.65]],
+            class_names=["ramp"],
+            count=1,
+            engine="yolo",
+            status="completed",
+        )
+        fb_detector = _cv_pipeline._ramp_fallback or MagicMock()
+        elev_det = {"value": True, "confidence": 0.75, "bbox_normalized": [0.1, 0.1, 0.6, 0.9], "engine": "yolo", "status": "completed", "error_code": None}
+
+        with (
+            patch.object(_cv_pipeline, "_ramp_fallback", fb_detector),
+            patch.object(_cv_pipeline._ramp, "detect_ramp", return_value=empty_det),
+            patch.object(fb_detector, "_detect", return_value=fb_ramp_det) as mock_fb,
+        ):
+            res_outdoor = self.client.post(
+                "/api/v1/ai/pre-scan",
+                files=[("images", ("outdoor_ramp.jpg", valid_img, "image/jpeg"))],
+            )
+            self.assertEqual(res_outdoor.status_code, 200)
+            self.assertEqual(res_outdoor.json()["features"]["exterior_ramp_present"]["value"], "present")
+            self.assertAlmostEqual(res_outdoor.json()["features"]["exterior_ramp_present"]["confidence"], 0.73, places=2)
+            self.assertEqual(mock_fb.call_count, 1)
+
+            with patch.object(_cv_pipeline._elevator, "detect_elevator", return_value=elev_det):
+                res_indoor = self.client.post(
+                    "/api/v1/ai/pre-scan",
+                    files=[("images", ("indoor_elev.jpg", valid_img, "image/jpeg"))],
+                )
+            self.assertEqual(res_indoor.status_code, 200)
+            self.assertEqual(res_indoor.json()["features"]["exterior_ramp_present"]["value"], "unknown")
+            self.assertEqual(mock_fb.call_count, 1)
+
+    def test_off_domain_guard_suppresses_fallback_ramp_and_marginal_stairs(self):
+        """Off-domain scene guard suppresses fallback ramps and marginal (<0.65) detections."""
+        from app.api.pre_scan import _cv_pipeline
+        from app.services.cv._base import DetectionResult
+
+        valid_img = create_dummy_image_bytes()
+        empty_det = {"value": False, "confidence": 0.0, "bbox_normalized": None, "engine": "yolo", "status": "completed", "error_code": None}
+        fb_ramp_det = DetectionResult(
+            detected=True,
+            max_confidence=0.81,
+            boxes=[[10.0, 20.0, 200.0, 220.0]],
+            boxes_normalized=[[0.03, 0.25, 0.88, 0.90]],
+            class_names=["ramp"],
+            count=1,
+            engine="yolo",
+            status="completed",
+        )
+        marginal_stairs = {
+            "value": True,
+            "step_count_estimate": 1,
+            "confidence": 0.48,
+            "bbox_normalized": [0.1, 0.2, 0.6, 0.5],
+            "engine": "yolo",
+            "status": "completed",
+            "error_code": None,
+        }
+        fb_detector = _cv_pipeline._ramp_fallback or MagicMock()
+
+        with (
+            patch.object(_cv_pipeline, "_ramp_fallback", fb_detector),
+            patch.object(_cv_pipeline._ramp, "detect_ramp", return_value=empty_det),
+            patch.object(fb_detector, "_detect", return_value=fb_ramp_det),
+            patch.object(_cv_pipeline._step, "detect_steps", return_value=marginal_stairs),
+            patch.object(_cv_pipeline, "_is_off_domain_scene", return_value=(True, "off_domain:keyboard")),
+        ):
+            res = self.client.post(
+                "/api/v1/ai/pre-scan",
+                files=[("images", ("keyboard.jpg", valid_img, "image/jpeg"))],
+            )
+        self.assertEqual(res.status_code, 200)
+        features = res.json()["features"]
+        self.assertEqual(features["exterior_ramp_present"]["value"], "unknown")
+        self.assertEqual(features["exterior_ramp_present"]["confidence"], 0.0)
+        self.assertEqual(features["steps_present"]["value"], "unknown")
+        self.assertEqual(features["steps_present"]["confidence"], 0.0)
 
     def test_summary_separates_visual_observations_from_contributor_claims(self):
         """Summary must not overwrite visual observations with user text, clearly attributing contributor claim."""

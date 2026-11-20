@@ -18,7 +18,11 @@ class ElevatorDetector(BaseYOLODetector):
 
     def __init__(self) -> None:
         weight_path = settings.yolo_weights_path["elevator"]
-        super().__init__(weight_path=weight_path, target_class=self.TARGET_CLASS)
+        super().__init__(
+            weight_path=weight_path,
+            target_class=self.TARGET_CLASS,
+            effective_conf_threshold=settings.yolo_elevator_conf_threshold,
+        )
 
     def detect_elevator(self, image_input: bytes | np.ndarray) -> dict:
         """

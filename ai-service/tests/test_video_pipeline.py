@@ -100,6 +100,35 @@ class TestAggregation(unittest.TestCase):
         self.assertEqual(out["compliance"]["door_width_compliant"], "unknown")
         self.assertTrue(out["requires_user_confirmation"])
         self.assertEqual(out["frames_analyzed"], 1)
+        self.assertIsNotNone(out["preview_frame_data_uri"])
+        self.assertTrue(out["preview_frame_data_uri"].startswith("data:image/jpeg;base64,"))
+
+    def test_single_frame_weak_flicker_suppressed_but_strong_or_multi_frame_kept(self):
+        frames = [make_frame(1, 1), make_frame(2, 2), make_frame(3, 3)]
+        absent = {"value": False, "confidence": 0.0}
+
+        def make_obs(ramp_conf=0.0, door_conf=0.0, step_conf=0.0):
+            return {
+                "exterior_ramp_present": {"value": ramp_conf > 0, "confidence": ramp_conf},
+                "door_detected": {"value": "present" if door_conf > 0 else "unknown", "confidence": door_conf},
+                "steps_present": {"value": step_conf > 0, "confidence": step_conf},
+                "elevator_present": absent,
+                "accessible_restroom_sign": absent,
+                "tactile_paving_present": absent,
+            }
+
+        results = [
+            (frames[0], make_obs(ramp_conf=0.31, door_conf=0.55, step_conf=0.32)),
+            (frames[1], make_obs(step_conf=0.33)),
+            (frames[2], make_obs()),
+        ]
+        suggestions = vp.aggregate_visual_observations(results)
+        self.assertEqual(suggestions["ramp_present"]["value"], "unknown")
+        self.assertEqual(suggestions["ramp_present"]["evidence"], [])
+        self.assertEqual(suggestions["door_detected"]["value"], "suggested_present")
+        self.assertEqual(len(suggestions["door_detected"]["evidence"]), 1)
+        self.assertEqual(suggestions["steps_present"]["value"], "suggested_present")
+        self.assertEqual(len(suggestions["steps_present"]["evidence"]), 2)
 
 
 class TestVideoEndpoint(unittest.TestCase):
@@ -200,6 +229,28 @@ class TestProbeVideo(unittest.TestCase):
         self.assertGreater(selection.frames_sampled, 0)
         self.assertGreater(len(selection.selected), 0)
         self.assertLessEqual(len(selection.selected), 4)
+
+    def test_extract_poster_frame_returns_jpeg_and_rejects_empty(self):
+        with self.assertRaises(vp.VideoValidationError):
+            vp.extract_poster_frame(b"")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            video_path = str(Path(tmpdir) / "poster_sample.mp4")
+            writer = cv2.VideoWriter(video_path, cv2.VideoWriter_fourcc(*"mp4v"), 5.0, (180, 320))
+            if not writer.isOpened():
+                self.skipTest("OpenCV VideoWriter mp4v encoder unavailable")
+            try:
+                for idx in range(15):
+                    frame = np.full((320, 180, 3), 60 + idx * 5, dtype=np.uint8)
+                    cv2.putText(frame, f"P{idx}", (20, 160), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
+                    writer.write(frame)
+            finally:
+                writer.release()
+            raw_bytes = Path(video_path).read_bytes()
+
+        poster = vp.extract_poster_frame(raw_bytes)
+        self.assertTrue(poster.startswith(b"\xff\xd8"))
+        self.assertGreater(len(poster), 500)
 
 
 if __name__ == "__main__":

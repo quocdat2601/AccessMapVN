@@ -147,6 +147,7 @@ class VideoPreScanResponse(BaseModel):
     compliance: dict[str, str]
     warnings: list[str] = Field(default_factory=list)
     requires_user_confirmation: bool = True
+    preview_frame_data_uri: str | None = None
 
 
 # ── Verify ─────────────────────────────────────────────────────────────────────

@@ -31,13 +31,17 @@ class Settings(BaseSettings):
     yolo_elevator_weights: str = "yolo/accessibility_v8s.pt"
     yolo_door_weights: str = "yolo/accessibility_v8s.pt"
     yolo_signage_weights: str = "yolo/accessibility_v8s.pt"
+    yolo_ood_weights: str = "yolo/yolov8n.pt"
 
     # PhoBERT (HuggingFace local path or hub id)
     phobert_model_path: str = str(_SERVICE_ROOT / "models" / "phobert")
     phobert_classifier_labels: list[str] = ["not_accessibility", "accessibility"]
 
     # ── CV pipeline ────────────────────────────────────────────────────────────
-    yolo_conf_threshold: float = 0.28          # minimum detection confidence for YOLOv8 (calibrated for real-world entrance/door/stair detection)
+    yolo_conf_threshold: float = 0.36          # minimum detection confidence for YOLOv8 (calibrated against out-of-domain false positives)
+    yolo_step_conf_threshold: float = 0.46
+    yolo_elevator_conf_threshold: float = 0.38
+    yolo_ramp_fallback_conf_threshold: float = 0.62
     yolo_img_size: int = 640                   # inference resolution
 
     # Video / keyframe extraction
@@ -89,16 +93,20 @@ class Settings(BaseSettings):
     def yolo_weights_path(self) -> dict[str, Path]:
         """Return a mapping of detector name → absolute weight path."""
         base = self.models_dir
-        step_p = base / self.yolo_step_weights
+        acc_p = base / self.yolo_accessibility_weights
+        ramp_p = acc_p if acc_p.exists() else base / self.yolo_ramp_weights
+        step_p = acc_p if acc_p.exists() else base / self.yolo_step_weights
         if not step_p.exists():
-            step_p = base / self.yolo_ramp_weights
+            step_p = ramp_p
         return {
-            "accessibility": base / self.yolo_accessibility_weights,
-            "ramp":     base / self.yolo_ramp_weights,
-            "step":     step_p,
-            "elevator": base / self.yolo_elevator_weights,
-            "door":     base / self.yolo_door_weights,
-            "signage":  base / self.yolo_signage_weights,
+            "accessibility": acc_p,
+            "ramp":          ramp_p,
+            "ramp_fallback": base / self.yolo_ramp_weights,
+            "step":          step_p,
+            "elevator":      base / self.yolo_elevator_weights,
+            "door":          base / self.yolo_door_weights,
+            "signage":       base / self.yolo_signage_weights,
+            "ood":           base / self.yolo_ood_weights,
         }
 
 

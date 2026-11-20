@@ -1,5 +1,18 @@
-import React, { useState } from 'react';
-import { Image, Modal, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Alert,
+  FlatList,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import { Image } from 'expo-image';
+import * as WebBrowser from 'expo-web-browser';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { EvidenceItem } from './types';
@@ -10,6 +23,28 @@ interface EvidenceGallerySectionProps {
   onViewAll?: () => void;
   showDemoContent?: boolean;
   isVerified?: boolean;
+}
+
+function getFallbackSpec(item: EvidenceItem | undefined, isVerified: boolean): { tag: string; icon: string } | null {
+  if (!item) {
+    return {
+      icon: 'slope-uphill',
+      tag: isVerified ? 'Độ dốc 1:12 đạt chuẩn QCVN 10' : 'Độ dốc 1:12 đạt chuẩn',
+    };
+  }
+  if (item.specTag) {
+    return { tag: item.specTag, icon: item.specIcon || 'check-circle-outline' };
+  }
+  if (item.title === 'Cửa vào') {
+    return { tag: 'Cửa ra vào rộng rãi', icon: 'door-open' };
+  }
+  if (item.title === 'Ram dốc') {
+    return {
+      icon: 'slope-uphill',
+      tag: isVerified ? 'Độ dốc 1:12 đạt chuẩn QCVN 10' : 'Độ dốc 1:12 đạt chuẩn',
+    };
+  }
+  return null;
 }
 
 function EvidenceIllustration() {
@@ -37,19 +72,182 @@ export function EvidenceGallerySection({
   showDemoContent = false,
   isVerified = false,
 }: EvidenceGallerySectionProps) {
-  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
-  const hasItems = evidence.length > 0 || showDemoContent;
-  const firstItem = evidence[0];
-  const currentPreviewItem = previewIndex !== null ? evidence[previewIndex] ?? firstItem : null;
+  const { width: windowWidth } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const pagerRef = useRef<FlatList<EvidenceItem>>(null);
 
-  const handleOpenPreview = () => {
-    if (onViewAll) {
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+  const [failedThumbs, setFailedThumbs] = useState<Record<string, boolean>>({});
+
+  const hasItems = evidence.length > 0 || showDemoContent;
+  const activeIndex = previewIndex ?? 0;
+  const currentPreviewItem = previewIndex !== null ? (evidence[activeIndex] ?? evidence[0] ?? null) : null;
+
+  const isMulti = evidence.length > 1;
+  const cardWidth = isMulti
+    ? Math.min(248, Math.round(windowWidth * 0.66))
+    : Math.max(240, windowWidth - 40);
+
+  useEffect(() => {
+    setFailedThumbs({});
+  }, [evidence]);
+
+  const markThumbFailed = (id: string) => {
+    setFailedThumbs((prev) => (prev[id] ? prev : { ...prev, [id]: true }));
+  };
+
+  const handleOpenPreview = (index = 0) => {
+    if (evidence.length > 0) {
+      const safeIndex = Math.max(0, Math.min(index, evidence.length - 1));
+      setPreviewIndex(safeIndex);
+    } else if (onViewAll) {
       onViewAll();
-    } else if (evidence.length > 0) {
-      setPreviewIndex(0);
     } else if (onAddEvidence) {
       onAddEvidence();
     }
+  };
+
+  const scrollToSlide = (nextIdx: number) => {
+    if (nextIdx < 0 || nextIdx >= evidence.length) return;
+    setPreviewIndex(nextIdx);
+    pagerRef.current?.scrollToIndex({ index: nextIdx, animated: true });
+  };
+
+  const handlePlayVideo = (item: EvidenceItem) => {
+    const targetUrl = item.videoUrl || item.imageUrl;
+    if (!targetUrl) return;
+    if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
+      void WebBrowser.openBrowserAsync(targetUrl);
+    } else {
+      Alert.alert(
+        'Video đang chờ đồng bộ',
+        'Video cục bộ sẽ phát trực tuyến sau khi hồ sơ hoàn tất tải lên.'
+      );
+    }
+  };
+
+  const renderDemoCard = () => {
+    const spec = getFallbackSpec(undefined, isVerified);
+    return (
+      <Pressable
+        style={({ pressed }) => [styles.featuredCard, { width: Math.max(240, windowWidth - 40) }, pressed && styles.cardPressed]}
+        onPress={() => handleOpenPreview(0)}
+        accessibilityRole="button"
+        accessibilityLabel="Xem minh chứng địa điểm"
+      >
+        <View style={styles.imageWrapper}>
+          <EvidenceIllustration />
+          {spec ? (
+            <View style={styles.specTag}>
+              <MaterialCommunityIcons name={spec.icon as any} size={11} color="#FFFFFF" />
+              <Text style={styles.specTagText}>{spec.tag}</Text>
+            </View>
+          ) : null}
+        </View>
+        <View style={styles.infoRow}>
+          <View style={styles.infoTextContainer}>
+            <Text style={styles.photoTitle} numberOfLines={1}>
+              {isVerified ? 'Ram dốc & Lối vào tiếp cận chuẩn' : 'Ram dốc lối Pasteur'}
+            </Text>
+            <Text style={styles.photoSub} numberOfLines={1}>
+              {isVerified
+                ? 'Bằng chứng gần nhất · Đã xác thực bởi chuyên viên'
+                : 'Bằng chứng gần nhất · 96 ngày trước · Mai Anh'}
+            </Text>
+          </View>
+        </View>
+      </Pressable>
+    );
+  };
+
+  const renderEvidenceCard = (item: EvidenceItem, index: number) => {
+    const isVideo = item.mediaType === 'video';
+    const thumbUri = isVideo ? item.thumbnailUrl : item.imageUrl;
+    const showThumbImage = Boolean(thumbUri) && !failedThumbs[item.id];
+    const spec = getFallbackSpec(item, isVerified);
+
+    return (
+      <Pressable
+        key={item.id}
+        style={({ pressed }) => [
+          styles.featuredCard,
+          { width: cardWidth },
+          pressed && styles.cardPressed,
+        ]}
+        onPress={() => handleOpenPreview(index)}
+        accessibilityRole="button"
+        accessibilityLabel={`${isVideo ? 'Xem video' : 'Xem ảnh'} ${item.title}`}
+      >
+        <View style={[styles.imageWrapper, isVideo && styles.videoWrapperBg]}>
+          {showThumbImage ? (
+            <Image
+              source={{ uri: thumbUri }}
+              style={styles.bannerImage}
+              contentFit="cover"
+              transition={150}
+              onError={() => markThumbFailed(item.id)}
+            />
+          ) : isVideo ? (
+            <View style={styles.videoFallbackBg} />
+          ) : (
+            <EvidenceIllustration />
+          )}
+
+          {isVideo ? (
+            <>
+              <View style={styles.videoPill}>
+                <MaterialCommunityIcons name="video-outline" size={12} color="#FFFFFF" />
+                <Text style={styles.videoPillText}>Video</Text>
+              </View>
+              <View style={styles.centerPlayBadge}>
+                <MaterialCommunityIcons name="play" size={24} color="#FFFFFF" />
+              </View>
+            </>
+          ) : null}
+
+          {item.isFaceBlurred ? (
+            <View style={styles.blurTag}>
+              <MaterialCommunityIcons name="eye-off-outline" size={11} color="#FFFFFF" />
+              <Text style={styles.blurTagText}>Mặt đã làm mờ</Text>
+            </View>
+          ) : null}
+
+          {spec ? (
+            <View style={styles.specTag}>
+              <MaterialCommunityIcons name={spec.icon as any} size={11} color="#FFFFFF" />
+              <Text style={styles.specTagText} numberOfLines={1}>{spec.tag}</Text>
+            </View>
+          ) : null}
+
+          {isMulti ? (
+            <View style={styles.indexPill}>
+              <Text style={styles.indexPillText}>{index + 1}/{evidence.length}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        <View style={styles.infoRow}>
+          <View style={styles.infoTextContainer}>
+            <Text style={styles.photoTitle} numberOfLines={1}>
+              {item.title}
+            </Text>
+            <Text style={styles.photoSub} numberOfLines={1}>
+              {item.subtitle || 'Đã công bố'}
+            </Text>
+          </View>
+          <View style={[styles.ageBadge, (isVerified || item.badge === 'Đã công bố') && styles.ageBadgeVerified]}>
+            <Text
+              style={[
+                styles.ageBadgeText,
+                (isVerified || item.badge === 'Đã công bố') && styles.ageBadgeTextVerified,
+              ]}
+            >
+              {isVideo ? 'Phát' : 'Xem'}
+            </Text>
+          </View>
+        </View>
+      </Pressable>
+    );
   };
 
   return (
@@ -68,25 +266,29 @@ export function EvidenceGallerySection({
         </View>
 
         {hasItems ? (
-          <TouchableOpacity
-            onPress={handleOpenPreview}
-            hitSlop={8}
-            style={styles.viewAllBtn}
+          <Pressable
+            onPress={() => handleOpenPreview(0)}
+            hitSlop={10}
+            style={({ pressed }) => [styles.viewAllBtn, pressed && styles.cardPressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Xem tất cả ảnh và video"
           >
             <Text style={styles.viewAllText}>
               {showDemoContent ? 'Xem tất cả (28)' : `Xem tất cả (${evidence.length})`}
             </Text>
             <MaterialCommunityIcons name="chevron-right" size={14} color="#006874" />
-          </TouchableOpacity>
+          </Pressable>
         ) : (
-          <TouchableOpacity
+          <Pressable
             onPress={onAddEvidence}
-            hitSlop={8}
-            style={styles.viewAllBtn}
+            hitSlop={10}
+            style={({ pressed }) => [styles.viewAllBtn, pressed && styles.cardPressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Đóng góp ảnh"
           >
             <Text style={styles.viewAllText}>Đóng góp ảnh</Text>
             <MaterialCommunityIcons name="plus" size={14} color="#006874" />
-          </TouchableOpacity>
+          </Pressable>
         )}
       </View>
 
@@ -99,166 +301,139 @@ export function EvidenceGallerySection({
           </View>
         </View>
       ) : (
-        /* Featured Big Photo Banner */
-        <TouchableOpacity
-          style={styles.featuredCard}
-          activeOpacity={firstItem?.imageUrl ? 0.88 : 1}
-          onPress={() => {
-            if (firstItem?.imageUrl) {
-              setPreviewIndex(0);
-            } else {
-              handleOpenPreview();
-            }
-          }}
+        <ScrollView
+          horizontal
+          nestedScrollEnabled
+          showsHorizontalScrollIndicator={false}
+          decelerationRate="fast"
+          style={styles.carouselScroll}
+          contentContainerStyle={styles.carouselContent}
         >
-          <View style={styles.imageWrapper}>
-            {firstItem?.imageUrl ? (
-              <Image
-                source={{ uri: firstItem.imageUrl }}
-                style={styles.bannerImage}
-                resizeMode="cover"
-              />
-            ) : (
-              <EvidenceIllustration />
-            )}
-
-            {/* Badges on the image */}
-            {firstItem?.isFaceBlurred ? (
-              <View style={styles.blurTag}>
-                <MaterialCommunityIcons name="eye-off-outline" size={11} color="#FFFFFF" />
-                <Text style={styles.blurTagText}>Mặt đã làm mờ</Text>
-              </View>
-            ) : null}
-
-            {firstItem?.specTag ? (
-              <View style={styles.specTag}>
-                <MaterialCommunityIcons name={(firstItem.specIcon as any) || 'check-circle-outline'} size={11} color="#FFFFFF" />
-                <Text style={styles.specTagText}>{firstItem.specTag}</Text>
-              </View>
-            ) : firstItem ? (
-              firstItem.title === 'Cửa vào' ? (
-                <View style={styles.specTag}>
-                  <MaterialCommunityIcons name="door-open" size={11} color="#FFFFFF" />
-                  <Text style={styles.specTagText}>Cửa ra vào rộng rãi</Text>
-                </View>
-              ) : firstItem.title === 'Ram dốc' ? (
-                <View style={styles.specTag}>
-                  <MaterialCommunityIcons name="slope-uphill" size={11} color="#FFFFFF" />
-                  <Text style={styles.specTagText}>
-                    {isVerified ? 'Độ dốc 1:12 đạt chuẩn QCVN 10' : 'Độ dốc 1:12 đạt chuẩn'}
-                  </Text>
-                </View>
-              ) : null
-            ) : (
-              <View style={styles.specTag}>
-                <MaterialCommunityIcons name="slope-uphill" size={11} color="#FFFFFF" />
-                <Text style={styles.specTagText}>
-                  {isVerified ? 'Độ dốc 1:12 đạt chuẩn QCVN 10' : 'Độ dốc 1:12 đạt chuẩn'}
-                </Text>
-              </View>
-            )}
-
-          </View>
-
-          {/* Info below image */}
-          <View style={styles.infoRow}>
-            <View style={styles.infoTextContainer}>
-              <Text style={styles.photoTitle}>
-                {firstItem?.title ?? (isVerified ? 'Ram dốc & Lối vào tiếp cận chuẩn' : 'Ram dốc lối Pasteur')}
-              </Text>
-              <Text style={styles.photoSub}>
-                {firstItem
-                  ? `Bằng chứng gần nhất • ${firstItem.subtitle}`
-                  : isVerified
-                  ? 'Bằng chứng gần nhất • Vừa xác thực • Bởi Chuyên viên Thẩm định'
-                  : 'Bằng chứng gần nhất • 96 ngày trước • Bởi Mai Anh'}
-              </Text>
-            </View>
-            <View style={[styles.ageBadge, isVerified && styles.ageBadgeVerified]}>
-              <MaterialCommunityIcons
-                name={isVerified ? 'check-decagram-outline' : 'history'}
-                size={12}
-                color={isVerified ? '#007D78' : '#B45309'}
-              />
-              <Text style={[styles.ageBadgeText, isVerified && styles.ageBadgeTextVerified]}>
-                {firstItem?.subtitle ?? (isVerified ? 'Đã xác thực' : '96 ngày trước')}
-              </Text>
-            </View>
-          </View>
-        </TouchableOpacity>
+          {evidence.length > 0
+            ? evidence.map((item, idx) => renderEvidenceCard(item, idx))
+            : renderDemoCard()}
+        </ScrollView>
       )}
 
-      {/* Fullscreen Photo Lightbox Modal */}
-      {currentPreviewItem?.imageUrl && (
+      {/* Fullscreen Swipeable Photo & Video Lightbox Modal */}
+      {previewIndex !== null && currentPreviewItem && (
         <Modal
-          visible={previewIndex !== null}
+          visible
           transparent
           animationType="fade"
           onRequestClose={() => setPreviewIndex(null)}
           statusBarTranslucent
         >
           <View style={styles.modalBackdrop}>
-            {/* Top Bar */}
-            <SafeAreaView style={styles.modalHeader}>
+            <View style={[styles.modalHeader, { paddingTop: Math.max(insets.top, 12) }]}>
               <View style={styles.modalHeaderContent}>
                 <View style={styles.modalTitleBox}>
                   <Text style={styles.modalTitle} numberOfLines={1}>
-                    {currentPreviewItem.title || 'Ảnh bằng chứng tiếp cận'}
+                    {currentPreviewItem.title || 'Bằng chứng tiếp cận'}
                   </Text>
                   <Text style={styles.modalSubtitle}>
                     {evidence.length > 1
-                      ? `${(previewIndex ?? 0) + 1}/${evidence.length} • ${currentPreviewItem.subtitle || 'Đã xác thực'}`
+                      ? `${activeIndex + 1}/${evidence.length} · ${currentPreviewItem.subtitle || 'Đã xác thực'}`
                       : currentPreviewItem.subtitle || 'Đã xác thực'}
                   </Text>
                 </View>
 
-                <TouchableOpacity
-                  style={styles.modalCloseBtn}
+                <Pressable
+                  style={({ pressed }) => [styles.modalCloseBtn, pressed && styles.cardPressed]}
                   onPress={() => setPreviewIndex(null)}
-                  hitSlop={12}
+                  hitSlop={8}
                   accessibilityRole="button"
-                  accessibilityLabel="Đóng xem ảnh"
+                  accessibilityLabel="Đóng xem bằng chứng"
                 >
                   <MaterialCommunityIcons name="close" size={22} color="#FFFFFF" />
-                </TouchableOpacity>
+                </Pressable>
               </View>
-            </SafeAreaView>
+            </View>
 
-            {/* Central Photo View */}
             <View style={styles.modalBody}>
-              {evidence.length > 1 && (previewIndex ?? 0) > 0 && (
-                <TouchableOpacity
-                  style={[styles.navArrow, styles.navArrowLeft]}
-                  onPress={() => setPreviewIndex((prev) => (prev !== null && prev > 0 ? prev - 1 : 0))}
-                  hitSlop={8}
-                >
-                  <MaterialCommunityIcons name="chevron-left" size={32} color="#FFFFFF" />
-                </TouchableOpacity>
-              )}
+              <FlatList
+                ref={pagerRef}
+                data={evidence}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                keyExtractor={(item) => item.id}
+                initialScrollIndex={Math.max(0, Math.min(previewIndex, evidence.length - 1))}
+                getItemLayout={(_, index) => ({
+                  length: windowWidth,
+                  offset: windowWidth * index,
+                  index,
+                })}
+                onMomentumScrollEnd={(e) => {
+                  const next = Math.round(e.nativeEvent.contentOffset.x / Math.max(1, windowWidth));
+                  if (next >= 0 && next < evidence.length) {
+                    setPreviewIndex(next);
+                  }
+                }}
+                renderItem={({ item }) => {
+                  const isVideo = item.mediaType === 'video';
+                  const slideUri = isVideo ? item.thumbnailUrl : item.imageUrl;
+                  const hasSlideImage = Boolean(slideUri) && !failedThumbs[item.id];
 
-              <Image
-                source={{ uri: currentPreviewItem.imageUrl }}
-                style={styles.modalImage}
-                resizeMode="contain"
+                  return (
+                    <View style={[styles.lightboxSlide, { width: windowWidth }]}>
+                      {hasSlideImage ? (
+                        <Image
+                          source={{ uri: slideUri }}
+                          style={styles.modalImage}
+                          contentFit="contain"
+                          onError={() => markThumbFailed(item.id)}
+                        />
+                      ) : isVideo ? (
+                        <View style={styles.modalVideoEmpty}>
+                          <MaterialCommunityIcons name="video-outline" size={56} color="#94A3B8" />
+                        </View>
+                      ) : (
+                        <EvidenceIllustration />
+                      )}
+
+                      {isVideo ? (
+                        <Pressable
+                          style={({ pressed }) => [styles.playVideoCta, pressed && styles.cardPressed]}
+                          onPress={() => handlePlayVideo(item)}
+                          accessibilityRole="button"
+                          accessibilityLabel="Xem video thực địa"
+                        >
+                          <MaterialCommunityIcons name="play-circle" size={22} color="#FFFFFF" />
+                          <Text style={styles.playVideoCtaText}>Xem video</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  );
+                }}
               />
 
-              {evidence.length > 1 && (previewIndex ?? 0) < evidence.length - 1 && (
-                <TouchableOpacity
-                  style={[styles.navArrow, styles.navArrowRight]}
-                  onPress={() =>
-                    setPreviewIndex((prev) =>
-                      prev !== null && prev < evidence.length - 1 ? prev + 1 : prev
-                    )
-                  }
+              {evidence.length > 1 && activeIndex > 0 && (
+                <Pressable
+                  style={({ pressed }) => [styles.navArrow, styles.navArrowLeft, pressed && styles.cardPressed]}
+                  onPress={() => scrollToSlide(activeIndex - 1)}
                   hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Bằng chứng trước"
                 >
-                  <MaterialCommunityIcons name="chevron-right" size={32} color="#FFFFFF" />
-                </TouchableOpacity>
+                  <MaterialCommunityIcons name="chevron-left" size={28} color="#FFFFFF" />
+                </Pressable>
+              )}
+
+              {evidence.length > 1 && activeIndex < evidence.length - 1 && (
+                <Pressable
+                  style={({ pressed }) => [styles.navArrow, styles.navArrowRight, pressed && styles.cardPressed]}
+                  onPress={() => scrollToSlide(activeIndex + 1)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Bằng chứng tiếp theo"
+                >
+                  <MaterialCommunityIcons name="chevron-right" size={28} color="#FFFFFF" />
+                </Pressable>
               )}
             </View>
 
-            {/* Bottom info & actions */}
-            <SafeAreaView style={styles.modalFooter}>
+            <View style={[styles.modalFooter, { paddingBottom: Math.max(insets.bottom, 12) }]}>
               <View style={styles.modalFooterContent}>
                 {currentPreviewItem.specTag ? (
                   <View style={styles.modalSpecBadge}>
@@ -274,20 +449,21 @@ export function EvidenceGallerySection({
                 )}
 
                 {onAddEvidence && (
-                  <TouchableOpacity
-                    style={styles.modalAddBtn}
+                  <Pressable
+                    style={({ pressed }) => [styles.modalAddBtn, pressed && styles.cardPressed]}
                     onPress={() => {
                       setPreviewIndex(null);
                       onAddEvidence();
                     }}
-                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Đóng góp thêm ảnh"
                   >
                     <MaterialCommunityIcons name="camera-plus-outline" size={15} color="#FFFFFF" />
-                    <Text style={styles.modalAddBtnText}>Đóng góp thêm ảnh</Text>
-                  </TouchableOpacity>
+                    <Text style={styles.modalAddBtnText}>Đóng góp thêm</Text>
+                  </Pressable>
                 )}
               </View>
-            </SafeAreaView>
+            </View>
           </View>
         </Modal>
       )}
@@ -337,11 +513,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 1,
     flexShrink: 0,
+    minHeight: 32,
   },
   viewAllText: {
     fontSize: 12,
     fontWeight: '700',
     color: '#006874',
+  },
+  carouselScroll: {
+    marginHorizontal: -20,
+  },
+  carouselContent: {
+    paddingHorizontal: 20,
+    gap: 10,
+  },
+  cardPressed: {
+    opacity: 0.85,
   },
   emptyState: {
     alignItems: 'center',
@@ -377,9 +564,17 @@ const styles = StyleSheet.create({
   },
   imageWrapper: {
     width: '100%',
-    height: 140,
+    height: 152,
     backgroundColor: '#DCE9E7',
     position: 'relative',
+  },
+  videoWrapperBg: {
+    backgroundColor: '#0F172A',
+  },
+  videoFallbackBg: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#0F172A',
   },
   bannerImage: {
     width: '100%',
@@ -387,6 +582,39 @@ const styles = StyleSheet.create({
   },
   illustration: {
     ...StyleSheet.absoluteFill,
+  },
+  videoPill: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(15, 23, 42, 0.78)',
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 999,
+  },
+  videoPillText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  centerPlayBadge: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginTop: -22,
+    marginLeft: -22,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingLeft: 2,
   },
   blurTag: {
     position: 'absolute',
@@ -409,10 +637,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 8,
     left: 8,
+    maxWidth: '72%',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(0, 78, 88, 0.85)',
+    backgroundColor: 'rgba(0, 78, 88, 0.88)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
@@ -422,17 +651,32 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     fontWeight: '700',
   },
+  indexPill: {
+    position: 'absolute',
+    bottom: 8,
+    right: 8,
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  indexPillText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+  },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 11,
+    paddingHorizontal: 11,
+    paddingVertical: 10,
     gap: 8,
   },
   infoTextContainer: {
     flex: 1,
   },
   photoTitle: {
-    fontSize: 13.5,
+    fontSize: 13,
     fontWeight: '800',
     color: '#0F172A',
     marginBottom: 2,
@@ -442,11 +686,8 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   ageBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 7,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 7,
   },
@@ -456,7 +697,7 @@ const styles = StyleSheet.create({
   ageBadgeText: {
     fontSize: 10.5,
     fontWeight: '700',
-    color: '#B45309',
+    color: '#475569',
   },
   ageBadgeTextVerified: {
     color: '#007D78',
@@ -474,7 +715,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
   },
   modalTitleBox: {
     flex: 1,
@@ -491,33 +732,67 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   modalCloseBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalBody: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    paddingHorizontal: 8,
+  },
+  lightboxSlide: {
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
   },
   modalImage: {
     width: '100%',
     height: '100%',
   },
+  modalVideoEmpty: {
+    width: '100%',
+    height: 240,
+    borderRadius: 16,
+    backgroundColor: '#0F172A',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playVideoCta: {
+    position: 'absolute',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minHeight: 48,
+    paddingHorizontal: 20,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0, 125, 120, 0.94)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  playVideoCtaText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
   navArrow: {
     position: 'absolute',
     zIndex: 10,
     top: '50%',
-    marginTop: -24,
+    marginTop: -22,
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -532,7 +807,7 @@ const styles = StyleSheet.create({
   },
   modalFooterContent: {
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -559,6 +834,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    minHeight: 40,
     backgroundColor: '#007D78',
     paddingHorizontal: 12,
     paddingVertical: 8,

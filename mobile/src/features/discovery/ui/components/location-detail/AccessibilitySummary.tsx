@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { AccessibilityDetailFeature } from './types';
 
@@ -33,8 +33,6 @@ export function AccessibilitySummary({
   onHelpConfirmPress,
   isFullyVerified,
 }: AccessibilitySummaryProps) {
-  const [currentTimestamp] = useState(() => Date.now());
-
   if (isUnrated) {
     return (
       <View style={styles.outerContainer}>
@@ -66,24 +64,28 @@ export function AccessibilitySummary({
     (f) => f.communityLabel === 'Reinforced' || f.communityLabel === 'Fresh'
   );
   const totalConfirmations = features.reduce((sum, f) => sum + (f.eligibleVoterCount ?? 0), 0);
+  const surveyedCount = features.filter((f) => f.publishedStatus !== 'Unknown').length;
+  const limitedCount = features.filter(
+    (f) => f.publishedStatus === 'Limited' || f.verificationLevel === 'limited'
+  ).length;
 
-  let headerBadgeLabel = 'Khảo sát sơ bộ';
-  let headerBadgeTone: 'verified' | 'conflict' | 'warning' = 'warning';
+  let headerBadgeLabel = 'Khảo sát cộng đồng';
+  let headerBadgeTone: 'verified' | 'conflict' | 'community' = 'community';
   if (verified) {
-    headerBadgeLabel = 'Đã xác minh QCVN 10';
+    headerBadgeLabel = 'Đạt chuẩn QCVN 10';
     headerBadgeTone = 'verified';
   } else if (hasConflict) {
-    headerBadgeLabel = 'Đang có phản ánh thay đổi';
+    headerBadgeLabel = 'Có phản ánh thay đổi';
     headerBadgeTone = 'conflict';
   } else if (hasReinforced) {
     headerBadgeLabel = 'Cộng đồng đã xác nhận';
     headerBadgeTone = 'verified';
   }
 
-  let badgeBgStyle = styles.statusBadgeWarning;
-  let badgeTextStyle = styles.statusBadgeTextWarning;
-  let badgeIconColor = '#B45309';
-  let badgeIconName: keyof typeof MaterialCommunityIcons.glyphMap = 'clock-alert-outline';
+  let badgeBgStyle = styles.statusBadgeCommunity;
+  let badgeTextStyle = styles.statusBadgeTextCommunity;
+  let badgeIconColor = '#004E58';
+  let badgeIconName: keyof typeof MaterialCommunityIcons.glyphMap = 'clipboard-text-outline';
   if (headerBadgeTone === 'verified') {
     badgeBgStyle = styles.statusBadgeVerified;
     badgeTextStyle = styles.statusBadgeTextVerified;
@@ -96,10 +98,24 @@ export function AccessibilitySummary({
     badgeIconName = 'alert-circle-outline';
   }
 
+  const coveragePillText = limitedCount > 0
+    ? `${surveyedCount}/${features.length} · có hạn chế`
+    : `${surveyedCount}/${features.length} hạng mục`;
+  const compactInfoNote = verified
+    ? 'Thông số đạt chuẩn QCVN 10:2014 (ram ≤ 1:12, cửa ≥ 90cm).'
+    : note && !note.startsWith('Khảo sát sơ bộ:')
+    ? note
+    : 'Khảo sát từ cộng đồng · Chưa đo đạc thông số kỹ thuật QCVN 10.';
+
   return (
     <View style={styles.outerContainer}>
-      <View style={[styles.mainCard, verified || headerBadgeTone === 'verified' ? styles.cardVerified : styles.cardWarning]}>
-        {/* Header Row: Reliability Badge on Left, Trust Score Pill on Right */}
+      <View
+        style={[
+          styles.mainCard,
+          verified || headerBadgeTone === 'verified' ? styles.cardVerified : styles.cardNeutral,
+        ]}
+      >
+        {/* Header Row: Status Badge on Left, Verified Score or Survey Coverage Pill on Right */}
         <View style={styles.headerRow}>
           <View style={[styles.statusBadge, badgeBgStyle]}>
             <MaterialCommunityIcons name={badgeIconName} size={14} color={badgeIconColor} />
@@ -108,16 +124,30 @@ export function AccessibilitySummary({
             </Text>
           </View>
 
-          {trustPercent > 0 && (
-            <View style={[styles.scorePill, verified ? styles.scorePillVerified : styles.scorePillWarning]}>
-              <Text style={[styles.scoreNumber, verified ? styles.scoreNumberVerified : styles.scoreNumberWarning]}>
+          {verified && trustPercent > 0 ? (
+            <View style={[styles.scorePill, styles.scorePillVerified]}>
+              <Text style={[styles.scoreNumber, styles.scoreNumberVerified]}>
                 {trustPercent}%
               </Text>
-              <Text style={[styles.scoreLabel, verified ? styles.scoreLabelVerified : styles.scoreLabelWarning]}>
-                {verified ? 'tin cậy' : 'sơ bộ'}
+              <Text style={[styles.scoreLabel, styles.scoreLabelVerified]}>tin cậy</Text>
+            </View>
+          ) : features.length > 0 ? (
+            <View
+              style={[
+                styles.scorePill,
+                limitedCount > 0 ? styles.scorePillWarning : styles.scorePillNeutral,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.coveragePillText,
+                  limitedCount > 0 ? styles.coveragePillTextWarning : styles.coveragePillTextNeutral,
+                ]}
+              >
+                {coveragePillText}
               </Text>
             </View>
-          )}
+          ) : null}
         </View>
 
         {/* Verification Date & Community Consensus Summary */}
@@ -150,26 +180,6 @@ export function AccessibilitySummary({
           </View>
         ) : null}
 
-        {/* Safety & Suitability Assessment Banner */}
-        <View style={[styles.suitabilityCard, verified ? styles.suitabilityVerified : styles.suitabilityWarning]}>
-          <MaterialCommunityIcons
-            name={verified ? 'shield-check' : 'shield-alert-outline'}
-            size={18}
-            color={verified ? '#007D78' : '#B45309'}
-            style={styles.suitabilityIcon}
-          />
-          <View style={styles.suitabilityTextBox}>
-            <Text style={[styles.suitabilityTitle, verified ? styles.suitabilityTitleVerified : styles.suitabilityTitleWarning]}>
-              {verified ? 'Phù hợp & an toàn tự hành cho xe lăn' : 'Chưa thẩm định thông số kỹ thuật'}
-            </Text>
-            <Text style={styles.suitabilityDesc}>
-              {verified
-                ? 'Đã thẩm định thông số thực tế (độ dốc ram ≤ 1:12, cửa ≥ 90cm) đạt chuẩn QCVN 10:2014.'
-                : 'Mới ghi nhận hiện diện sơ bộ. Người dùng xe lăn nên cân nhắc đi cùng người hỗ trợ.'}
-            </Text>
-          </View>
-        </View>
-
         {/* 4-Item Quick Grid */}
         <View style={styles.featuresGrid}>
           {features.map((feature) => {
@@ -185,7 +195,7 @@ export function AccessibilitySummary({
 
             let statusIcon: keyof typeof MaterialCommunityIcons.glyphMap = 'minus';
             let statusText = 'Chưa rõ';
-            let statusColor = '#94A3B8';
+            let statusColor = '#64748B';
             let statusTextStyle = styles.statusTextUnknown;
 
             if (isCompliant) {
@@ -280,22 +290,26 @@ export function AccessibilitySummary({
           })}
         </View>
 
-        {/* Clean Note Box (only if note exists) */}
-        {note ? (
-          <View style={styles.noteBox}>
-            <MaterialCommunityIcons name="information-outline" size={14} color="#007D78" style={styles.noteIcon} />
-            <Text numberOfLines={2} style={styles.noteText}>
-              {note}
-            </Text>
-          </View>
-        ) : null}
+        {/* Compact Info Note */}
+        <View style={[styles.noteBox, verified && styles.noteBoxVerified]}>
+          <MaterialCommunityIcons
+            name={verified ? 'shield-check' : 'information-outline'}
+            size={15}
+            color={verified ? '#007D78' : '#004E58'}
+            style={styles.noteIcon}
+          />
+          <Text numberOfLines={2} style={styles.noteText}>
+            {compactInfoNote}
+          </Text>
+        </View>
 
         {/* Single Clear Action Link for Community Verification / Reporting */}
         {onHelpConfirmPress && features.length > 0 && (
-          <TouchableOpacity
-            style={styles.recheckActionRow}
+          <Pressable
+            style={({ pressed }) => [styles.recheckActionRow, pressed && styles.pressedRow]}
             onPress={onHelpConfirmPress}
-            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel="Xác nhận hoặc báo thay đổi tiện ích"
           >
             <View style={styles.recheckActionLeft}>
               <MaterialCommunityIcons name="clipboard-check-outline" size={16} color="#0F766E" />
@@ -307,7 +321,7 @@ export function AccessibilitySummary({
               </View>
             </View>
             <MaterialCommunityIcons name="chevron-right" size={18} color="#0F766E" />
-          </TouchableOpacity>
+          </Pressable>
         )}
       </View>
     </View>
@@ -325,18 +339,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   cardVerified: {
-    backgroundColor: '#F8FCFA',
+    backgroundColor: '#FFFFFF',
     borderColor: '#C6ECE5',
   },
-  cardWarning: {
-    backgroundColor: '#FFFDF6',
-    borderColor: '#FDE68A',
+  cardNeutral: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 6,
+    gap: 8,
   },
   dateRow: {
     flexDirection: 'row',
@@ -357,9 +372,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#E6F8F5',
     borderColor: '#A8E7DC',
   },
-  statusBadgeWarning: {
-    backgroundColor: '#FEF3C7',
-    borderColor: '#FDE68A',
+  statusBadgeCommunity: {
+    backgroundColor: '#F0FDFA',
+    borderColor: '#CCFBF1',
   },
   statusBadgeConflict: {
     backgroundColor: '#FFF1F2',
@@ -372,8 +387,8 @@ const styles = StyleSheet.create({
   statusBadgeTextVerified: {
     color: '#007D78',
   },
-  statusBadgeTextWarning: {
-    color: '#B45309',
+  statusBadgeTextCommunity: {
+    color: '#004E58',
   },
   statusBadgeTextConflict: {
     color: '#BE123C',
@@ -416,8 +431,21 @@ const styles = StyleSheet.create({
   scorePillVerified: {
     backgroundColor: '#E6F8F5',
   },
+  scorePillNeutral: {
+    backgroundColor: '#F1F5F9',
+  },
   scorePillWarning: {
     backgroundColor: '#FEF3C7',
+  },
+  coveragePillText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  coveragePillTextNeutral: {
+    color: '#334155',
+  },
+  coveragePillTextWarning: {
+    color: '#B45309',
   },
   scoreNumber: {
     fontSize: 12,
@@ -577,19 +605,23 @@ const styles = StyleSheet.create({
     color: '#EF4444',
   },
   statusTextUnknown: {
-    color: '#94A3B8',
+    color: '#475569',
   },
   noteBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 6,
-    backgroundColor: '#FFFFFF',
+    gap: 7,
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#D4EFEA',
+    borderColor: '#E2E8F0',
     borderRadius: 10,
     paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingVertical: 8,
     marginTop: 10,
+  },
+  noteBoxVerified: {
+    backgroundColor: '#F0FDF9',
+    borderColor: '#C6ECE5',
   },
   noteIcon: {
     marginTop: 1.5,
@@ -601,6 +633,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   recheckActionRow: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -610,7 +643,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    marginTop: 12,
+    marginTop: 10,
+  },
+  pressedRow: {
+    opacity: 0.78,
   },
   recheckActionLeft: {
     flexDirection: 'row',

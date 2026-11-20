@@ -126,6 +126,12 @@ function calculateDistance(
   return `Cách ${d.toFixed(1)} km`;
 }
 
+function isVideoMediaUrl(url?: string | null): boolean {
+  if (!url) return false;
+  const clean = url.split('?')[0].toLowerCase();
+  return clean.endsWith('.mp4') || clean.endsWith('.mov') || clean.endsWith('.webm');
+}
+
 function resolveEvidenceImageUrl(rawUrl?: string | null): string {
   if (!rawUrl) return '';
   if (rawUrl.startsWith('data:') || rawUrl.startsWith('file://')) return rawUrl;
@@ -140,6 +146,22 @@ function resolveEvidenceImageUrl(rawUrl?: string | null): string {
     return rawUrl.replace('http://127.0.0.1:5256', baseUrl);
   }
   return rawUrl;
+}
+
+function buildVideoMediaUrls(rawUrl?: string | null, resolvedUrl?: string): {
+  thumbnailUrl?: string;
+  videoUrl?: string;
+} {
+  if (!resolvedUrl || resolvedUrl.startsWith('file://')) {
+    return { videoUrl: resolvedUrl || undefined };
+  }
+  const baseUrl = resolveServiceUrl(5256, process.env.EXPO_PUBLIC_API_URL);
+  const paramUrl = rawUrl && rawUrl.startsWith('/uploads/') ? rawUrl : resolvedUrl;
+  const encoded = encodeURIComponent(paramUrl);
+  return {
+    thumbnailUrl: `${baseUrl}/api/v1/media/video-poster?url=${encoded}`,
+    videoUrl: `${baseUrl}/api/v1/media/video-stream?url=${encoded}`,
+  };
 }
 
 export function LocationDetailSheet({
@@ -222,11 +244,7 @@ export function LocationDetailSheet({
         : Math.min(rawScore, 100)
   );
 
-  const trustPercent = isUnrated
-    ? 0
-    : isFullyVerified
-      ? Math.max(normalizedScore, 85)
-      : Math.min(normalizedScore, 55);
+  const trustPercent = isUnrated ? 0 : normalizedScore;
 
   const distanceStr = useMemo(
     () => calculateDistance(userLatitude, userLongitude, place.lat, place.lng),
@@ -507,12 +525,17 @@ export function LocationDetailSheet({
           if (resolved && !seenUrls.has(resolved)) {
             seenUrls.add(resolved);
             const spec = getEvidenceSpec(r.featureTags);
+            const isVideo = isVideoMediaUrl(resolved);
+            const videoUrls = isVideo ? buildVideoMediaUrls(r.imageUrl, resolved) : {};
             items.push({
               id: r.id,
               title: r.title || getEvidenceTitle(r.featureTags),
               subtitle: r.createdAt ? new Date(r.createdAt).toLocaleDateString('vi-VN') : (r.subtitle ?? 'Đã công bố'),
               badge: r.badge || 'Đã xác thực',
               imageUrl: resolved,
+              mediaType: isVideo ? 'video' : 'image',
+              thumbnailUrl: isVideo ? videoUrls.thumbnailUrl : resolved,
+              videoUrl: videoUrls.videoUrl,
               specTag: spec.tag,
               specIcon: spec.icon,
             });
@@ -536,13 +559,18 @@ export function LocationDetailSheet({
             const resolved = resolveEvidenceImageUrl(r.mediaUri);
             if (resolved && !seenUrls.has(resolved)) {
               seenUrls.add(resolved);
+              const isVideo = r.mediaType === 'video' || isVideoMediaUrl(resolved);
+              const videoUrls = isVideo ? buildVideoMediaUrls(r.mediaUri, resolved) : {};
               items.push({
                 id: r.id,
                 title: `${getEvidenceTitle(r.featureTags)} (Chờ duyệt)`,
                 subtitle: new Date(r.createdAt).toLocaleDateString('vi-VN'),
                 badge: 'Đang chờ duyệt',
                 imageUrl: resolved,
-                specTag: 'Ảnh đóng góp · Đang chờ duyệt',
+                mediaType: isVideo ? 'video' : 'image',
+                thumbnailUrl: isVideo ? videoUrls.thumbnailUrl : resolved,
+                videoUrl: videoUrls.videoUrl,
+                specTag: isVideo ? 'Video · Đang chờ duyệt' : 'Ảnh đóng góp · Đang chờ duyệt',
                 specIcon: 'clock-outline',
               });
             }
@@ -748,15 +776,6 @@ export function LocationDetailSheet({
           >
             <View style={styles.dragHandle} />
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={dismissSheet}
-            accessibilityRole="button"
-            accessibilityLabel="Đóng thông tin địa điểm"
-            activeOpacity={0.72}
-          >
-            <MaterialCommunityIcons name="close" size={19} color={Colors.textSecondary} />
-          </TouchableOpacity>
         </View>
       </GestureDetector>
 
@@ -782,7 +801,7 @@ export function LocationDetailSheet({
               category={localizedCategory}
               brand={place.brand}
               distanceStr={distanceStr}
-              standardLabel={isFullyVerified ? 'Đạt QCVN 10:2014' : trustPercent > 0 ? 'Khảo sát cộng đồng' : undefined}
+              standardLabel={isFullyVerified ? 'Đạt QCVN 10:2014' : undefined}
               address={place.address}
               isAddressLoading={place.isAddressLoading}
               openingHours={place.opening_hours}
@@ -790,6 +809,7 @@ export function LocationDetailSheet({
               website={place.website}
               isFavorite={isFavorite}
               onToggleFavorite={onToggleFavorite ? () => onToggleFavorite(place) : undefined}
+              onClose={dismissSheet}
             />
 
             <AccessibilitySummary
@@ -845,7 +865,7 @@ export function LocationDetailSheet({
                   }
                   onContribute?.(place);
                 }}
-                showReportIssue={hasPublishedAccessibilityInfo}
+                showReportIssue={false}
                 onReportIssue={() => {
                   if (!user) {
                     setLoginModalFeature('báo thay đổi thông tin tiếp cận');
@@ -936,13 +956,13 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
   },
   dragArea: {
-    height: 38,
+    height: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
   handleButton: {
     width: 100,
-    height: 38,
+    height: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -951,17 +971,6 @@ const styles = StyleSheet.create({
     height: 5,
     borderRadius: 3,
     backgroundColor: '#cbd5e1',
-  },
-  closeButton: {
-    position: 'absolute',
-    right: 12,
-    top: 6,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#f1f5f9',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   subviewViewport: {
     flex: 1,

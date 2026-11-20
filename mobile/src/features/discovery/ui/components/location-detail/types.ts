@@ -48,6 +48,9 @@ export interface EvidenceItem {
   badge: string;
   isFaceBlurred?: boolean;
   imageUrl?: string;
+  mediaType?: 'image' | 'video';
+  thumbnailUrl?: string;
+  videoUrl?: string;
   specTag?: string;
   specIcon?: string;
 }

@@ -24,11 +24,16 @@ public sealed class AdminSubmissionsController : ControllerBase
     private const int SlaTargetMinutes = 120;
     private readonly ApplicationDbContext _db;
     private readonly IAiServiceClient? _aiClient;
+    private readonly IWebHostEnvironment? _env;
 
-    public AdminSubmissionsController(ApplicationDbContext db, IAiServiceClient? aiClient = null)
+    public AdminSubmissionsController(
+        ApplicationDbContext db,
+        IAiServiceClient? aiClient = null,
+        IWebHostEnvironment? env = null)
     {
         _db = db;
         _aiClient = aiClient;
+        _env = env;
     }
 
     [HttpGet]
@@ -37,7 +42,11 @@ public sealed class AdminSubmissionsController : ControllerBase
         [FromQuery] string? search = null,
         [FromQuery] string? status = null,
         [FromQuery] string? type = null,
-        [FromQuery] string? sort = "oldest",
+        [FromQuery] string? category = null,
+        [FromQuery] string? warning = null,
+        [FromQuery] string? date = null,
+        [FromQuery] string? view = null,
+        [FromQuery] string? sort = "newest",
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 8,
         CancellationToken cancellationToken = default)
@@ -117,6 +126,44 @@ public sealed class AdminSubmissionsController : ControllerBase
                 if (!record.Type.Equals(type, StringComparison.OrdinalIgnoreCase)) return false;
             }
 
+            if (!string.IsNullOrWhiteSpace(category) && !category.Equals("all", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!record.Categories.Any(c => c.Equals(category.Trim(), StringComparison.OrdinalIgnoreCase))) return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(warning) && !warning.Equals("all", StringComparison.OrdinalIgnoreCase))
+            {
+                if (warning.Equals("warning", StringComparison.OrdinalIgnoreCase) && record.Priority != "high") return false;
+                if (warning.Equals("over_sla", StringComparison.OrdinalIgnoreCase) && record.WaitingMinutes <= SlaTargetMinutes) return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(date) && !date.Equals("all", StringComparison.OrdinalIgnoreCase))
+            {
+                var submittedUtc = DateTimeOffset.Parse(record.SubmittedAt).UtcDateTime;
+                var utcNow = DateTime.UtcNow;
+                var cutoff = date.ToLowerInvariant() switch
+                {
+                    "today" => utcNow.Date,
+                    "7d" => utcNow.AddDays(-7),
+                    "30d" => utcNow.AddDays(-30),
+                    _ => DateTime.MinValue,
+                };
+                if (submittedUtc < cutoff) return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(view) && !view.Equals("all", StringComparison.OrdinalIgnoreCase))
+            {
+                var matchView = view.ToLowerInvariant() switch
+                {
+                    "fast_track" => record.Status == "pending" && record.Verification.Confidence >= 80 && record.Priority != "high",
+                    "waiting_long" => record.WaitingMinutes > SlaTargetMinutes,
+                    "warning" => record.Priority == "high",
+                    "new_place" => record.Type == "new_place",
+                    _ => true,
+                };
+                if (!matchView) return false;
+            }
+
             if (!string.IsNullOrWhiteSpace(search))
             {
                 var term = search.Trim().ToLowerInvariant();
@@ -133,10 +180,11 @@ public sealed class AdminSubmissionsController : ControllerBase
         // 3. Sort
         filtered = sort?.ToLowerInvariant() switch
         {
-            "newest" => filtered.OrderByDescending(r => DateTimeOffset.Parse(r.SubmittedAt)).ToList(),
-            "lowest_confidence" => filtered.OrderBy(r => r.Verification.Confidence).ToList(),
-            "highest_reputation" => filtered.OrderByDescending(r => r.Contributor.ReputationScore).ToList(),
-            _ => filtered.OrderBy(r => DateTimeOffset.Parse(r.SubmittedAt)).ToList(),
+            "oldest" => filtered.OrderBy(r => DateTimeOffset.Parse(r.SubmittedAt)).ToList(),
+            "highest_confidence" => filtered.OrderByDescending(r => r.Verification.Confidence).ThenByDescending(r => DateTimeOffset.Parse(r.SubmittedAt)).ToList(),
+            "lowest_confidence" => filtered.OrderBy(r => r.Verification.Confidence).ThenByDescending(r => DateTimeOffset.Parse(r.SubmittedAt)).ToList(),
+            "highest_reputation" => filtered.OrderByDescending(r => r.Contributor.ReputationScore).ThenByDescending(r => DateTimeOffset.Parse(r.SubmittedAt)).ToList(),
+            _ => filtered.OrderByDescending(r => DateTimeOffset.Parse(r.SubmittedAt)).ToList(),
         };
 
         // 4. Pagination
@@ -190,8 +238,9 @@ public sealed class AdminSubmissionsController : ControllerBase
 
         var place = await FindPlaceAsync(submission.PlaceId, cancellationToken);
         var appUser = await FindAppUserAsync(submission.UserId, cancellationToken);
+        var contributorHistory = await GetContributorHistoryAsync(submission.UserId, cancellationToken);
 
-        return Ok(MapToDetail(submission, place, appUser));
+        return Ok(MapToDetail(submission, place, appUser, contributorHistory, _env));
     }
 
     [HttpGet("{id}/navigation")]
@@ -200,7 +249,7 @@ public sealed class AdminSubmissionsController : ControllerBase
     {
         var submissions = await _db.Submissions
             .AsNoTracking()
-            .OrderBy(s => s.CreatedAt)
+            .OrderByDescending(s => s.CreatedAt)
             .Select(s => s.SubmissionCode != null && s.SubmissionCode != "" ? s.SubmissionCode : s.Id.ToString())
             .ToListAsync(cancellationToken);
 
@@ -282,7 +331,8 @@ public sealed class AdminSubmissionsController : ControllerBase
         await SyncLocationFeaturesAsync(place, submission, now, cancellationToken);
         await _db.SaveChangesAsync(cancellationToken);
 
-        var detail = MapToDetail(submission, place, appUser);
+        var contributorHistory = await GetContributorHistoryAsync(submission.UserId, cancellationToken);
+        var detail = MapToDetail(submission, place, appUser, contributorHistory, _env);
         detail.ModerationDecision = new ModerationDecisionDto
         {
             Type = "published",
@@ -321,7 +371,8 @@ public sealed class AdminSubmissionsController : ControllerBase
         await _db.SaveChangesAsync(cancellationToken);
 
         var now = DateTimeOffset.UtcNow;
-        var detail = MapToDetail(submission, place, appUser);
+        var contributorHistory = await GetContributorHistoryAsync(submission.UserId, cancellationToken);
+        var detail = MapToDetail(submission, place, appUser, contributorHistory, _env);
         detail.ModerationDecision = new ModerationDecisionDto
         {
             Type = "rejected",
@@ -360,7 +411,8 @@ public sealed class AdminSubmissionsController : ControllerBase
         await _db.SaveChangesAsync(cancellationToken);
 
         var now = DateTimeOffset.UtcNow;
-        var detail = MapToDetail(submission, place, appUser);
+        var contributorHistory = await GetContributorHistoryAsync(submission.UserId, cancellationToken);
+        var detail = MapToDetail(submission, place, appUser, contributorHistory, _env);
         detail.InformationRequest = new InformationRequestDto
         {
             RequestedClaimIds = request.ClaimIds,
@@ -397,7 +449,8 @@ public sealed class AdminSubmissionsController : ControllerBase
         var appUser = await FindAppUserAsync(submission.UserId, cancellationToken);
 
         var now = DateTimeOffset.UtcNow;
-        var detail = MapToDetail(submission, place, appUser);
+        var contributorHistory = await GetContributorHistoryAsync(submission.UserId, cancellationToken);
+        var detail = MapToDetail(submission, place, appUser, contributorHistory, _env);
         detail.Timeline.Add(new ContributionTimelineEventDto
         {
             Id = $"timeline-{Guid.NewGuid()}",
@@ -450,6 +503,51 @@ public sealed class AdminSubmissionsController : ControllerBase
         return null;
     }
 
+    private async Task<ContributorHistorySummaryDto> GetContributorHistoryAsync(
+        string userId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return new ContributorHistorySummaryDto
+            {
+                Approved = 0,
+                Supplements = 0,
+                Violations = 0,
+                ReputationDelta = PublicationPoints,
+            };
+        }
+
+        var statuses = await _db.Submissions
+            .AsNoTracking()
+            .Where(x => x.UserId == userId)
+            .Select(x => x.Status)
+            .ToListAsync(cancellationToken);
+
+        return new ContributorHistorySummaryDto
+        {
+            Approved = statuses.Count(x => x == SubmissionStatus.Published),
+            Supplements = statuses.Count(x => x == SubmissionStatus.NeedsSupplement),
+            Violations = statuses.Count(x => x == SubmissionStatus.Rejected),
+            ReputationDelta = PublicationPoints,
+        };
+    }
+
+    private static string FormatFileSizeOrEmpty(string url, IWebHostEnvironment? env)
+    {
+        if (env == null || string.IsNullOrWhiteSpace(url)) return string.Empty;
+        var uploadsIdx = url.IndexOf("/uploads/", StringComparison.OrdinalIgnoreCase);
+        if (uploadsIdx < 0) return string.Empty;
+        var fileName = Path.GetFileName(url[uploadsIdx..].Split('?')[0]);
+        if (string.IsNullOrWhiteSpace(fileName)) return string.Empty;
+        var filePath = Path.Combine(env.ContentRootPath, "wwwroot", "uploads", fileName);
+        if (!System.IO.File.Exists(filePath)) return string.Empty;
+        var bytes = new FileInfo(filePath).Length;
+        return bytes >= 1024 * 1024
+            ? $"{bytes / (1024.0 * 1024.0):F1} MB"
+            : $"{Math.Max(1, bytes / 1024)} KB";
+    }
+
     private static ContributionRecordDto MapToRecord(
         Submission s,
         IReadOnlyDictionary<string, Place> places,
@@ -459,14 +557,14 @@ public sealed class AdminSubmissionsController : ControllerBase
         var placeName = !string.IsNullOrWhiteSpace(s.PlaceId) && s.PlaceId != "custom-location"
             ? s.PlaceId
             : "Địa điểm khảo sát";
-        var placeAddress = "Chưa có địa chỉ";
-        var placeCity = "TP.HCM";
-        var placeDistrict = "Quận 1";
+        var placeAddress = string.Empty;
+        var placeCity = string.Empty;
+        var placeDistrict = string.Empty;
 
         if (places.TryGetValue(s.PlaceId, out var place))
         {
             placeName = place.Name;
-            placeAddress = place.Address ?? "";
+            placeAddress = place.Address?.Trim() ?? string.Empty;
         }
 
         var contributorName = "Người đóng góp";
@@ -483,7 +581,6 @@ public sealed class AdminSubmissionsController : ControllerBase
         var categories = s.FeatureTags.Select(MapTagToVietnameseCategory).Distinct().ToList();
         if (categories.Count == 0) categories.Add("Lối vào chính");
 
-        var waitingMinutes = (int)Math.Max(0, (DateTimeOffset.UtcNow - s.CreatedAt).TotalMinutes);
         var confidencePercent = (int)Math.Round(s.ConfidenceScore > 1.0 ? s.ConfidenceScore : s.ConfidenceScore * 100);
 
         var status = s.Status switch
@@ -494,7 +591,13 @@ public sealed class AdminSubmissionsController : ControllerBase
             _ => "pending",
         };
 
-        var priority = waitingMinutes > SlaTargetMinutes || s.ConfidenceScore < 0.6 ? "high" : "normal";
+        var isActiveStatus = status == "pending" || status == "needs_supplement";
+        var waitingMinutes = isActiveStatus
+            ? (int)Math.Max(0, (DateTimeOffset.UtcNow - s.CreatedAt).TotalMinutes)
+            : 0;
+        var priority = isActiveStatus && (waitingMinutes > SlaTargetMinutes || confidencePercent < 60)
+            ? "high"
+            : "normal";
 
         return new ContributionRecordDto
         {
@@ -538,7 +641,9 @@ public sealed class AdminSubmissionsController : ControllerBase
     private static ContributionDetailDto MapToDetail(
         Submission s,
         Place? place,
-        AppUser? appUser)
+        AppUser? appUser,
+        ContributorHistorySummaryDto? contributorHistory = null,
+        IWebHostEnvironment? env = null)
     {
         var placeDict = new Dictionary<string, Place>(StringComparer.OrdinalIgnoreCase);
         if (place != null)
@@ -564,8 +669,10 @@ public sealed class AdminSubmissionsController : ControllerBase
             for (var i = 0; i < s.MediaUrls.Count; i++)
             {
                 var url = s.MediaUrls[i];
-                var isVideo = url.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)
-                    || url.EndsWith(".mov", StringComparison.OrdinalIgnoreCase);
+                var cleanPath = url.Split('?')[0];
+                var isVideo = cleanPath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)
+                    || cleanPath.EndsWith(".mov", StringComparison.OrdinalIgnoreCase)
+                    || cleanPath.EndsWith(".webm", StringComparison.OrdinalIgnoreCase);
 
                 var isSafeWebUrl = url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
                     || url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
@@ -585,13 +692,17 @@ public sealed class AdminSubmissionsController : ControllerBase
                     Url = displayUrl,
                     CapturedAt = s.CreatedAt.ToString("O"),
                     Device = "Điện thoại di động (GPS tích hợp)",
-                    Resolution = "1920 × 1080",
-                    FileSize = "2,4 MB",
+                    Resolution = string.Empty,
+                    FileSize = FormatFileSizeOrEmpty(displayUrl, env),
                     ExifStatus = "valid",
                     GeotagStatus = s.AccuracyMeters <= 30 ? "valid" : "mismatch",
                     Description = !string.IsNullOrWhiteSpace(s.TextDescription)
                         ? s.TextDescription
-                        : (isSafeWebUrl ? "Ảnh hiện trường được chụp từ thiết bị khảo sát thực địa." : $"Ảnh chụp từ thiết bị di động: {url}"),
+                        : isVideo
+                            ? "Video hành trình thực địa được ghi nhận từ thiết bị khảo sát."
+                            : isSafeWebUrl
+                                ? "Ảnh hiện trường được chụp từ thiết bị khảo sát thực địa."
+                                : $"Ảnh chụp từ thiết bị di động: {url}",
                     AiFindings = new List<EvidenceAiFindingDto>
                     {
                         new()
@@ -614,8 +725,8 @@ public sealed class AdminSubmissionsController : ControllerBase
                 Url = "/evidence/ramp-entrance.png",
                 CapturedAt = s.CreatedAt.ToString("O"),
                 Device = "Mobile Camera",
-                Resolution = "1920 × 1080",
-                FileSize = "2,5 MB",
+                Resolution = string.Empty,
+                FileSize = string.Empty,
                 ExifStatus = "valid",
                 GeotagStatus = "valid",
                 Description = "Hình ảnh khảo sát thực tế.",
@@ -867,7 +978,7 @@ public sealed class AdminSubmissionsController : ControllerBase
                 Latitude = s.GpsLat,
                 Longitude = s.GpsLng,
                 GpsAccuracyMeters = s.AccuracyMeters ?? 5.0,
-                SurveyArea = record.Place.Address,
+                SurveyArea = !string.IsNullOrWhiteSpace(record.Place.Address) ? record.Place.Address : record.Place.Name,
                 MismatchMeters = Math.Round(mismatchMeters, 1),
                 Warning = mismatchMeters > 50.0 ? $"Khoảng cách lệch {Math.Round(mismatchMeters, 1)}m so với tọa độ gốc của địa điểm." : null,
                 MapHref = $"https://www.google.com/maps?q={s.GpsLat},{s.GpsLng}",
@@ -875,12 +986,12 @@ public sealed class AdminSubmissionsController : ControllerBase
             Evidence = evidenceList,
             Claims = claims,
             Timeline = timeline,
-            ContributorHistory = new ContributorHistorySummaryDto
+            ContributorHistory = contributorHistory ?? new ContributorHistorySummaryDto
             {
-                Approved = appUser != null && appUser.ReputationScore > 200 ? 5 : 1,
+                Approved = 0,
                 Supplements = 0,
                 Violations = 0,
-                ReputationDelta = 50,
+                ReputationDelta = PublicationPoints,
             },
             TechnicalNotes = new List<string>
             {
@@ -889,7 +1000,7 @@ public sealed class AdminSubmissionsController : ControllerBase
             },
             ApplicableStandards = new List<string>
             {
-                "QCVN 10:2014/BXD - Quy chuẩn kỹ thuật quốc gia về Xây dựng công trình đảm bảo người khuyết tật tiếp cận sử dụng",
+                "QCVN 10:2024/BXD - Quy chuẩn kỹ thuật quốc gia về Xây dựng công trình đảm bảo người khuyết tật tiếp cận sử dụng",
                 "Tiêu chuẩn khảo sát tiếp cận cộng đồng AccessMapVN 2026"
             },
             UserClaims = userClaims,
@@ -961,18 +1072,26 @@ public sealed class AdminSubmissionsController : ControllerBase
         }
 
         // 6. Cập nhật Điểm số và thời gian kiểm định
-        var featureCount = 0;
-        if (place.HasRamp == true) featureCount++;
-        if (place.DoorWidthOk == true) featureCount++;
-        if (place.HasAccessibleElevator == true) featureCount++;
-        if (place.HasAccessibleRestroom == true) featureCount++;
-        if (place.HasTactilePaving == true) featureCount++;
+        var surveyedCount = 0;
+        var availableCount = 0;
+        foreach (var flag in new bool?[]
+        {
+            place.HasRamp,
+            place.DoorWidthOk,
+            place.HasAccessibleElevator,
+            place.HasAccessibleRestroom,
+            place.HasTactilePaving,
+        })
+        {
+            if (flag.HasValue) surveyedCount++;
+            if (flag == true) availableCount++;
+        }
 
         var confidencePercent = (decimal)Math.Round(submission.ConfidenceScore <= 1.0 ? submission.ConfidenceScore * 100 : submission.ConfidenceScore);
-        place.AccessibilityScore = confidencePercent >= 50 ? confidencePercent : Math.Round((decimal)featureCount / 5.0m * 100.0m, 1);
+        place.AccessibilityScore = confidencePercent >= 50 ? confidencePercent : Math.Round((decimal)availableCount / 5.0m * 100.0m, 1);
         place.AccessibilityNote = !string.IsNullOrWhiteSpace(submission.TextDescription) && !submission.TextDescription.Contains("file:")
             ? submission.TextDescription
-            : $"Khảo sát cộng đồng: Ghi nhận {featureCount} hạng mục tiếp cận (chưa thẩm định thông số kỹ thuật).";
+            : $"Khảo sát cộng đồng: Đã ghi nhận {surveyedCount} hạng mục tiếp cận ({availableCount} khả dụng, chưa thẩm định thông số kỹ thuật).";
         place.LastVerifiedAt = publishedAt;
     }
 

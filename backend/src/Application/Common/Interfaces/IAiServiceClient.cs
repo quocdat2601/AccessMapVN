@@ -18,4 +18,8 @@ public interface IAiServiceClient
         string? textDescription,
         string? locationId,
         CancellationToken cancellationToken = default);
+
+    Task<byte[]?> ExtractVideoPosterAsync(
+        string videoUrl,
+        CancellationToken cancellationToken = default);
 }

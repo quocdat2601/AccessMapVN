@@ -14,10 +14,10 @@ public class ContributionPlaceDto
     public string Address { get; set; } = string.Empty;
 
     [JsonPropertyName("district")]
-    public string District { get; set; } = "Quận 1";
+    public string District { get; set; } = string.Empty;
 
     [JsonPropertyName("city")]
-    public string City { get; set; } = "TP.HCM";
+    public string City { get; set; } = string.Empty;
 }
 
 public class ContributorSummaryDto
@@ -131,10 +131,10 @@ public class ContributionEvidenceDto
     public string Device { get; set; } = "Mobile Camera";
 
     [JsonPropertyName("resolution")]
-    public string Resolution { get; set; } = "1920 × 1080";
+    public string Resolution { get; set; } = string.Empty;
 
     [JsonPropertyName("fileSize")]
-    public string FileSize { get; set; } = "2,5 MB";
+    public string FileSize { get; set; } = string.Empty;
 
     [JsonPropertyName("exifStatus")]
     public string ExifStatus { get; set; } = "valid";

@@ -68,4 +68,29 @@ public class AiServiceClient : IAiServiceClient
             return null;
         }
     }
+
+    public async Task<byte[]?> ExtractVideoPosterAsync(
+        string videoUrl,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(videoUrl)) return null;
+        try
+        {
+            var response = await _httpClient.PostAsJsonAsync(
+                "/api/v1/ai/video-poster",
+                new { url = videoUrl },
+                cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("AI service video-poster failed for {Url} with status {StatusCode}.", videoUrl, response.StatusCode);
+                return null;
+            }
+            return await response.Content.ReadAsByteArrayAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Exception calling AI service video-poster endpoint.");
+            return null;
+        }
+    }
 }

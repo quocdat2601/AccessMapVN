@@ -7,7 +7,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -24,6 +23,33 @@ import type { ContributionSubmissionRecord } from '../model/types';
 interface ContributionHistorySheetProps {
   visible: boolean;
   onClose: () => void;
+}
+
+const FEATURE_LABEL_MAP: Record<string, string> = {
+  door_width_ok: 'Cửa ra vào',
+  door_threshold_flat: 'Ngạch cửa phẳng',
+  door_lever_handle: 'Cửa tự động / tay gạt',
+  exterior_ramp_present: 'Ram dốc',
+  ramp_slope_comfortable: 'Độ dốc thoải',
+  steps_present: 'Bậc tam cấp / Cầu thang',
+  elevator_accessible: 'Thang máy',
+  elevator_present: 'Thang máy',
+  restroom_accessible_stall: 'Nhà vệ sinh tiếp cận',
+  accessible_restroom_sign: 'Nhà vệ sinh tiếp cận',
+  restroom_grab_bars: 'Tay vịn bồn cầu',
+  restroom_sink_clearance: 'Khoảng trống gầm bồn rửa',
+  tactile_paving_guiding: 'Gạch dẫn hướng',
+  tactile_paving_warning: 'Gạch cảnh báo',
+  tactile_paving_blocked: 'Lối xúc giác bị chặn',
+  overhead_clearance_ok: 'Lối đi thông thoáng',
+  braille_signage_present: 'Chữ nổi Braille',
+  audible_signal_present: 'Âm thanh thông báo',
+  parking_accessible_space: 'Đỗ xe ưu tiên NKT',
+  counter_lowered_section: 'Quầy phục vụ hạ thấp',
+};
+
+function formatFeatureTag(tag: string): string {
+  return FEATURE_LABEL_MAP[tag] ?? tag;
 }
 
 const FALLBACK_DEMO_ITEMS: ContributionSubmissionRecord[] = [
@@ -73,6 +99,7 @@ export function ContributionHistorySheet({ visible, onClose }: ContributionHisto
       if (Array.isArray(res) && res.length > 0) {
         const mapped: ContributionSubmissionRecord[] = res.map((r) => ({
           id: String(r.id || r.submission_code),
+          submissionCode: r.submission_code || r.submissionCode ? String(r.submission_code || r.submissionCode) : undefined,
           locationId: String(r.place_id || r.placeId || ''),
           locationName: String(r.location_name || r.locationName || 'Địa điểm khảo sát'),
           mediaUri: (r.media_urls && r.media_urls[0]) || (r.mediaUrls && r.mediaUrls[0]) || '',
@@ -80,7 +107,7 @@ export function ContributionHistorySheet({ visible, onClose }: ContributionHisto
           featureTags: r.feature_tags || r.featureTags || [],
           textDescription: r.text_description || r.textDescription,
           status: (r.status as any) || 'Submitted',
-          confidenceScore: 0.9,
+          confidenceScore: Number(r.confidence_score ?? r.confidenceScore ?? 0),
           pointsAwarded: r.points_awarded ?? r.pointsAwarded ?? 0,
           createdAt: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
           revision: r.revision ?? 1,
@@ -212,7 +239,7 @@ export function ContributionHistorySheet({ visible, onClose }: ContributionHisto
     }
   };
 
-  const renderStatusBadge = (status: string, confidence: number) => {
+  const renderStatusBadge = (status: string) => {
     switch (status) {
       case 'Published':
       case 'Auto-Verified':
@@ -220,7 +247,7 @@ export function ContributionHistorySheet({ visible, onClose }: ContributionHisto
           <View style={[styles.statusBadge, { backgroundColor: '#ECFDF5' }]}>
             <Ionicons name="checkmark-circle" size={13} color="#059669" />
             <Text style={[styles.statusText, { color: '#059669' }]}>
-              Đã xuất bản ({Math.round(confidence * 100)}%)
+              Đã xuất bản
             </Text>
           </View>
         );
@@ -273,6 +300,7 @@ export function ContributionHistorySheet({ visible, onClose }: ContributionHisto
   };
 
   const totalExp = items.reduce((sum, item) => sum + item.pointsAwarded, 0);
+  const tierLabel = totalExp >= 500 ? 'Vàng' : totalExp >= 200 ? 'Bạc' : 'Đồng';
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -284,28 +312,29 @@ export function ContributionHistorySheet({ visible, onClose }: ContributionHisto
 
           {/* Header */}
           <View style={styles.headerRow}>
-            <View>
+            <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={styles.title}>Đóng góp của tôi</Text>
-              <Text style={styles.subtitle}>Quy trình kiểm định và nộp lại minh chứng (WF-01)</Text>
+              <Text style={styles.subtitle}>Theo dõi tiến độ duyệt và bổ sung minh chứng</Text>
             </View>
-            <TouchableOpacity
-              style={styles.closeBtn}
+            <Pressable
+              style={({ pressed }) => [styles.closeBtn, pressed && styles.pressed]}
               onPress={onClose}
               accessibilityRole="button"
               accessibilityLabel="Đóng lịch sử đóng góp"
+              hitSlop={6}
             >
-              <MaterialCommunityIcons name="close" size={20} color={Colors.textSecondary} />
-            </TouchableOpacity>
+              <MaterialCommunityIcons name="close" size={20} color="#475569" />
+            </Pressable>
           </View>
 
           {/* Summary Card */}
           <View style={styles.summaryCard}>
             <View style={styles.summaryLeft}>
-              <MaterialCommunityIcons name="shield-star" size={32} color="#facc15" />
-              <View>
-                <Text style={styles.summaryTier}>Hạng đóng góp: Đồng (Tier 1)</Text>
+              <MaterialCommunityIcons name="shield-star" size={30} color="#f59e0b" />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.summaryTier}>Hạng đóng góp: {tierLabel}</Text>
                 <Text style={styles.summarySub}>
-                  {items.length} lượt đóng góp · Dữ liệu chuẩn hóa QCVN 10:2014
+                  {items.length} lượt đóng góp · Chuẩn QCVN 10:2014
                 </Text>
               </View>
             </View>
@@ -338,6 +367,8 @@ export function ContributionHistorySheet({ visible, onClose }: ContributionHisto
               items.map((item) => {
                 const isNeedsSupplement = item.status === 'AwaitingMoreInfo';
                 const isOperating = actionInProgressId === item.id;
+                const displayCode =
+                  item.submissionCode || (item.id.startsWith('AMV-') ? item.id : null);
 
                 return (
                   <View key={item.id} style={styles.card}>
@@ -354,6 +385,11 @@ export function ContributionHistorySheet({ visible, onClose }: ContributionHisto
                           <Text style={styles.locationName} numberOfLines={1}>
                             {item.locationName}
                           </Text>
+                          {displayCode ? (
+                            <View style={styles.codePill}>
+                              <Text style={styles.codePillText}>{displayCode}</Text>
+                            </View>
+                          ) : null}
                           {item.revision && item.revision > 1 && (
                             <View style={styles.revisionPill}>
                               <Text style={styles.revisionText}>Rev {item.revision}</Text>
@@ -366,7 +402,7 @@ export function ContributionHistorySheet({ visible, onClose }: ContributionHisto
                         </Text>
 
                         <View style={styles.statusRow}>
-                          {renderStatusBadge(item.status, item.confidenceScore)}
+                          {renderStatusBadge(item.status)}
                           {item.pointsAwarded > 0 && (
                             <Text style={styles.itemExp}>+{item.pointsAwarded} EXP</Text>
                           )}
@@ -386,27 +422,37 @@ export function ContributionHistorySheet({ visible, onClose }: ContributionHisto
                         </Text>
 
                         <View style={styles.supplementActionRow}>
-                          <TouchableOpacity
-                            style={[styles.resubmitBtn, isOperating && { opacity: 0.6 }]}
+                          <Pressable
+                            style={({ pressed }) => [
+                              styles.resubmitBtn,
+                              isOperating && { opacity: 0.6 },
+                              pressed && styles.pressed,
+                            ]}
                             onPress={() => handleResubmit(item)}
                             disabled={isOperating}
-                            activeOpacity={0.8}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Nộp lại minh chứng cho ${item.locationName}`}
                           >
                             <Ionicons name="camera" size={15} color="#FFFFFF" />
                             <Text style={styles.resubmitBtnText}>
                               Nộp lại minh chứng (Rev {(item.revision || 1) + 1})
                             </Text>
-                          </TouchableOpacity>
+                          </Pressable>
 
-                          <TouchableOpacity
-                            style={[styles.cancelBtn, isOperating && { opacity: 0.6 }]}
+                          <Pressable
+                            style={({ pressed }) => [
+                              styles.cancelBtn,
+                              isOperating && { opacity: 0.6 },
+                              pressed && styles.pressed,
+                            ]}
                             onPress={() => handleCancelSubmission(item)}
                             disabled={isOperating}
-                            activeOpacity={0.8}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Hủy hồ sơ ${item.locationName}`}
                           >
                             <Ionicons name="close" size={15} color="#EF4444" />
                             <Text style={styles.cancelBtnText}>Hủy</Text>
-                          </TouchableOpacity>
+                          </Pressable>
                         </View>
                       </View>
                     )}
@@ -415,7 +461,7 @@ export function ContributionHistorySheet({ visible, onClose }: ContributionHisto
                       <View style={styles.tagsRow}>
                         {item.featureTags.map((t) => (
                           <View key={t} style={styles.tagChip}>
-                            <Text style={styles.tagText}>{t}</Text>
+                            <Text style={styles.tagText}>{formatFeatureTag(t)}</Text>
                           </View>
                         ))}
                       </View>
@@ -486,12 +532,15 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   closeBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#f1f5f9',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  pressed: {
+    opacity: 0.78,
   },
   summaryCard: {
     backgroundColor: '#f8fafc',
@@ -502,6 +551,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 10,
     marginBottom: 14,
   },
   summaryLeft: {
@@ -613,6 +663,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0f172a',
   },
+  codePill: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+  },
+  codePillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#334155',
+  },
   revisionPill: {
     backgroundColor: '#E6F8F5',
     borderWidth: 1,
@@ -628,7 +689,7 @@ const styles = StyleSheet.create({
   },
   timestamp: {
     fontSize: 11,
-    color: '#94a3b8',
+    color: '#64748b',
     marginTop: 2,
   },
   statusRow: {
@@ -688,12 +749,13 @@ const styles = StyleSheet.create({
   },
   resubmitBtn: {
     flex: 1,
+    minHeight: 40,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 5,
     backgroundColor: '#004F58',
-    paddingVertical: 7,
+    paddingVertical: 9,
     paddingHorizontal: 10,
     borderRadius: 8,
   },
@@ -703,6 +765,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   cancelBtn: {
+    minHeight: 40,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -710,7 +773,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEE2E2',
     borderWidth: 1,
     borderColor: '#FECACA',
-    paddingVertical: 7,
+    paddingVertical: 9,
     paddingHorizontal: 12,
     borderRadius: 8,
   },

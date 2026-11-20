@@ -35,6 +35,12 @@ export function CameraStatusOverlay({ currentAddress, gps }: CameraStatusOverlay
           <View style={[styles.corner, styles.cornerBL]} />
           <View style={[styles.corner, styles.cornerBR]} />
         </View>
+        <View style={styles.framingHintPill}>
+          <MaterialCommunityIcons name="crop-free" size={13} color="#5eead4" />
+          <Text style={styles.framingHintText}>
+            Giữ ngang tầm cửa / ram dốc để AI nhận diện rõ
+          </Text>
+        </View>
       </View>
 
       {/* TimeMark-style Live Audit Stamp / Watermark on bottom-left */}

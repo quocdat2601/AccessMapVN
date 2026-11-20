@@ -128,6 +128,7 @@ function ActiveCameraContributionScreen() {
   const [preScanTags, setPreScanTags] = useState<PreScanFeatureTag[]>([]);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isPreScanning, setIsPreScanning] = useState(false);
+  const [videoPreviewUri, setVideoPreviewUri] = useState<string | null>(null);
   const [confirmedTagKeys, setConfirmedTagKeys] = useState<string[]>([]);
   const [userObservations, setUserObservations] = useState<Record<string, 'present' | 'absent'>>({});
   const [fieldNotes, setFieldNotes] = useState('');
@@ -356,12 +357,14 @@ function ActiveCameraContributionScreen() {
     setIsPreScanning(true);
     setPreScanTags([]);
     setAiSummary(null);
+    setVideoPreviewUri(null);
 
     const request = media.type === 'video' ? runAiVideoPreScan(media.uri) : runAiPreScan(media.uri);
     void request.then((result) => {
       if (!mounted.current) return;
       setPreScanTags(result.features);
       setAiSummary(result.summary);
+      setVideoPreviewUri(result.previewFrameUri ?? null);
       setIsPreScanning(false);
     });
   }, []);
@@ -452,6 +455,7 @@ function ActiveCameraContributionScreen() {
     setWorkflowStep('camera');
     setMatrixResult(null);
     setUserObservations({});
+    setVideoPreviewUri(null);
   }, []);
 
   const handleProceedToVerification = useCallback(
@@ -547,6 +551,7 @@ function ActiveCameraContributionScreen() {
       <>
         <TagReviewScreen
           media={capturedMedia}
+          previewFrameUri={videoPreviewUri}
           availableTags={preScanTags}
           aiSummary={aiSummary}
           isPreScanning={isPreScanning}

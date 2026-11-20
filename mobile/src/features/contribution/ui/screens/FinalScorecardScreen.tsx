@@ -3,7 +3,8 @@ import { ActivityIndicator, Alert, Animated, Easing, Pressable, ScrollView, Styl
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { addContributionRecord, type CapturedContributionMedia } from '@/entities/contribution';
+import { ContributionHistorySheet, addContributionRecord, type CapturedContributionMedia } from '@/entities/contribution';
+import { QCVN_FEATURE_TAGS } from '../../model/tagReviewModel';
 import { apiClient } from '@/shared/api/client';
 import { uploadMediaToBackend } from '../../api/mediaUploadService';
 import type { VerificationMatrixResult } from '../../lib/verificationEngine';
@@ -69,7 +70,16 @@ export function FinalScorecardScreen({
 
   const { user } = useAuth();
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showHistorySheet, setShowHistorySheet] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const selectedTagLabels = React.useMemo(
+    () =>
+      selectedTagKeys.map(
+        (key) => QCVN_FEATURE_TAGS.find((t) => t.key === key)?.label ?? key
+      ),
+    [selectedTagKeys]
+  );
   const clientSubmissionIdRef = useRef<string>(
     `mob-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 9)}`
   );
@@ -309,21 +319,21 @@ export function FinalScorecardScreen({
     ]).start();
   };
 
-  let statusBg = 'rgba(16, 185, 129, 0.15)';
-  let statusBorder = '#10b981';
+  let statusBg = 'rgba(5, 150, 105, 0.12)';
+  let statusBorder = '#059669';
   let statusIcon: any = 'check-decagram';
-  let statusColor = '#10b981';
+  let statusColor = '#059669';
 
-  if (status === 'PendingModeration') {
-    statusBg = 'rgba(245, 158, 11, 0.15)';
-    statusBorder = '#f59e0b';
-    statusIcon = 'clock-alert-outline';
-    statusColor = '#f59e0b';
-  } else if (status === 'AwaitingMoreInfo') {
-    statusBg = 'rgba(244, 63, 94, 0.15)';
-    statusBorder = '#f43f5e';
+  if (status === 'AwaitingMoreInfo') {
+    statusBg = 'rgba(225, 29, 72, 0.12)';
+    statusBorder = '#e11d48';
     statusIcon = 'alert-circle-outline';
-    statusColor = '#f43f5e';
+    statusColor = '#e11d48';
+  } else if (overallScore < 80 || !spatialValid || matrixResult.unverifiedTagCount > 0) {
+    statusBg = 'rgba(217, 119, 6, 0.12)';
+    statusBorder = '#d97706';
+    statusIcon = 'clock-alert-outline';
+    statusColor = '#d97706';
   }
 
   const handleAttachToReport = () => {
@@ -390,30 +400,44 @@ export function FinalScorecardScreen({
 
       {/* Header */}
       <View style={styles.header}>
-        <Pressable
-          style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
-          onPress={onEditTags}
-          accessibilityRole="button"
-          accessibilityLabel="Chỉnh sửa nhãn"
-        >
-          <MaterialCommunityIcons name="arrow-left" size={22} color="#0f172a" />
-        </Pressable>
+        {submittedResult ? (
+          <View style={styles.headerSpacer} />
+        ) : (
+          <Pressable
+            style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
+            onPress={onEditTags}
+            accessibilityRole="button"
+            accessibilityLabel="Chỉnh sửa nhãn"
+            hitSlop={6}
+          >
+            <MaterialCommunityIcons name="arrow-left" size={22} color="#0f172a" />
+          </Pressable>
+        )}
         <View style={styles.headerCenter}>
           <Text style={styles.headerStep}>
-            {flow === 'report' ? 'MINH CHỨNG BÁO CÁO' : 'BƯỚC 3 / 3'}
+            {submittedResult ? 'ĐÃ GỬI HỒ SƠ' : flow === 'report' ? 'MINH CHỨNG BÁO CÁO' : 'BƯỚC 3 / 3'}
           </Text>
           <Text style={styles.headerTitle} numberOfLines={1}>
-            {flow === 'report' ? 'Đánh giá AI minh chứng' : 'Kết quả đánh giá tiếp cận'}
+            {submittedResult
+              ? 'Hoàn tất đóng góp'
+              : flow === 'report'
+              ? 'Đánh giá AI minh chứng'
+              : 'Kết quả đánh giá tiếp cận'}
           </Text>
         </View>
-        <Pressable
-          style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
-          onPress={onRetakeOrReset}
-          accessibilityRole="button"
-          accessibilityLabel="Quét lại từ đầu"
-        >
-          <MaterialCommunityIcons name="refresh" size={20} color="#64748b" />
-        </Pressable>
+        {submittedResult ? (
+          <View style={styles.headerSpacer} />
+        ) : (
+          <Pressable
+            style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}
+            onPress={onRetakeOrReset}
+            accessibilityRole="button"
+            accessibilityLabel="Quét lại từ đầu"
+            hitSlop={6}
+          >
+            <MaterialCommunityIcons name="refresh" size={20} color="#475569" />
+          </Pressable>
+        )}
       </View>
 
       <ScrollView
@@ -422,126 +446,266 @@ export function FinalScorecardScreen({
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Top Hero: Score Meter & Status Badge */}
-        <View style={styles.heroCard}>
-          <ScoreMeterRing
-            score={overallScore}
-            size={130}
-            strokeWidth={11}
-            animated={true}
-            onAnimationComplete={handleScoreAnimationComplete}
-          />
+        {submittedResult ? (
+          <>
+            {/* Dedicated Post-Submit Receipt Hero */}
+            <View style={styles.receiptHeroCard}>
+              <View style={styles.receiptIconWrap}>
+                <MaterialCommunityIcons name="check-decagram" size={38} color="#059669" />
+              </View>
+              <Text style={styles.receiptTitle}>Đã gửi đóng góp thành công</Text>
+              <Text style={styles.receiptSubtitle}>
+                Cảm ơn bạn đã đóng góp dữ liệu tiếp cận cho cộng đồng.
+              </Text>
+              <View style={styles.receiptCodePill}>
+                <MaterialCommunityIcons name="identifier" size={14} color="#004e58" />
+                <Text style={styles.receiptCodeText}>Mã hồ sơ: {submittedResult.submissionId}</Text>
+              </View>
+            </View>
 
-          <Animated.View
-            style={[
-              styles.statusBadge,
-              {
-                backgroundColor: statusBg,
-                borderColor: statusBorder,
-                opacity: badgeOpacity,
-                transform: [{ scale: badgeScale }],
-              },
-            ]}
-          >
-            <MaterialCommunityIcons name={statusIcon} size={18} color={statusColor} />
-            <Text style={[styles.statusTitle, { color: statusColor }]}>{statusLabel}</Text>
-          </Animated.View>
-
-          <Animated.View
-            style={{
-              width: '100%',
-              alignItems: 'center',
-              opacity: contentOpacity,
-              transform: [{ translateY: contentTranslateY }],
-            }}
-          >
-            <Text style={styles.statusDescription}>{statusDescription}</Text>
-
-            {!submittedResult && !submitError && (
-              <View style={styles.testStopBanner}>
-                <MaterialCommunityIcons name="cloud-upload-outline" size={15} color="#004e58" />
-                <Text style={styles.testStopText}>
-                  Kiểm tra lại thông tin trước khi gửi. Điểm thưởng EXP sẽ được cộng sau khi hồ sơ được duyệt.
+            {/* Open Contribution History Sheet */}
+            <Pressable
+              style={({ pressed }) => [styles.historyLinkCard, pressed && styles.pressed]}
+              onPress={() => setShowHistorySheet(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Theo dõi trạng thái hồ sơ"
+            >
+              <View style={styles.historyLinkIconWrap}>
+                <MaterialCommunityIcons name="clipboard-text-clock-outline" size={20} color="#004e58" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.historyLinkTitle}>Theo dõi trạng thái hồ sơ</Text>
+                <Text style={styles.historyLinkSub}>
+                  Xem tiến độ duyệt hoặc bổ sung ảnh nếu cần
                 </Text>
               </View>
-            )}
-          </Animated.View>
-        </View>
+              <MaterialCommunityIcons name="chevron-right" size={20} color="#64748b" />
+            </Pressable>
 
-        {/* Breakdown Matrix & Details */}
-        <Animated.View
-          style={{
-            opacity: contentOpacity,
-            transform: [{ translateY: contentTranslateY }],
-          }}
-        >
-          <ScoreMatrixBreakdown
-            matrixResult={matrixResult}
-            pillars={pillars}
-            spatialValid={spatialValid}
-            spatialDistanceMeters={spatialDistanceMeters}
-            selectedTagKeys={selectedTagKeys}
-          />
+            {/* Location & Confirmed Features */}
+            <View style={styles.detailsCard}>
+              <Text style={styles.detailsTitle}>Thông tin đã ghi nhận</Text>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Địa điểm:</Text>
+                <Text style={styles.detailValue} numberOfLines={1}>
+                  {locationName || media.locationName}
+                </Text>
+              </View>
+              {selectedTagLabels.length > 0 ? (
+                <View style={styles.tagChipsSection}>
+                  <Text style={styles.detailLabel}>Đặc điểm xác nhận ({selectedTagLabels.length}):</Text>
+                  <View style={styles.tagChipsWrap}>
+                    {selectedTagLabels.map((label) => (
+                      <View key={label} style={styles.featureChip}>
+                        <MaterialCommunityIcons name="check" size={12} color="#004e58" />
+                        <Text style={styles.featureChipText}>{label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+            </View>
 
-          <ScoreCriteriaExplainer
-            overallScore={overallScore}
-            status={status}
-            hasNoFeatures={selectedTagKeys.length === 0}
-            cvScore={pillars.computerVision.score}
-            spatialDistanceMeters={spatialDistanceMeters}
-          />
+            {/* Compact 3-Step Approval Timeline */}
+            <View style={styles.detailsCard}>
+              <Text style={styles.detailsTitle}>Tiến trình xử lý</Text>
 
-        {/* POI & Submission Details Card */}
-        <View style={styles.detailsCard}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-            <Text style={styles.detailsTitle}>Thông tin ghi nhận</Text>
-            {onChangeLocation ? (
-              <Pressable
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: '#f0fdfa' }}
-                onPress={onChangeLocation}
+              <View style={styles.timelineRow}>
+                <View style={[styles.timelineDot, styles.timelineDotDone]}>
+                  <MaterialCommunityIcons name="check" size={12} color="#ffffff" />
+                </View>
+                <View style={styles.timelineTextCol}>
+                  <Text style={styles.timelineTitle}>Đã tiếp nhận hồ sơ</Text>
+                  <Text style={styles.timelineDesc}>
+                    Lưu minh chứng với mã {submittedResult.submissionId}.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.timelineConnector} />
+
+              <View style={styles.timelineRow}>
+                <View style={[styles.timelineDot, styles.timelineDotActive]}>
+                  <MaterialCommunityIcons name="clock-outline" size={12} color="#ffffff" />
+                </View>
+                <View style={styles.timelineTextCol}>
+                  <Text style={styles.timelineTitle}>Đang xác minh & chờ duyệt</Text>
+                  <Text style={styles.timelineDesc}>
+                    AI kiểm tra minh chứng và kiểm duyệt viên đối chiếu trên cổng quản trị.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.timelineConnector} />
+
+              <View style={styles.timelineRow}>
+                <View style={[styles.timelineDot, styles.timelineDotPending]}>
+                  <MaterialCommunityIcons name="star-outline" size={12} color="#64748b" />
+                </View>
+                <View style={styles.timelineTextCol}>
+                  <Text style={[styles.timelineTitle, { color: '#475569' }]}>
+                    Công bố & nhận +50 EXP
+                  </Text>
+                  <Text style={styles.timelineDesc}>
+                    Cập nhật tiện ích lên bản đồ và cộng điểm thưởng vào tài khoản.
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </>
+        ) : (
+          <>
+            {/* Top Hero: Score Meter & Status Badge */}
+            <View style={styles.heroCard}>
+              <ScoreMeterRing
+                score={overallScore}
+                size={130}
+                strokeWidth={11}
+                animated={true}
+                onAnimationComplete={handleScoreAnimationComplete}
+              />
+
+              <Animated.View
+                style={[
+                  styles.statusBadge,
+                  {
+                    backgroundColor: statusBg,
+                    borderColor: statusBorder,
+                    opacity: badgeOpacity,
+                    transform: [{ scale: badgeScale }],
+                  },
+                ]}
               >
-                <MaterialCommunityIcons name="pencil-outline" size={13} color="#006874" />
-                <Text style={{ fontSize: 11, fontWeight: '700', color: '#006874' }}>Đổi vị trí</Text>
-              </Pressable>
-            ) : null}
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Địa điểm:</Text>
-            <Text style={styles.detailValue} numberOfLines={1}>
-              {locationName || media.locationName}
-            </Text>
-          </View>
-          {locationAddress ? (
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Địa chỉ:</Text>
-              <Text style={styles.detailValue} numberOfLines={1}>
-                {locationAddress}
-              </Text>
-            </View>
-          ) : null}
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Đặc tính đã chọn:</Text>
-            <Text style={styles.detailValue}>{selectedTagKeys.length} đặc tính</Text>
-          </View>
-          {notes ? (
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Ghi chú:</Text>
-              <Text style={styles.detailValue} numberOfLines={2}>
-                "{notes}"
-              </Text>
-            </View>
-          ) : null}
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Ghi nhận EXP:</Text>
-            <View style={styles.expPill}>
-              <MaterialCommunityIcons name="clock-outline" size={14} color="#b45309" />
-              <Text style={styles.expPillText}>{flow === 'report' ? '+30 EXP (chờ duyệt)' : '+50 EXP (chờ duyệt)'}</Text>
+                <MaterialCommunityIcons name={statusIcon} size={18} color={statusColor} />
+                <Text style={[styles.statusTitle, { color: statusColor }]}>{statusLabel}</Text>
+              </Animated.View>
 
+              <Animated.View
+                style={{
+                  width: '100%',
+                  alignItems: 'center',
+                  opacity: contentOpacity,
+                  transform: [{ translateY: contentTranslateY }],
+                }}
+              >
+                <Text style={styles.statusDescription}>{statusDescription}</Text>
+              </Animated.View>
             </View>
-          </View>
-        </View>
-      </Animated.View>
-    </ScrollView>
+
+            {/* Breakdown Matrix & Details */}
+            <Animated.View
+              style={{
+                opacity: contentOpacity,
+                transform: [{ translateY: contentTranslateY }],
+              }}
+            >
+              <ScoreMatrixBreakdown
+                matrixResult={matrixResult}
+                pillars={pillars}
+                spatialValid={spatialValid}
+                spatialDistanceMeters={spatialDistanceMeters}
+                selectedTagKeys={selectedTagKeys}
+                mediaType={media.type === 'video' ? 'video' : 'photo'}
+              />
+
+              <ScoreCriteriaExplainer
+                overallScore={overallScore}
+                hasNoFeatures={selectedTagKeys.length === 0}
+                cvScore={pillars.computerVision.score}
+                spatialDistanceMeters={spatialDistanceMeters}
+                mediaType={media.type === 'video' ? 'video' : 'photo'}
+                hasNotes={Boolean(notes.trim())}
+              />
+
+              {/* POI & Submission Details Card */}
+              <View style={styles.detailsCard}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <Text style={styles.detailsTitle}>Thông tin ghi nhận</Text>
+                  {onChangeLocation ? (
+                    <Pressable
+                      style={({ pressed }) => [
+                        { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: '#f0fdfa' },
+                        pressed && styles.pressed,
+                      ]}
+                      onPress={onChangeLocation}
+                      hitSlop={6}
+                      accessibilityRole="button"
+                      accessibilityLabel="Đổi vị trí địa điểm"
+                    >
+                      <MaterialCommunityIcons name="pencil-outline" size={13} color="#006874" />
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#006874' }}>Đổi vị trí</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Địa điểm:</Text>
+                  <Text style={styles.detailValue} numberOfLines={1}>
+                    {locationName || media.locationName}
+                  </Text>
+                </View>
+                {locationAddress ? (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Địa chỉ:</Text>
+                    <Text style={styles.detailValue} numberOfLines={1}>
+                      {locationAddress}
+                    </Text>
+                  </View>
+                ) : null}
+                <View style={styles.tagChipsSection}>
+                  <Text style={styles.detailLabel}>
+                    Đặc tính đã chọn ({selectedTagLabels.length}):
+                  </Text>
+                  {selectedTagLabels.length > 0 ? (
+                    <View style={styles.tagChipsWrap}>
+                      {selectedTagLabels.map((label) => (
+                        <View key={label} style={styles.featureChip}>
+                          <MaterialCommunityIcons name="check" size={12} color="#004e58" />
+                          <Text style={styles.featureChipText}>{label}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={styles.detailEmptyText}>Chưa chọn đặc tính nào</Text>
+                  )}
+                </View>
+                {userMeasurements?.doorClearWidthCm ||
+                (userMeasurements?.rampHeightCm != null && userMeasurements?.rampLengthCm != null) ? (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Số đo kỹ thuật:</Text>
+                    <Text style={styles.detailValue} numberOfLines={1}>
+                      {[
+                        userMeasurements?.doorClearWidthCm ? `Cửa ${userMeasurements.doorClearWidthCm} cm` : null,
+                        userMeasurements?.rampHeightCm != null && userMeasurements?.rampLengthCm != null
+                          ? `Dốc ${userMeasurements.rampHeightCm}/${userMeasurements.rampLengthCm} cm`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </Text>
+                  </View>
+                ) : null}
+                {notes ? (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Ghi chú:</Text>
+                    <Text style={styles.detailValue} numberOfLines={2}>
+                      "{notes}"
+                    </Text>
+                  </View>
+                ) : null}
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Ghi nhận EXP:</Text>
+                  <View style={styles.expPill}>
+                    <MaterialCommunityIcons name="star-circle-outline" size={14} color="#b45309" />
+                    <Text style={styles.expPillText}>
+                      {flow === 'report' ? '+30 EXP sau khi duyệt' : '+50 EXP sau khi duyệt'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </Animated.View>
+          </>
+        )}
+      </ScrollView>
 
       {/* Bottom Actions with Docked Status Notification */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 14) + 6 }]}>
@@ -565,18 +729,6 @@ export function FinalScorecardScreen({
               )}
             </View>
           </View>
-        ) : submittedResult ? (
-          <View style={styles.dockedSuccessBanner}>
-            <MaterialCommunityIcons name="check-decagram" size={20} color="#059669" />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.dockedSuccessTitle}>
-                Đã gửi hồ sơ thành công{submittedResult.pointsAwarded > 0 ? ` (+${submittedResult.pointsAwarded} EXP)` : ''}
-              </Text>
-              <Text style={styles.dockedSuccessText}>
-                Mã: {submittedResult.submissionId} · EXP sẽ được cộng sau khi duyệt
-              </Text>
-            </View>
-          </View>
         ) : null}
 
         <View style={styles.bottomButtonsRow}>
@@ -586,6 +738,7 @@ export function FinalScorecardScreen({
                 style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
                 onPress={onEditTags}
                 accessibilityRole="button"
+                accessibilityLabel="Sửa đặc tính"
               >
                 <MaterialCommunityIcons name="tag-outline" size={16} color="#334155" />
                 <Text style={styles.secondaryBtnText}>Sửa đặc tính</Text>
@@ -595,6 +748,7 @@ export function FinalScorecardScreen({
                 style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
                 onPress={handleAttachToReport}
                 accessibilityRole="button"
+                accessibilityLabel="Đính kèm vào báo cáo"
               >
                 <MaterialCommunityIcons name="clipboard-check-outline" size={18} color="#ffffff" />
                 <Text style={styles.primaryBtnText}>Đính kèm vào báo cáo</Text>
@@ -606,6 +760,7 @@ export function FinalScorecardScreen({
                 style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
                 onPress={onRetakeOrReset}
                 accessibilityRole="button"
+                accessibilityLabel="Đóng góp khác"
               >
                 <MaterialCommunityIcons name="camera-retake" size={16} color="#334155" />
                 <Text style={styles.secondaryBtnText}>Đóng góp khác</Text>
@@ -615,9 +770,10 @@ export function FinalScorecardScreen({
                 style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
                 onPress={onFinish || onRetakeOrReset}
                 accessibilityRole="button"
+                accessibilityLabel="Về bản đồ"
               >
-                <MaterialCommunityIcons name="check" size={16} color="#ffffff" />
-                <Text style={styles.primaryBtnText}>Hoàn tất</Text>
+                <MaterialCommunityIcons name="map-outline" size={16} color="#ffffff" />
+                <Text style={styles.primaryBtnText}>Về bản đồ</Text>
               </Pressable>
             </>
           ) : (
@@ -626,6 +782,7 @@ export function FinalScorecardScreen({
                 style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
                 onPress={onEditTags}
                 accessibilityRole="button"
+                accessibilityLabel="Sửa đặc tính"
                 disabled={isSubmitting}
               >
                 <MaterialCommunityIcons name="tag-outline" size={16} color="#334155" />
@@ -641,6 +798,7 @@ export function FinalScorecardScreen({
                 onPress={handleSubmit}
                 disabled={isSubmitting}
                 accessibilityRole="button"
+                accessibilityLabel="Gửi đóng góp"
               >
                 {isSubmitting ? (
                   <>
@@ -664,6 +822,11 @@ export function FinalScorecardScreen({
         featureName="xuất bản dữ liệu tiếp cận và nhận +50 EXP"
         onClose={() => setShowLoginModal(false)}
       />
+
+      <ContributionHistorySheet
+        visible={showHistorySheet}
+        onClose={() => setShowHistorySheet(false)}
+      />
     </View>
   );
 }
@@ -683,12 +846,16 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f1f5f9',
   },
   iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#f1f5f9',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  headerSpacer: {
+    width: 40,
+    height: 40,
   },
   headerCenter: {
     flex: 1,
@@ -749,25 +916,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
     paddingHorizontal: 8,
-  },
-  testStopBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f0fdfa',
-    borderWidth: 1,
-    borderColor: '#ccfbf1',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    gap: 7,
-    marginTop: 4,
-  },
-  testStopText: {
-    fontSize: 11,
-    color: '#004e58',
-    fontWeight: '600',
-    flex: 1,
-    lineHeight: 15,
   },
   detailsCard: {
     backgroundColor: '#ffffff',
@@ -876,26 +1024,153 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#9f1239',
   },
-  dockedSuccessBanner: {
+  tagChipsSection: {
+    gap: 6,
+    paddingTop: 2,
+  },
+  tagChipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  featureChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ecfdf5',
+    gap: 4,
+    backgroundColor: '#f0fdfa',
+    borderWidth: 1,
+    borderColor: '#ccfbf1',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  featureChipText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#004e58',
+  },
+  detailEmptyText: {
+    fontSize: 11.5,
+    color: '#94a3b8',
+    fontStyle: 'italic',
+  },
+  receiptHeroCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: '#a7f3d0',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    gap: 8,
-    width: '100%',
+    padding: 16,
+    alignItems: 'center',
+    gap: 6,
   },
-  dockedSuccessTitle: {
+  receiptIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#ecfdf5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
+  receiptTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0f172a',
+    textAlign: 'center',
+  },
+  receiptSubtitle: {
+    fontSize: 12.5,
+    color: '#475569',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  receiptCodePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#f0fdfa',
+    borderWidth: 1,
+    borderColor: '#ccfbf1',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    marginTop: 4,
+  },
+  receiptCodeText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#065f46',
+    color: '#004e58',
   },
-  dockedSuccessText: {
-    fontSize: 11,
-    color: '#047857',
+  timelineRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  timelineDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  timelineDotDone: {
+    backgroundColor: '#059669',
+  },
+  timelineDotActive: {
+    backgroundColor: '#004e58',
+  },
+  timelineDotPending: {
+    backgroundColor: '#e2e8f0',
+  },
+  timelineConnector: {
+    width: 2,
+    height: 14,
+    backgroundColor: '#e2e8f0',
+    marginLeft: 10,
+    marginVertical: 2,
+  },
+  timelineTextCol: {
+    flex: 1,
+  },
+  timelineTitle: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  timelineDesc: {
+    fontSize: 11.5,
+    color: '#64748b',
+    lineHeight: 16,
+    marginTop: 1,
+  },
+  historyLinkCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    padding: 14,
+  },
+  historyLinkIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#f0fdfa',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  historyLinkTitle: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#004e58',
+  },
+  historyLinkSub: {
+    fontSize: 11.5,
+    color: '#64748b',
+    marginTop: 1,
   },
   secondaryBtn: {
     flex: 1,

@@ -91,6 +91,7 @@ export async function uploadMediaToBackend(
           .from('contributions-media')
           .upload(fileName, fileBody, {
             contentType: mimeType,
+            cacheControl: '31536000',
             upsert: true,
           });
 

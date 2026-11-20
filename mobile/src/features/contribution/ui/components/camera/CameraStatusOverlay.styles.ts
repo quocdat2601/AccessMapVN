@@ -26,6 +26,21 @@ export const styles = StyleSheet.create({
   cornerTR: { top: 0, right: 0, borderTopWidth: 2, borderRightWidth: 2, borderTopRightRadius: 6 },
   cornerBL: { bottom: 0, left: 0, borderBottomWidth: 2, borderLeftWidth: 2, borderBottomLeftRadius: 6 },
   cornerBR: { bottom: 0, right: 0, borderBottomWidth: 2, borderRightWidth: 2, borderBottomRightRadius: 6 },
+  framingHintPill: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  framingHintText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#ffffff',
+  },
   auditWatermark: {
     position: 'absolute',
     bottom: 148,

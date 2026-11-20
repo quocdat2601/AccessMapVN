@@ -57,14 +57,14 @@ export function ScoreMeterRing({
 
   const strokeDashoffset = circumference - (circumference * displayScore) / 100;
 
-  let strokeColor = '#10b981'; // >= 90% AutoVerified (Emerald)
-  let statusBadge = 'CAO';
+  let strokeColor = '#059669'; // >= 80% Tốt (Emerald)
+  let statusBadge = 'TỐT';
   if (displayScore < 60) {
-    strokeColor = '#f43f5e'; // < 60% AwaitingMoreInfo (Rose)
+    strokeColor = '#e11d48'; // < 60% Cần bổ sung (Rose)
     statusBadge = 'THẤP';
-  } else if (displayScore < 90) {
-    strokeColor = '#f59e0b'; // 60-89% PendingModeration (Amber)
-    statusBadge = 'TRUNG BÌNH';
+  } else if (displayScore < 80) {
+    strokeColor = '#d97706'; // 60-79% Khá (Amber)
+    statusBadge = 'KHÁ';
   }
 
   return (

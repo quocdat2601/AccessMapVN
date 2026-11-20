@@ -9,6 +9,7 @@ interface ScoreMatrixBreakdownProps {
   spatialValid: boolean;
   spatialDistanceMeters: number | null;
   selectedTagKeys?: string[];
+  mediaType?: 'photo' | 'video';
 }
 
 export function ScoreMatrixBreakdown({
@@ -17,189 +18,28 @@ export function ScoreMatrixBreakdown({
   spatialValid,
   spatialDistanceMeters,
   selectedTagKeys,
+  mediaType = 'photo',
 }: ScoreMatrixBreakdownProps) {
-  const { computerVision, nlpContext, spatialProximity } = pillars;
-  const personaScores = matrixResult?.personaScores;
-  const personaFit = matrixResult?.personaFit;
-  const dataConfidence = matrixResult?.dataConfidence;
+  const { computerVision, nlpContext } = pillars;
   const penalties = matrixResult?.penalties;
+  const isVideo = mediaType === 'video';
 
   return (
     <View style={styles.container}>
-      {/* ── 1. Persona Fit Evaluation Cards (QCVN 10:2014) ──────────────── */}
-      {personaScores && personaFit ? (
-        <View style={styles.personaSection}>
-          <Text style={styles.sectionTitle}>Độ tương thích theo đối tượng sử dụng</Text>
-
-          {/* Wheelchair Persona Card */}
-          <View style={styles.personaCard}>
-            <View style={styles.personaHeader}>
-              <View style={styles.personaTitleRow}>
-                <View style={[styles.personaIconWrap, { backgroundColor: 'rgba(56, 189, 248, 0.15)' }]}>
-                  <MaterialCommunityIcons name="wheelchair-accessibility" size={20} color="#38bdf8" />
-                </View>
-                <View style={styles.personaTextCol}>
-                  <Text style={styles.personaName} numberOfLines={1}>Người dùng xe lăn & vận động</Text>
-                  <Text style={styles.personaSub} numberOfLines={1}>Ram dốc, cửa lọt lòng, không gian vệ sinh</Text>
-                </View>
-              </View>
-              <View style={styles.scorePill}>
-                <Text style={[styles.scorePillText, { color: '#38bdf8' }]}>
-                  {personaScores.wheelchairScore}%
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.badgesRow}>
-              <View
-                style={[
-                  styles.fitBadge,
-                  personaFit.manualWheelchairSelf === 'FullyAccessible'
-                    ? styles.badgeSuccess
-                    : personaFit.manualWheelchairSelf === 'NeedsAssistance'
-                    ? styles.badgeWarning
-                    : styles.badgeDanger,
-                ]}
-              >
-                <MaterialCommunityIcons
-                  name={
-                    personaFit.manualWheelchairSelf === 'FullyAccessible'
-                      ? 'check-circle'
-                      : personaFit.manualWheelchairSelf === 'NeedsAssistance'
-                      ? 'help-circle-outline'
-                      : 'close-circle-outline'
-                  }
-                  size={12}
-                  color={
-                    personaFit.manualWheelchairSelf === 'FullyAccessible'
-                      ? '#10b981'
-                      : personaFit.manualWheelchairSelf === 'NeedsAssistance'
-                      ? '#f59e0b'
-                      : '#f43f5e'
-                  }
-                />
-                <Text
-                  style={[
-                    styles.fitBadgeText,
-                    {
-                      color:
-                        personaFit.manualWheelchairSelf === 'FullyAccessible'
-                          ? '#10b981'
-                          : personaFit.manualWheelchairSelf === 'NeedsAssistance'
-                          ? '#f59e0b'
-                          : '#f43f5e',
-                    },
-                  ]}
-                >
-                  Xe lăn tay:{' '}
-                  {personaFit.manualWheelchairSelf === 'FullyAccessible'
-                    ? 'Tự di chuyển độc lập'
-                    : personaFit.manualWheelchairSelf === 'NeedsAssistance'
-                    ? 'Cần người hỗ trợ đẩy'
-                    : 'Không thể tiếp cận'}
-                </Text>
-              </View>
-
-              <View
-                style={[
-                  styles.fitBadge,
-                  personaFit.electricWheelchair === 'FullyAccessible'
-                    ? styles.badgeSuccess
-                    : personaFit.electricWheelchair === 'Accessible'
-                    ? styles.badgeInfo
-                    : styles.badgeDanger,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.fitBadgeText,
-                    {
-                      color:
-                        personaFit.electricWheelchair === 'FullyAccessible'
-                          ? '#10b981'
-                          : personaFit.electricWheelchair === 'Accessible'
-                          ? '#38bdf8'
-                          : '#f43f5e',
-                    },
-                  ]}
-                >
-                  Xe lăn điện:{' '}
-                  {personaFit.electricWheelchair === 'FullyAccessible'
-                    ? 'Tiếp cận tốt'
-                    : personaFit.electricWheelchair === 'Accessible'
-                    ? 'Tiếp cận được'
-                    : 'Không tiếp cận'}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Elderly & Stroller Persona Card */}
-          <View style={styles.personaCard}>
-            <View style={styles.personaHeader}>
-              <View style={styles.personaTitleRow}>
-                <View style={[styles.personaIconWrap, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
-                  <MaterialCommunityIcons name="human-cane" size={20} color="#d97706" />
-                </View>
-                <View style={styles.personaTextCol}>
-                  <Text style={styles.personaName} numberOfLines={1}>Người cao tuổi & Xe đẩy trẻ em</Text>
-                  <Text style={styles.personaSub} numberOfLines={1}>Dốc thoải, sàn phẳng, thang máy và gờ cửa</Text>
-                </View>
-              </View>
-              <View style={styles.scorePill}>
-                <Text style={[styles.scorePillText, { color: '#d97706' }]}>
-                  {personaScores.wheelchairScore}%
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.badgesRow}>
-              {(() => {
-                const isLowConfidence = (matrixResult?.overallScore ?? 0) < 60;
-                if (isLowConfidence) {
-                  return (
-                    <View style={[styles.fitBadge, styles.badgeWarning]}>
-                      <MaterialCommunityIcons name="help-circle-outline" size={12} color="#f59e0b" />
-                      <Text style={[styles.fitBadgeText, { color: '#f59e0b' }]}>
-                        Lối đi cho xe đẩy & người già: Chưa đủ dữ liệu ảnh để kết luận
-                      </Text>
-                    </View>
-                  );
-                }
-                const isStepFree = !penalties?.stepsWithoutRamp;
-                return (
-                  <View style={[styles.fitBadge, isStepFree ? styles.badgeSuccess : styles.badgeWarning]}>
-                    <MaterialCommunityIcons
-                      name={isStepFree ? 'check-circle' : 'alert-circle-outline'}
-                      size={12}
-                      color={isStepFree ? '#10b981' : '#f59e0b'}
-                    />
-                    <Text style={[styles.fitBadgeText, { color: isStepFree ? '#10b981' : '#f59e0b' }]}>
-                      Lối đi cho xe đẩy & người già:{' '}
-                      {isStepFree ? 'Thuận tiện, không vướng bậc' : 'Có bậc cản, cần nâng/bê'}
-                    </Text>
-                  </View>
-                );
-              })()}
-            </View>
-          </View>
-        </View>
-      ) : null}
-
-      {/* ── 2. Penalty Alerts (If Detected) ─────────────────────────────── */}
+      {/* Penalty Alert if steps without ramp were marked */}
       {penalties?.stepsWithoutRamp ? (
         <View style={styles.penaltyAlert}>
           <MaterialCommunityIcons name="alert-decagram" size={18} color="#f43f5e" />
           <Text style={styles.penaltyAlertText}>
-            Lưu ý: Có bậc tam cấp cản trở, xe lăn và xe đẩy chưa thể tự di chuyển qua.
+            Lưu ý: Có bậc tam cấp cản trở, lối đi này chưa hỗ trợ xe lăn tự di chuyển qua.
           </Text>
         </View>
       ) : null}
 
-      {/* ── 3. Cơ sở xác thực thông tin (Lý do đạt điểm này) ─────────────── */}
+      {/* Cơ sở xác thực thông tin */}
       <Text style={styles.sectionTitle}>Cơ sở xác thực thông tin</Text>
       <View style={styles.evidenceCard}>
-        {/* Hình ảnh */}
+        {/* Minh chứng hình ảnh / video */}
         <View style={styles.evidenceRow}>
           <View
             style={[
@@ -211,19 +51,25 @@ export function ScoreMatrixBreakdown({
             ]}
           >
             <MaterialCommunityIcons
-              name={computerVision.score > 0 ? 'image-check-outline' : 'image-filter-center-focus'}
+              name={
+                isVideo
+                  ? (computerVision.score > 0 ? 'video-check-outline' : 'video-outline')
+                  : (computerVision.score > 0 ? 'image-check-outline' : 'image-filter-center-focus')
+              }
               size={18}
               color={computerVision.score > 0 ? '#059669' : '#64748b'}
             />
           </View>
           <View style={styles.evidenceTextCol}>
-            <Text style={styles.evidenceTitle}>Hình ảnh chụp tại chỗ</Text>
+            <Text style={styles.evidenceTitle}>
+              {isVideo ? 'Video ghi hình tại chỗ' : 'Hình ảnh chụp tại chỗ'}
+            </Text>
             <Text style={styles.evidenceSub}>
               {computerVision.score >= 80
-                ? 'Ảnh rõ nét, nhận diện tốt ram dốc và lối vào'
+                ? `${isVideo ? 'Video' : 'Ảnh'} rõ nét, nhận diện tốt tiện ích đã chọn (${computerVision.score}%)`
                 : computerVision.score > 0
-                ? `Ảnh cơ bản, nhận diện đặc trưng tiếp cận (${computerVision.score}%)`
-                : 'Chưa phát hiện tiện ích tiếp cận trong ảnh'}
+                ? `Nhận diện được đặc trưng tiện ích trong ${isVideo ? 'video' : 'ảnh'} (${computerVision.score}%)`
+                : `Chưa phát hiện rõ tiện ích trong ${isVideo ? 'video' : 'ảnh'}`}
             </Text>
           </View>
           <MaterialCommunityIcons
@@ -289,6 +135,7 @@ export function ScoreMatrixBreakdown({
           let title = 'Chưa chọn đặc tính nào';
           let subtitle = '0 đặc tính được xác nhận. Cần bổ sung để đủ điều kiện xét duyệt.';
 
+          const mediaWord = isVideo ? 'video' : 'ảnh chụp';
           if (isFullyVerified) {
             rowBg = '#ecfdf5';
             rowColor = '#059669';
@@ -297,17 +144,17 @@ export function ScoreMatrixBreakdown({
             title = 'Đặc điểm bạn đã chọn';
             subtitle = nlpContext.matchedKeywords.length > 0
               ? `Đã chọn ${count} đặc điểm (khớp ${nlpContext.matchedKeywords.length} từ khóa ghi chú)`
-              : `Đã xác nhận ${count} đặc điểm phù hợp với ảnh chụp`;
+              : `Đã xác nhận ${count} đặc điểm phù hợp với ${mediaWord}`;
           } else if (isPartiallyVerified) {
             rowBg = '#eff6ff';
             rowColor = '#0284c7';
             mainIcon = 'information-outline';
             statusIcon = 'clock-outline';
-            title = `Đặc điểm đã chọn (${verifiedCount} khớp ảnh, ${unverifiedCount} tự khai)`;
-            subtitle = `${verifiedCount}/${count} đặc điểm khớp với ảnh; ${unverifiedCount} mục còn lại sẽ được kiểm duyệt viên xem xét.`;
+            title = `Đặc điểm đã chọn (${verifiedCount} khớp ${mediaWord}, ${unverifiedCount} tự khai)`;
+            subtitle = `${verifiedCount}/${count} đặc điểm khớp với ${mediaWord}; ${unverifiedCount} mục còn lại sẽ được kiểm duyệt viên xem xét.`;
           } else if (hasTags) {
-            title = 'Đặc điểm tự khai (Chưa khớp ảnh)';
-            subtitle = `Đã chọn ${count} đặc điểm nhưng chưa thấy rõ trong ảnh. Kiểm duyệt viên sẽ xác minh lại.`;
+            title = `Đặc điểm tự khai (Chưa khớp ${mediaWord})`;
+            subtitle = `Đã chọn ${count} đặc điểm nhưng chưa thấy rõ trong ${mediaWord}. Kiểm duyệt viên sẽ xác minh lại.`;
           }
 
           return (
@@ -338,110 +185,6 @@ const styles = StyleSheet.create({
     color: '#0f172a',
     marginBottom: 8,
     marginTop: 4,
-  },
-  personaSection: {
-    marginBottom: 10,
-  },
-  personaCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  personaHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  personaTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flex: 1,
-    marginRight: 8,
-  },
-  personaIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  personaTextCol: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  personaName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0f172a',
-    flexShrink: 1,
-  },
-  personaSub: {
-    fontSize: 11,
-    color: '#64748b',
-    marginTop: 1,
-    flexShrink: 1,
-  },
-  scorePill: {
-    backgroundColor: '#f1f5f9',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    flexShrink: 0,
-    alignSelf: 'center',
-  },
-  scorePillText: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  badgesRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  fitBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-    maxWidth: '100%',
-  },
-  badgeSuccess: {
-    backgroundColor: '#ecfdf5',
-    borderColor: '#a7f3d0',
-  },
-  badgeWarning: {
-    backgroundColor: '#fffbeb',
-    borderColor: '#fde68a',
-  },
-  badgeDanger: {
-    backgroundColor: '#fff1f2',
-    borderColor: '#fecdd3',
-  },
-  badgeInfo: {
-    backgroundColor: '#f0f9ff',
-    borderColor: '#bae6fd',
-  },
-  fitBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    flexShrink: 1,
-    lineHeight: 15,
   },
   penaltyAlert: {
     flexDirection: 'row',
@@ -502,22 +245,5 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#f1f5f9',
     marginVertical: 10,
-  },
-  tipCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#f0fdf4',
-    borderWidth: 1,
-    borderColor: '#bbf7d0',
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 8,
-  },
-  tipText: {
-    fontSize: 11,
-    color: '#166534',
-    flex: 1,
-    lineHeight: 16,
   },
 });

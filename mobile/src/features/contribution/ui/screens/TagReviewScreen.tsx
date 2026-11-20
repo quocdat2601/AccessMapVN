@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -35,6 +36,7 @@ export interface UserMeasurementsInput {
 
 interface TagReviewScreenProps {
   media: CapturedContributionMedia;
+  previewFrameUri?: string | null;
   availableTags: PreScanFeatureTag[];
   aiSummary: string | null;
   isPreScanning: boolean;
@@ -77,6 +79,7 @@ function mapDetectedToQcvn(tags: PreScanFeatureTag[]): string[] {
 
 export function TagReviewScreen({
   media,
+  previewFrameUri,
   availableTags,
   aiSummary,
   isPreScanning,
@@ -99,6 +102,8 @@ export function TagReviewScreen({
   });
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showFullPreview, setShowFullPreview] = useState(false);
+  const previewImageUri = media.type === 'video' ? (previewFrameUri ?? null) : media.uri;
 
   // Tự động chọn Có cho các tag AI phát hiện được khi scan hoàn tất
   React.useEffect(() => {
@@ -132,7 +137,8 @@ export function TagReviewScreen({
     [observations]
   );
 
-  // Optional technical measurement states
+  // Optional technical measurement states (collapsed by default to keep review concise)
+  const [showMeasurements, setShowMeasurements] = useState(false);
   const [doorClearWidthStr, setDoorClearWidthStr] = useState('');
   const [rampHeightStr, setRampHeightStr] = useState('');
   const [rampLengthStr, setRampLengthStr] = useState('');
@@ -194,6 +200,7 @@ export function TagReviewScreen({
           onPress={onBack}
           accessibilityRole="button"
           accessibilityLabel="Quay lại"
+          hitSlop={6}
         >
           <MaterialCommunityIcons name="arrow-left" size={22} color="#0f172a" />
         </Pressable>
@@ -208,8 +215,9 @@ export function TagReviewScreen({
           onPress={onRetake}
           accessibilityRole="button"
           accessibilityLabel="Chụp lại"
+          hitSlop={6}
         >
-          <MaterialCommunityIcons name="camera-retake-outline" size={20} color="#64748b" />
+          <MaterialCommunityIcons name="camera-retake-outline" size={20} color="#475569" />
         </Pressable>
       </View>
 
@@ -222,9 +230,9 @@ export function TagReviewScreen({
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 90 }]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Media Preview Card */}
+          {/* Media Preview Card (unified photo & video keyframe preview) */}
           <View style={styles.mediaCard}>
-            {media.type === 'video' ? (
+            {!previewImageUri ? (
               <View style={styles.videoPreviewPlaceholder}>
                 <MaterialCommunityIcons name="video-check-outline" size={38} color="#004e58" />
                 <Text style={styles.videoPreviewTitle}>
@@ -237,9 +245,40 @@ export function TagReviewScreen({
                 </Text>
               </View>
             ) : (
-              <Image source={{ uri: media.uri }} style={styles.mediaImage} contentFit="cover" />
+              <Pressable
+                style={({ pressed }) => [styles.mediaPressable, pressed && styles.mediaPressed]}
+                onPress={() => setShowFullPreview(true)}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  media.type === 'video'
+                    ? 'Xem toàn màn hình khung hình video'
+                    : 'Xem toàn màn hình ảnh chụp'
+                }
+              >
+                <Image
+                  source={{ uri: previewImageUri }}
+                  style={styles.mediaImage}
+                  contentFit="cover"
+                />
+              </Pressable>
             )}
-            <View style={styles.mediaOverlay}>
+            <View style={styles.mediaTypePill} pointerEvents="none">
+              <MaterialCommunityIcons
+                name={media.type === 'video' ? 'video-outline' : 'camera-outline'}
+                size={12}
+                color="#ffffff"
+              />
+              <Text style={styles.mediaTypePillText}>
+                {media.type === 'video' ? `Video · ${media.durationSeconds ?? 5}s` : 'Ảnh chụp'}
+              </Text>
+            </View>
+            {previewImageUri ? (
+              <View style={styles.expandHintPill} pointerEvents="none">
+                <MaterialCommunityIcons name="fullscreen" size={13} color="#ffffff" />
+                <Text style={styles.expandHintPillText}>Phóng to</Text>
+              </View>
+            ) : null}
+            <View style={styles.mediaOverlay} pointerEvents="box-none">
               <Pressable
                 style={({ pressed }) => [styles.locationPill, pressed && { opacity: 0.8 }]}
                 onPress={onChangeLocation}
@@ -295,20 +334,37 @@ export function TagReviewScreen({
             />
           </View>
 
-          {/* Optional Technical Measurements */}
+          {/* Optional Technical Measurements (collapsible, collapsed by default) */}
           {(hasRampSelected || hasDoorSelected) && (
             <View style={styles.card}>
-              <View style={styles.inputHeader}>
+              <Pressable
+                style={({ pressed }) => [styles.collapsibleHeader, pressed && { opacity: 0.78 }]}
+                onPress={() => setShowMeasurements((prev) => !prev)}
+                accessibilityRole="button"
+                accessibilityLabel="Mở hoặc thu gọn số đo kỹ thuật tùy chọn"
+              >
                 <MaterialCommunityIcons name="ruler-square" size={17} color="#004e58" />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.inputTitle}>Kích thước kỹ thuật thực tế (Tùy chọn)</Text>
+                  <Text style={styles.inputTitle}>Kích thước kỹ thuật (Tùy chọn)</Text>
                   <Text style={styles.measurementSubtitle}>
-                    Nếu có thước đo, hãy nhập số đo để hệ thống thẩm định đạt chuẩn QCVN 10
+                    {showMeasurements
+                      ? 'Nhập số đo thực tế để kiểm tra theo chuẩn QCVN 10'
+                      : 'Chạm để nhập chiều rộng cửa / độ dốc nếu có thước đo'}
                   </Text>
                 </View>
-              </View>
+                {(validDoorWidthCm !== null || calculatedSlopePercent !== null) ? (
+                  <View style={styles.measuredPill}>
+                    <Text style={styles.measuredPillText}>Đã nhập</Text>
+                  </View>
+                ) : null}
+                <MaterialCommunityIcons
+                  name={showMeasurements ? 'chevron-up' : 'chevron-down'}
+                  size={20}
+                  color="#64748b"
+                />
+              </Pressable>
 
-              {hasRampSelected && (
+              {showMeasurements && hasRampSelected && (
                 <View style={styles.measurementSection}>
                   <Text style={styles.measurementFieldLabel}>
                     Độ dốc ram (Chiều cao H & Chiều dài mặt dốc L)
@@ -369,7 +425,7 @@ export function TagReviewScreen({
                 </View>
               )}
 
-              {hasDoorSelected && (
+              {showMeasurements && hasDoorSelected && (
                 <View style={[styles.measurementSection, hasRampSelected && { marginTop: 12 }]}>
                   <Text style={styles.measurementFieldLabel}>
                     Độ rộng lọt lòng cửa ra vào (Chuẩn QCVN 10: ≥ 90 cm)
@@ -471,6 +527,71 @@ export function TagReviewScreen({
           )}
         </Pressable>
       </View>
+
+      {previewImageUri ? (
+        <Modal
+          visible={showFullPreview}
+          transparent
+          animationType="fade"
+          statusBarTranslucent
+          onRequestClose={() => setShowFullPreview(false)}
+        >
+          <View style={styles.fullPreviewBackdrop}>
+            <View
+              style={[
+                styles.fullPreviewHeader,
+                { paddingTop: Math.max(insets.top, 16) + 8 },
+              ]}
+            >
+              <View style={styles.fullPreviewTitleWrap}>
+                <Text style={styles.fullPreviewTitle} numberOfLines={1}>
+                  {media.type === 'video'
+                    ? `Khung hình video · ${media.durationSeconds ?? 5}s`
+                    : 'Ảnh chụp bằng chứng'}
+                </Text>
+                <Text style={styles.fullPreviewSubtitle} numberOfLines={1}>
+                  {locationName || media.locationName}
+                </Text>
+              </View>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.fullPreviewCloseBtn,
+                  pressed && styles.pressed,
+                ]}
+                onPress={() => setShowFullPreview(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Đóng xem toàn màn hình"
+              >
+                <MaterialCommunityIcons name="close" size={22} color="#ffffff" />
+              </Pressable>
+            </View>
+
+            <Pressable
+              style={styles.fullPreviewBody}
+              onPress={() => setShowFullPreview(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Chạm để đóng xem toàn màn hình"
+            >
+              <Image
+                source={{ uri: previewImageUri }}
+                style={styles.fullPreviewImage}
+                contentFit="contain"
+              />
+            </Pressable>
+
+            <View
+              style={[
+                styles.fullPreviewFooter,
+                { paddingBottom: Math.max(insets.bottom, 16) + 8 },
+              ]}
+            >
+              <Text style={styles.fullPreviewHint}>
+                Chạm vào ảnh hoặc nút đóng để quay lại
+              </Text>
+            </View>
+          </View>
+        </Modal>
+      ) : null}
     </View>
   );
 }
@@ -490,9 +611,9 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f1f5f9',
   },
   iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#f1f5f9',
     alignItems: 'center',
     justifyContent: 'center',
@@ -532,6 +653,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
+  mediaPressable: {
+    width: '100%',
+    height: '100%',
+  },
+  mediaPressed: {
+    opacity: 0.92,
+  },
   mediaImage: {
     width: '100%',
     height: '100%',
@@ -553,6 +681,40 @@ const styles = StyleSheet.create({
   videoPreviewSubtitle: {
     fontSize: 12,
     color: '#0f766e',
+  },
+  mediaTypePill: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  mediaTypePillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  expandHintPill: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  expandHintPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#ffffff',
   },
   mediaOverlay: {
     position: 'absolute',
@@ -640,6 +802,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     marginBottom: 8,
+  },
+  collapsibleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  measuredPill: {
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  measuredPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#007D78',
   },
   inputTitle: {
     fontSize: 13,
@@ -777,5 +957,58 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     fontWeight: '700',
     color: '#ffffff',
+  },
+  fullPreviewBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(2, 6, 23, 0.96)',
+  },
+  fullPreviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    gap: 12,
+  },
+  fullPreviewTitleWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  fullPreviewTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  fullPreviewSubtitle: {
+    fontSize: 12,
+    color: '#cbd5e1',
+    marginTop: 2,
+  },
+  fullPreviewCloseBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fullPreviewBody: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  fullPreviewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  fullPreviewFooter: {
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  fullPreviewHint: {
+    fontSize: 12,
+    color: '#cbd5e1',
   },
 });

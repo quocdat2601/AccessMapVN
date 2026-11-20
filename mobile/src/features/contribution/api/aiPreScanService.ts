@@ -15,6 +15,7 @@ export interface PreScanResult {
   features: PreScanFeatureTag[];
   summary: string;
   isMockFallback?: boolean;
+  previewFrameUri?: string | null;
 }
 
 interface AiPreScanPayload {
@@ -37,6 +38,7 @@ interface AiVideoPreScanPayload {
   frames_analyzed?: number;
   suggestions?: Record<string, AiVideoSuggestionPayload>;
   warnings?: string[];
+  preview_frame_data_uri?: string | null;
 }
 
 const VIDEO_SUGGESTION_KEY_MAP: Record<string, string> = {
@@ -177,6 +179,7 @@ export async function runAiVideoPreScan(videoUri: string): Promise<PreScanResult
       features,
       summary,
       isMockFallback: false,
+      previewFrameUri: data.preview_frame_data_uri ?? null,
     };
   } catch (error) {
     console.warn('[runAiVideoPreScan] FAILED:', error);

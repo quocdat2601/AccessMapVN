@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { PreScanFeatureTag } from '../../../api/aiPreScanService';
 import {
@@ -54,10 +54,14 @@ export function FeatureTagSelector({
   };
 
   for (const tag of availableTags) {
-    aiTagMap.set(tag.key, tag);
+    if (tag.detected || !aiTagMap.get(tag.key)?.detected) {
+      aiTagMap.set(tag.key, tag);
+    }
     const qcvnKeys = AI_KEY_MAPPING[tag.key] || [];
     for (const qk of qcvnKeys) {
-      aiTagMap.set(qk, tag);
+      if (tag.detected || !aiTagMap.get(qk)?.detected) {
+        aiTagMap.set(qk, tag);
+      }
     }
   }
 
@@ -105,13 +109,8 @@ export function FeatureTagSelector({
         </View>
       </View>
 
-      {/* 3 Category Tabs */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.tabScrollContent}
-        style={styles.tabScrollView}
-      >
+      {/* 3 Category Tabs fit cleanly on one row */}
+      <View style={styles.tabRow}>
         {CATEGORIES.map((cat) => {
           const cfg = CATEGORY_CONFIG[cat];
           const isActive = activeCategory === cat;
@@ -131,10 +130,13 @@ export function FeatureTagSelector({
             >
               <MaterialCommunityIcons
                 name={cfg.icon as any}
-                size={14}
+                size={13}
                 color={isActive ? '#ffffff' : '#64748b'}
               />
-              <Text style={[styles.tabPillLabel, isActive && styles.tabPillLabelActive]}>
+              <Text
+                style={[styles.tabPillLabel, isActive && styles.tabPillLabelActive]}
+                numberOfLines={1}
+              >
                 {cfg.shortLabel}
               </Text>
               {count > 0 ? (
@@ -147,7 +149,7 @@ export function FeatureTagSelector({
             </Pressable>
           );
         })}
-      </ScrollView>
+      </View>
 
       {/* Active Category Description */}
       <View style={styles.categoryInfoBar}>
@@ -176,6 +178,7 @@ export function FeatureTagSelector({
             ? aiTagMap.get(primaryTag.key)?.detected ?? false
             : false;
           const isPrimaryViolation = primaryTag ? isViolationOrObstacleTag(primaryTag.key) : false;
+          const showChildren = childTags.length > 0 && (!primaryTag || primaryState === 'present');
 
           return (
             <View key={group.id} style={styles.groupCard}>
@@ -183,7 +186,7 @@ export function FeatureTagSelector({
               <View
                 style={[
                   styles.groupHeader,
-                  childTags.length === 0 && styles.groupHeaderSingle,
+                  !showChildren && styles.groupHeaderSingle,
                 ]}
               >
                 <View style={styles.groupHeaderLeft}>
@@ -203,11 +206,11 @@ export function FeatureTagSelector({
                       {isPrimaryAiDetected ? (
                         <View style={styles.aiBadgeInline}>
                           <MaterialCommunityIcons name="creation" size={10} color="#007D78" />
-                          <Text style={styles.aiBadgeText}>Gợi ý từ ảnh</Text>
+                          <Text style={styles.aiBadgeText}>AI gợi ý</Text>
                         </View>
                       ) : null}
                     </View>
-                    {group.description && childTags.length > 0 ? (
+                    {group.description && showChildren ? (
                       <Text style={styles.groupDescription}>{group.description}</Text>
                     ) : null}
                   </View>
@@ -278,7 +281,7 @@ export function FeatureTagSelector({
                       <Text
                         style={[
                           styles.triStateBtnText,
-                          primaryState === 'unknown' && styles.triStateBtnTextActive,
+                          primaryState === 'unknown' && styles.triStateBtnTextUnknownActive,
                         ]}
                       >
                         Chưa rõ
@@ -288,8 +291,8 @@ export function FeatureTagSelector({
                 )}
               </View>
 
-              {/* Child Items in Card Body */}
-              {childTags.length > 0 && (
+              {/* Child Items in Card Body (expanded only when parent is selected as Có, or group has no parent) */}
+              {showChildren && (
                 <View style={styles.groupItemsList}>
                   {childTags.map((tag, idx) => {
                     const effectiveState = resolveEffectiveState(tag.key, activeObservations);
@@ -330,7 +333,7 @@ export function FeatureTagSelector({
                           {isAiDetected ? (
                             <View style={styles.aiBadge}>
                               <MaterialCommunityIcons name="creation" size={10} color="#007D78" />
-                              <Text style={styles.aiBadgeText}>Gợi ý từ ảnh</Text>
+                              <Text style={styles.aiBadgeText}>AI gợi ý</Text>
                             </View>
                           ) : null}
                         </View>
@@ -404,7 +407,7 @@ export function FeatureTagSelector({
                               <Text
                                 style={[
                                   styles.triStateBtnText,
-                                  effectiveState === 'unknown' && styles.triStateBtnTextActive,
+                                  effectiveState === 'unknown' && styles.triStateBtnTextUnknownActive,
                                 ]}
                               >
                                 Chưa rõ
@@ -456,24 +459,22 @@ const styles = StyleSheet.create({
     color: '#475569',
     fontWeight: '600',
   },
-  tabScrollView: {
+  tabRow: {
+    flexDirection: 'row',
+    gap: 6,
     marginBottom: 10,
   },
-  tabScrollContent: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingVertical: 2,
-    paddingHorizontal: 2,
-  },
   tabPill: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 7,
-    paddingHorizontal: 12,
+    paddingHorizontal: 6,
     borderRadius: 18,
     borderWidth: 1,
     overflow: 'hidden',
-    gap: 5,
+    gap: 4,
   },
   tabPillActive: {
     backgroundColor: '#004e58',
@@ -551,13 +552,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    minWidth: 0,
     gap: 8,
-    marginRight: 8,
+    marginRight: 4,
   },
   titleWithBadgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    flexWrap: 'wrap',
+    gap: 5,
   },
   aiBadgeInline: {
     flexDirection: 'row',
@@ -567,6 +570,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 1,
     borderRadius: 4,
+    alignSelf: 'flex-start',
   },
   groupIconWrap: {
     width: 24,
@@ -578,6 +582,7 @@ const styles = StyleSheet.create({
   },
   groupHeaderTextWrap: {
     flex: 1,
+    minWidth: 0,
   },
   groupTitle: {
     fontSize: 12.5,
@@ -585,8 +590,8 @@ const styles = StyleSheet.create({
     color: '#0f172a',
   },
   groupDescription: {
-    fontSize: 10.5,
-    color: '#64748b',
+    fontSize: 11.5,
+    color: '#475569',
     marginTop: 1,
   },
   groupItemsList: {
@@ -652,9 +657,9 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   aiBadgeText: {
-    fontSize: 9.5,
+    fontSize: 10.5,
     fontWeight: '600',
-    color: '#007D78',
+    color: '#006874',
   },
   naBadge: {
     backgroundColor: '#f1f5f9',
@@ -664,7 +669,7 @@ const styles = StyleSheet.create({
   },
   naBadgeText: {
     fontSize: 10.5,
-    color: '#94a3b8',
+    color: '#64748b',
     fontWeight: '600',
   },
   triStateGroup: {
@@ -672,13 +677,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f5f9',
     borderRadius: 8,
     padding: 2,
+    gap: 3,
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
   triStateBtn: {
-    paddingVertical: 5,
-    paddingHorizontal: 7,
-    minWidth: 42,
+    minHeight: 36,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    minWidth: 46,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 6,
@@ -704,15 +711,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#475569',
   },
   triStateBtnUnknown: {
-    backgroundColor: '#cbd5e1',
+    backgroundColor: '#e2e8f0',
   },
   triStateBtnText: {
-    fontSize: 10.5,
+    fontSize: 11.5,
     fontWeight: '600',
-    color: '#64748b',
+    color: '#475569',
   },
   triStateBtnTextActive: {
     color: '#ffffff',
+    fontWeight: '700',
+  },
+  triStateBtnTextUnknownActive: {
+    color: '#334155',
     fontWeight: '700',
   },
 });

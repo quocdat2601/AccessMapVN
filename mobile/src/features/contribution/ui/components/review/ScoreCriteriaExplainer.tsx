@@ -4,20 +4,23 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 interface ScoreCriteriaExplainerProps {
   overallScore: number;
-  status: string;
   hasNoFeatures: boolean;
   cvScore: number;
   spatialDistanceMeters: number | null;
+  mediaType?: 'photo' | 'video';
+  hasNotes?: boolean;
 }
 
 export function ScoreCriteriaExplainer({
   overallScore,
-  status,
   hasNoFeatures,
   cvScore,
   spatialDistanceMeters,
+  mediaType = 'photo',
+  hasNotes = false,
 }: ScoreCriteriaExplainerProps) {
   const [expanded, setExpanded] = useState(false);
+  const mediaLabel = mediaType === 'video' ? 'video' : 'ảnh chụp';
 
   return (
     <View style={styles.card}>
@@ -25,15 +28,15 @@ export function ScoreCriteriaExplainer({
         style={styles.headerRow}
         onPress={() => setExpanded((prev) => !prev)}
         accessibilityRole="button"
-        accessibilityLabel="Xem chi tiết cách tính điểm và điều kiện xét duyệt"
+        accessibilityLabel="Xem chi tiết cách tính điểm và quy trình xét duyệt"
       >
         <View style={styles.iconBadge}>
           <MaterialCommunityIcons name="calculator-variant-outline" size={18} color="#006874" />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>Vì sao có điểm số này? ({overallScore}%)</Text>
+          <Text style={styles.headerTitle}>Cách tính điểm độ tin cậy ({overallScore}%)</Text>
           <Text style={styles.headerSub}>
-            {expanded ? 'Chạm để thu gọn tiêu chuẩn chấm điểm' : 'Xem chi tiết cách tính điểm & điều kiện xét duyệt'}
+            {expanded ? 'Chạm để thu gọn chi tiết' : 'Xem tỷ trọng chấm điểm & quy trình duyệt hồ sơ'}
           </Text>
         </View>
         <MaterialCommunityIcons
@@ -54,17 +57,17 @@ export function ScoreCriteriaExplainer({
             />
             <Text style={styles.takeawayText}>
               {hasNoFeatures
-                ? 'Điểm đạt 25% vì bạn chưa tick chọn đặc tính tiếp cận nào ở Bước 2. Hệ thống yêu cầu ít nhất 1 đặc tính (như Ram dốc, Cửa rộng, WC...) để thẩm định.'
+                ? 'Bạn chưa chọn đặc điểm tiếp cận nào ở Bước 2. Cần ít nhất 1 đặc điểm để kiểm duyệt viên thẩm định.'
                 : cvScore === 0
-                ? 'Ảnh chụp chưa nhận diện được tiện ích rõ ràng hoặc chưa khớp với đặc tính đã chọn.'
+                ? `${mediaType === 'video' ? 'Video' : 'Ảnh'} chưa nhận diện rõ tiện ích đã chọn. Bạn vẫn có thể gửi để kiểm duyệt viên xác minh thủ công.`
                 : overallScore >= 80
-                ? 'Hồ sơ đạt độ tin cậy xuất sắc (trên 80%). Đạt chuẩn xác minh AI, được ưu tiên duyệt và xuất bản lên bản đồ.'
-                : 'Đóng góp đã có thông tin cơ bản và sẽ được kiểm duyệt viên xem xét trên Admin Portal.'}
+                ? 'Minh chứng rõ ràng và khớp vị trí thực địa, sẵn sàng gửi để kiểm duyệt viên xét duyệt.'
+                : 'Hồ sơ hợp lệ nhưng còn mục tự khai báo hoặc độ nét trung bình, cần kiểm duyệt viên đối chiếu.'}
             </Text>
           </View>
 
-          {/* 3 Pillars Breakdown */}
-          <Text style={styles.sectionHeading}>CƠ CẤU 3 TRỤ CỘT ĐIỂM SỐ</Text>
+          {/* 3 Pillars Breakdown matching verificationEngine.ts weights */}
+          <Text style={styles.sectionHeading}>CƠ CẤU TỶ TRỌNG ĐIỂM</Text>
 
           <View style={styles.pillarItem}>
             <View style={styles.pillarBullet}>
@@ -72,11 +75,13 @@ export function ScoreCriteriaExplainer({
             </View>
             <View style={{ flex: 1 }}>
               <View style={styles.pillarTitleRow}>
-                <Text style={styles.pillarTitle}>Thị giác máy tính AI (Tỷ trọng 50%)</Text>
+                <Text style={styles.pillarTitle}>
+                  AI nhận diện minh chứng (Tỷ trọng {hasNotes ? '50%' : '65%'})
+                </Text>
                 <Text style={styles.pillarScore}>{cvScore}%</Text>
               </View>
               <Text style={styles.pillarDesc}>
-                Mô hình AI tự động quét hình ảnh để nhận diện ram dốc, bậc tam cấp, thang máy, độ rộng cửa... Ảnh chụp rõ nét và trực diện tiện ích sẽ đạt điểm tối đa.
+                Mô hình AI đối chiếu trực tiếp {mediaLabel} với các đặc điểm bạn xác nhận (cửa, ram dốc, bậc thang, thang máy, WC).
               </Text>
             </View>
           </View>
@@ -87,13 +92,15 @@ export function ScoreCriteriaExplainer({
             </View>
             <View style={{ flex: 1 }}>
               <View style={styles.pillarTitleRow}>
-                <Text style={styles.pillarTitle}>Vị trí GPS thực địa (Tỷ trọng 30%)</Text>
+                <Text style={styles.pillarTitle}>
+                  Vị trí GPS thực địa (Tỷ trọng {hasNotes ? '30%' : '35%'})
+                </Text>
                 <Text style={styles.pillarScore}>
                   {spatialDistanceMeters != null ? `Cách ${spatialDistanceMeters}m` : 'Hợp lệ'}
                 </Text>
               </View>
               <Text style={styles.pillarDesc}>
-                Khoảng cách giữa tọa độ lúc bạn chụp ảnh và địa điểm trên bản đồ phải trong vòng bán kính 50m để chống báo cáo ảo/từ xa.
+                Tọa độ lúc ghi nhận phải nằm trong bán kính 50m (có bù sai số GPS và công trình lớn) để đảm bảo khảo sát tại chỗ.
               </Text>
             </View>
           </View>
@@ -104,32 +111,48 @@ export function ScoreCriteriaExplainer({
             </View>
             <View style={{ flex: 1 }}>
               <View style={styles.pillarTitleRow}>
-                <Text style={styles.pillarTitle}>Xác nhận đặc tính & Mô tả (Tỷ trọng 20%)</Text>
-                <Text style={styles.pillarScore}>{hasNoFeatures ? '0 đặc tính' : 'Đã chọn'}</Text>
+                <Text style={styles.pillarTitle}>Ghi chú hiện trường</Text>
+                <Text style={styles.pillarScore}>
+                  {hasNotes ? 'Tỷ trọng 20%' : 'Tùy chọn · Không trừ điểm'}
+                </Text>
               </View>
               <Text style={styles.pillarDesc}>
-                Các tiêu chuẩn QCVN 10:2014 bạn tick chọn ở Bước 2 cùng ghi chú hiện trường. Nếu để trống không chọn đặc tính nào, hệ thống giới hạn tối đa 25%.
+                {hasNotes
+                  ? 'Mô tả thực địa giúp AI và kiểm duyệt viên hiểu rõ hơn bối cảnh lối vào và tiện ích.'
+                  : 'Ghi chú thêm là không bắt buộc — bỏ trống không bị trừ điểm; AI và GPS sẽ chiếm 100% tỷ trọng.'}
               </Text>
             </View>
           </View>
 
-          {/* 3 Moderation Tiers */}
-          <Text style={[styles.sectionHeading, { marginTop: 14 }]}>ĐIỀU KIỆN XÉT DUYỆT & CỘNG EXP</Text>
+          {/* Accurate WF-01 Moderation Tiers */}
+          <Text style={[styles.sectionHeading, { marginTop: 14 }]}>QUY TRÌNH XÉT DUYỆT & +50 EXP</Text>
           <View style={styles.tiersCard}>
             <View style={styles.tierRow}>
-              <View style={[styles.tierDot, { backgroundColor: '#10b981' }]} />
-              <Text style={styles.tierName}>≥ 80% (Độ tin cậy cao):</Text>
-              <Text style={styles.tierDesc}>Đạt chuẩn xác minh AI, ưu tiên duyệt nhanh và nhận +50 EXP sau khi duyệt.</Text>
+              <View style={styles.tierHeaderRow}>
+                <View style={[styles.tierDot, { backgroundColor: '#059669' }]} />
+                <Text style={styles.tierName}>≥ 80% (Tốt)</Text>
+              </View>
+              <Text style={styles.tierDesc}>
+                Minh chứng và GPS rõ ràng, đủ điều kiện gửi duyệt. Nhận +50 EXP sau khi được công bố.
+              </Text>
             </View>
             <View style={styles.tierRow}>
-              <View style={[styles.tierDot, { backgroundColor: '#0284c7' }]} />
-              <Text style={styles.tierName}>40% – 79% (Đồng thuận cộng đồng):</Text>
-              <Text style={styles.tierDesc}>Cộng đồng cùng biểu quyết xác minh (Consensus). Chỉ tranh chấp mới chuyển Admin.</Text>
+              <View style={styles.tierHeaderRow}>
+                <View style={[styles.tierDot, { backgroundColor: '#d97706' }]} />
+                <Text style={styles.tierName}>60% – 79% (Khá)</Text>
+              </View>
+              <Text style={styles.tierDesc}>
+                Có mục tự khai hoặc khoảng cách GPS rộng; kiểm duyệt viên sẽ kiểm tra thêm trước khi duyệt.
+              </Text>
             </View>
             <View style={styles.tierRow}>
-              <View style={[styles.tierDot, { backgroundColor: '#ef4444' }]} />
-              <Text style={styles.tierName}>&lt; 40% (Tự động từ chối):</Text>
-              <Text style={styles.tierDesc}>Ảnh mờ hoặc không nhận diện tiện ích. Yêu cầu chụp lại ảnh rõ nét trước khi gửi.</Text>
+              <View style={styles.tierHeaderRow}>
+                <View style={[styles.tierDot, { backgroundColor: '#e11d48' }]} />
+                <Text style={styles.tierName}>&lt; 60% (Cần bổ sung)</Text>
+              </View>
+              <Text style={styles.tierDesc}>
+                Chưa đủ rõ minh chứng hoặc thiếu đặc điểm. Nên chụp/quay lại góc rõ hơn trước khi gửi.
+              </Text>
             </View>
           </View>
         </View>
@@ -255,26 +278,27 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   tierRow: {
+    gap: 2,
+  },
+  tierHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 8,
   },
   tierDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginTop: 5,
   },
   tierName: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '700',
     color: '#0f172a',
-    width: 140,
   },
   tierDesc: {
-    flex: 1,
     fontSize: 11,
-    color: '#64748b',
+    color: '#475569',
     lineHeight: 15,
+    paddingLeft: 16,
   },
 });

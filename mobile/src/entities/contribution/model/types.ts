@@ -30,6 +30,7 @@ export interface ContributionLocation {
 
 export interface ContributionSubmissionRecord {
   id: string;
+  submissionCode?: string;
   locationId: string;
   locationName: string;
   mediaUri: string;

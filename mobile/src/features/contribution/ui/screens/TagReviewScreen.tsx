@@ -271,15 +271,17 @@ export function TagReviewScreen({
               <View style={styles.aiIconBadge}>
                 <MaterialCommunityIcons name="creation" size={15} color="#004e58" />
               </View>
-              <Text style={styles.aiBannerTitle}>Gợi ý tự động từ ảnh</Text>
+              <Text style={styles.aiBannerTitle}>
+                {media.type === 'video' ? 'Nhận diện nhanh từ video' : 'Nhận diện nhanh từ ảnh'}
+              </Text>
               {isPreScanning ? (
                 <ActivityIndicator size="small" color="#004e58" style={{ marginLeft: 'auto' }} />
               ) : null}
             </View>
             <Text style={styles.aiBannerBody}>
               {isPreScanning
-                ? 'Đang phân tích nhanh hình ảnh...'
-                : aiSummary || 'Không phát hiện tiện ích tiếp cận nào rõ ràng trong ảnh. Vui lòng tự chọn đặc điểm bên dưới nếu có.'}
+                ? (media.type === 'video' ? 'Đang trích xuất và phân tích khung hình video...' : 'Đang phân tích hình ảnh...')
+                : aiSummary || 'Chưa nhận diện rõ tiện ích trong hình. Bạn hãy tự chọn các mục quan sát được bên dưới.'}
             </Text>
           </View>
 

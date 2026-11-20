@@ -23,6 +23,82 @@ function getSafeEvidenceUrl(url?: string): string {
   return "/evidence/ramp-entrance.png";
 }
 
+function getFeatureDisplayMeta(feature: string): {
+  label: string;
+  tone: "emerald" | "amber" | "cyan";
+  borderClass: string;
+  badgeClass: string;
+} {
+  const lower = feature.toLowerCase();
+  if (lower.includes("ramp")) {
+    return {
+      label: "Ram dốc",
+      tone: "emerald",
+      borderClass: "border-emerald-400 bg-emerald-500/15 ring-emerald-500/30",
+      badgeClass: "bg-emerald-600 text-white",
+    };
+  }
+  if (lower.includes("stair") || lower.includes("step")) {
+    return {
+      label: "Bậc thang",
+      tone: "amber",
+      borderClass: "border-amber-400 bg-amber-500/15 ring-amber-500/30",
+      badgeClass: "bg-amber-600 text-white",
+    };
+  }
+  if (lower.includes("door")) {
+    return {
+      label: "Cửa ra vào",
+      tone: "cyan",
+      borderClass: "border-cyan-400 bg-cyan-500/15 ring-cyan-500/30",
+      badgeClass: "bg-cyan-600 text-white",
+    };
+  }
+  if (lower.includes("elevator")) {
+    return {
+      label: "Thang máy",
+      tone: "cyan",
+      borderClass: "border-cyan-400 bg-cyan-500/15 ring-cyan-500/30",
+      badgeClass: "bg-cyan-600 text-white",
+    };
+  }
+  if (lower.includes("restroom") || lower.includes("toilet") || lower.includes("sign")) {
+    return {
+      label: "WC tiếp cận",
+      tone: "cyan",
+      borderClass: "border-cyan-400 bg-cyan-500/15 ring-cyan-500/30",
+      badgeClass: "bg-cyan-600 text-white",
+    };
+  }
+  if (lower.includes("tactile")) {
+    return {
+      label: "Đường dẫn xúc giác",
+      tone: "cyan",
+      borderClass: "border-cyan-400 bg-cyan-500/15 ring-cyan-500/30",
+      badgeClass: "bg-cyan-600 text-white",
+    };
+  }
+  return {
+    label: feature,
+    tone: "cyan",
+    borderClass: "border-cyan-400 bg-cyan-500/15 ring-cyan-500/30",
+    badgeClass: "bg-cyan-600 text-white",
+  };
+}
+
+function getClaimDisplayText(claim: UserClaim): string {
+  if (claim.snippet) {
+    return claim.snippet;
+  }
+  if (claim.claim === "reported_present") {
+    return "Khai báo có";
+  }
+  if (claim.claim === "reported_absent") {
+    return "Khai báo không có";
+  }
+  return claim.claim;
+}
+
 export function EvidenceViewer({ evidence, userClaims }: { evidence: ContributionEvidence[]; userClaims?: UserClaim[] }) {
   const [activeId, setActiveId] = useState(evidence[0]?.id);
   const [zoomed, setZoomed] = useState(false);
@@ -70,10 +146,10 @@ export function EvidenceViewer({ evidence, userClaims }: { evidence: Contributio
                 ? "bg-teal-700 hover:bg-teal-800 text-white"
                 : "border-slate-200 text-slate-700 bg-white hover:bg-slate-50"
             )}
-            title={activeBBoxes.length > 0 ? "Bật/tắt hiển thị Bounding Box AI" : "AI không phát hiện đối tượng nào có khung nhận diện trong ảnh này"}
+            title={activeBBoxes.length > 0 ? "Bật/tắt khung nhận diện đối tượng" : "Không có vùng đối tượng nhận diện trong ảnh này"}
           >
             <ScanSearch className="size-3.5" />
-            <span>AI Bounding Box</span>
+            <span>Khung nhận diện</span>
             <span
               className={cn(
                 "ml-0.5 rounded px-1.5 py-0.5 text-[10px] font-bold",
@@ -106,48 +182,52 @@ export function EvidenceViewer({ evidence, userClaims }: { evidence: Contributio
               aspectRatio: imgDims[active.id] ? `${imgDims[active.id].w} / ${imgDims[active.id].h}` : "16/9",
             }}
           >
-            <Image
-              src={activeImageUrl}
-              alt={active.title}
-              fill
-              sizes="(max-width: 1280px) 100vw, 900px"
-              className="object-contain"
-              unoptimized
-              priority
-              onLoad={(e) => {
-                const img = e.currentTarget;
-                if (img.naturalWidth && img.naturalHeight) {
-                  setImgDims((prev) => ({ ...prev, [active.id]: { w: img.naturalWidth, h: img.naturalHeight } }));
-                }
-              }}
-              onError={() => setFailedImages((prev) => ({ ...prev, [active.id]: true }))}
-            />
+            {active.type === "video" && !isLocalDeviceFile && !failedImages[active.id] && activeImageUrl !== "/evidence/ramp-entrance.png" ? (
+              <video
+                src={activeImageUrl}
+                controls
+                playsInline
+                className="h-full w-full object-contain"
+                onError={() => setFailedImages((prev) => ({ ...prev, [active.id]: true }))}
+              />
+            ) : (
+              <>
+                <Image
+                  src={activeImageUrl}
+                  alt={active.title}
+                  fill
+                  sizes="(max-width: 1280px) 100vw, 900px"
+                  className="object-contain"
+                  unoptimized
+                  priority
+                  onLoad={(e) => {
+                    const img = e.currentTarget;
+                    if (img.naturalWidth && img.naturalHeight) {
+                      setImgDims((prev) => ({ ...prev, [active.id]: { w: img.naturalWidth, h: img.naturalHeight } }));
+                    }
+                  }}
+                  onError={() => setFailedImages((prev) => ({ ...prev, [active.id]: true }))}
+                />
 
-            {active.type === "video" && (
-              <div className="pointer-events-none absolute inset-0 grid place-items-center bg-slate-950/20">
-                <span className="grid size-14 place-items-center rounded-full bg-white/90 text-teal-700 shadow-lg">
-                  <Play className="ml-1 size-6 fill-current" />
-                </span>
-              </div>
+                {active.type === "video" && (
+                  <div className="pointer-events-none absolute inset-0 grid place-items-center bg-slate-950/20">
+                    <span className="grid size-14 place-items-center rounded-full bg-white/90 text-teal-700 shadow-lg">
+                      <Play className="ml-1 size-6 fill-current" />
+                    </span>
+                  </div>
+                )}
+              </>
             )}
 
-            {/* AI Bounding Box Overlays */}
+            {/* Bounding Box Overlays */}
             {showBBoxes && activeBBoxes.map((item, idx) => {
               const [xmin, ymin, xmax, ymax] = item.bboxNormalized!;
-              const isRamp = item.feature.includes("ramp");
-              const isStairs = item.feature.includes("stair") || item.feature.includes("step");
-              const label = isRamp ? "Ram dốc" : isStairs ? "Bậc thang" : item.feature;
-              const borderClass = isRamp
-                ? "border-emerald-400 bg-emerald-500/15 ring-emerald-500/30"
-                : isStairs
-                ? "border-amber-400 bg-amber-500/15 ring-amber-500/30"
-                : "border-cyan-400 bg-cyan-500/15 ring-cyan-500/30";
-              const badgeClass = isRamp ? "bg-emerald-600 text-white" : isStairs ? "bg-amber-600 text-white" : "bg-cyan-600 text-white";
+              const meta = getFeatureDisplayMeta(item.feature);
 
               return (
                 <div
                   key={idx}
-                  className={cn("pointer-events-none absolute border-2 ring-1 z-10 rounded-lg shadow-sm", borderClass)}
+                  className={cn("pointer-events-none absolute border-2 ring-1 z-10 rounded-lg shadow-sm", meta.borderClass)}
                   style={{
                     left: `${xmin * 100}%`,
                     top: `${ymin * 100}%`,
@@ -155,8 +235,8 @@ export function EvidenceViewer({ evidence, userClaims }: { evidence: Contributio
                     height: `${(ymax - ymin) * 100}%`,
                   }}
                 >
-                  <span className={cn("absolute -top-5 left-0 flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-bold shadow-md whitespace-nowrap", badgeClass)}>
-                    {label} {item.detectorScore ? `${Math.round(item.detectorScore * 100)}%` : ""}
+                  <span className={cn("absolute -top-5 left-0 flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-bold shadow-md whitespace-nowrap", meta.badgeClass)}>
+                    {meta.label} {item.detectorScore ? `${Math.round(item.detectorScore * 100)}%` : ""}
                   </span>
                 </div>
               );
@@ -200,15 +280,25 @@ export function EvidenceViewer({ evidence, userClaims }: { evidence: Contributio
               )}
             >
               <div className="relative h-12 w-20 shrink-0 overflow-hidden rounded-md bg-slate-950">
-                <Image
-                  src={failedImages[item.id] ? "/evidence/ramp-entrance.png" : getSafeEvidenceUrl(item.url)}
-                  alt=""
-                  fill
-                  sizes="80px"
-                  className="object-cover"
-                  unoptimized
-                  onError={() => setFailedImages((prev) => ({ ...prev, [item.id]: true }))}
-                />
+                {item.type === "video" && !failedImages[item.id] && getSafeEvidenceUrl(item.url) !== "/evidence/ramp-entrance.png" ? (
+                  <video
+                    src={getSafeEvidenceUrl(item.url)}
+                    muted
+                    preload="metadata"
+                    className="h-full w-full object-cover"
+                    onError={() => setFailedImages((prev) => ({ ...prev, [item.id]: true }))}
+                  />
+                ) : (
+                  <Image
+                    src={failedImages[item.id] ? "/evidence/ramp-entrance.png" : getSafeEvidenceUrl(item.url)}
+                    alt=""
+                    fill
+                    sizes="80px"
+                    className="object-cover"
+                    unoptimized
+                    onError={() => setFailedImages((prev) => ({ ...prev, [item.id]: true }))}
+                  />
+                )}
                 {item.type === "video" && <Play className="absolute left-1/2 top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 fill-white text-white" />}
               </div>
               <div className="min-w-0">
@@ -240,13 +330,16 @@ export function EvidenceViewer({ evidence, userClaims }: { evidence: Contributio
             {/* Contributor User Claims */}
             {userClaims && userClaims.length > 0 && (
               <div className="mt-3 border-t border-slate-200 pt-2">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Tuyên bố của người gửi</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Thông tin người gửi mô tả</p>
                 <div className="mt-1.5 space-y-1">
-                  {userClaims.map((claim, cIdx) => (
-                    <div key={cIdx} className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700">
-                      <span className="font-semibold text-slate-900">{claim.feature}:</span> {claim.snippet ?? claim.claim}
-                    </div>
-                  ))}
+                  {userClaims.map((claim, cIdx) => {
+                    const meta = getFeatureDisplayMeta(claim.feature);
+                    return (
+                      <div key={cIdx} className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700">
+                        <span className="font-semibold text-slate-900">{meta.label}:</span> {getClaimDisplayText(claim)}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -273,24 +366,21 @@ export function EvidenceViewer({ evidence, userClaims }: { evidence: Contributio
             {/* Visual suggestions with coordinates indicator */}
             {active.visualSuggestions && active.visualSuggestions.some((vs) => vs.value === "suggested_present" || Boolean(vs.detectorScore) || Boolean(vs.bboxNormalized)) && (
               <div className="mt-3 border-t border-slate-200 pt-2">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Gợi ý thị giác AI</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Đối tượng nhận diện trên ảnh</p>
                 <div className="mt-1.5 space-y-1">
                   {active.visualSuggestions
                     .filter((vs) => vs.value === "suggested_present" || Boolean(vs.detectorScore) || Boolean(vs.bboxNormalized))
                     .map((vs, sIdx) => {
-                      const isRamp = vs.feature.includes("ramp");
-                      const isStairs = vs.feature.includes("stair") || vs.feature.includes("step");
-                      const isDoor = vs.feature.includes("door");
-                      const label = isRamp ? "Ram dốc (Ramp)" : isStairs ? "Bậc thang (Stairs)" : isDoor ? "Cửa ra vào (Door)" : vs.feature;
+                      const meta = getFeatureDisplayMeta(vs.feature);
                       return (
                         <div key={sIdx} className="flex items-center justify-between rounded bg-white px-2 py-1 text-xs border border-slate-100">
-                          <span className="text-slate-700">{label}</span>
+                          <span className="text-slate-700">{meta.label}</span>
                           <div className="flex items-center gap-1">
                             {vs.bboxNormalized && (
                               <span className="text-[10px] text-slate-400">[{vs.bboxNormalized.map((n) => n.toFixed(2)).join(", ")}]</span>
                             )}
                             {vs.detectorScore && (
-                              <Badge variant={isStairs ? "amber" : "teal"}>{Math.round(vs.detectorScore * 100)}%</Badge>
+                              <Badge variant={meta.tone === "amber" ? "amber" : "teal"}>{Math.round(vs.detectorScore * 100)}%</Badge>
                             )}
                           </div>
                         </div>
@@ -308,7 +398,7 @@ export function EvidenceViewer({ evidence, userClaims }: { evidence: Contributio
         <DialogContent className="max-w-6xl bg-slate-950 p-3 text-white">
           <DialogTitle className="text-white">{active.title}</DialogTitle>
           <DialogDescription className="text-slate-300">
-            Bằng chứng gốc · {active.device} {activeBBoxes.length > 0 && `· ${activeBBoxes.length} Bounding Box`}
+            Bằng chứng gốc · {active.device} {activeBBoxes.length > 0 && `· ${activeBBoxes.length} khung nhận diện`}
           </DialogDescription>
           <div className="relative mt-4 flex aspect-video w-full items-center justify-center overflow-hidden rounded-xl bg-slate-950">
             <div
@@ -317,23 +407,25 @@ export function EvidenceViewer({ evidence, userClaims }: { evidence: Contributio
                 aspectRatio: imgDims[active.id] ? `${imgDims[active.id].w} / ${imgDims[active.id].h}` : "16/9",
               }}
             >
-              <Image src={activeImageUrl} alt={active.title} fill sizes="90vw" className="object-contain" unoptimized />
+              {active.type === "video" && !isLocalDeviceFile && !failedImages[active.id] && activeImageUrl !== "/evidence/ramp-entrance.png" ? (
+                <video
+                  src={activeImageUrl}
+                  controls
+                  playsInline
+                  className="h-full w-full object-contain"
+                  onError={() => setFailedImages((prev) => ({ ...prev, [active.id]: true }))}
+                />
+              ) : (
+                <Image src={activeImageUrl} alt={active.title} fill sizes="90vw" className="object-contain" unoptimized />
+              )}
               {showBBoxes && activeBBoxes.map((item, idx) => {
                 const [xmin, ymin, xmax, ymax] = item.bboxNormalized!;
-                const isRamp = item.feature.includes("ramp");
-                const isStairs = item.feature.includes("stair") || item.feature.includes("step");
-                const label = isRamp ? "Ram dốc" : isStairs ? "Bậc thang" : item.feature;
-                const borderClass = isRamp
-                  ? "border-emerald-400 bg-emerald-500/15"
-                  : isStairs
-                  ? "border-amber-400 bg-amber-500/15"
-                  : "border-cyan-400 bg-cyan-500/15";
-                const badgeClass = isRamp ? "bg-emerald-600 text-white" : isStairs ? "bg-amber-600 text-white" : "bg-cyan-600 text-white";
+                const meta = getFeatureDisplayMeta(item.feature);
 
                 return (
                   <div
                     key={idx}
-                    className={cn("pointer-events-none absolute border-2 z-10 rounded-lg shadow-sm", borderClass)}
+                    className={cn("pointer-events-none absolute border-2 z-10 rounded-lg shadow-sm", meta.borderClass)}
                     style={{
                       left: `${xmin * 100}%`,
                       top: `${ymin * 100}%`,
@@ -341,8 +433,8 @@ export function EvidenceViewer({ evidence, userClaims }: { evidence: Contributio
                       height: `${(ymax - ymin) * 100}%`,
                     }}
                   >
-                    <span className={cn("absolute -top-5 left-0 rounded px-1.5 py-0.5 text-[10px] font-bold shadow whitespace-nowrap", badgeClass)}>
-                      {label} {item.detectorScore ? `${Math.round(item.detectorScore * 100)}%` : ""}
+                    <span className={cn("absolute -top-5 left-0 rounded px-1.5 py-0.5 text-[10px] font-bold shadow whitespace-nowrap", meta.badgeClass)}>
+                      {meta.label} {item.detectorScore ? `${Math.round(item.detectorScore * 100)}%` : ""}
                     </span>
                   </div>
                 );

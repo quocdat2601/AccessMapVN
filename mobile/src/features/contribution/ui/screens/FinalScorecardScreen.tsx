@@ -457,7 +457,7 @@ export function FinalScorecardScreen({
               <View style={styles.testStopBanner}>
                 <MaterialCommunityIcons name="cloud-upload-outline" size={15} color="#004e58" />
                 <Text style={styles.testStopText}>
-                  Sẵn sàng gửi lên máy chủ. EXP sẽ được cộng sau khi khảo sát được duyệt.
+                  Kiểm tra lại thông tin trước khi gửi. Điểm thưởng EXP sẽ được cộng sau khi hồ sơ được duyệt.
                 </Text>
               </View>
             )}

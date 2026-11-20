@@ -166,12 +166,12 @@ export async function runAiVideoPreScan(videoUri: string): Promise<PreScanResult
     );
 
     const detectedLabels = features.filter((f) => f.detected).map((f) => f.label);
-    const summary =
-      data.processing_status === 'insufficient_visual_quality'
-        ? 'Video chưa đủ chất lượng hình ảnh để phân tích. Vui lòng tự chọn đặc điểm hoặc quay lại video rõ hơn.'
-        : detectedLabels.length > 0
-        ? `AI gợi ý từ ${data.frames_analyzed ?? 0}/${data.frames_sampled ?? 0} khung hình video: ${detectedLabels.join(', ')}. Người khảo sát cần xác nhận thực tế.`
-        : `Đã phân tích ${data.frames_analyzed ?? 0} khung hình video nhưng chưa phát hiện đặc điểm rõ ràng. Vui lòng tự chọn bên dưới nếu có.`;
+    let summary = `Chưa nhận diện rõ tiện ích qua ${data.frames_analyzed ?? 0} khung hình video. Bạn hãy tự chọn các mục quan sát được bên dưới.`;
+    if (data.processing_status === 'insufficient_visual_quality') {
+      summary = 'Video hơi mờ hoặc thiếu sáng nên chưa phân tích được. Bạn có thể tự chọn đặc điểm bên dưới hoặc quay lại.';
+    } else if (detectedLabels.length > 0) {
+      summary = `Nhận diện thấy ${detectedLabels.join(', ')} qua video (${data.frames_analyzed ?? 0} khung hình). Vui lòng kiểm tra và xác nhận lại bên dưới.`;
+    }
 
     return {
       features,

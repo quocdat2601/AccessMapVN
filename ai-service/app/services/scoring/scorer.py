@@ -206,10 +206,9 @@ def _build_summary(features: FeaturesDict, nlp_result: dict | None) -> str:
         joined_items = " và ".join(items) if len(items) <= 2 else (", ".join(items[:-1]) + f" và {items[-1]}")
         if unmeasured:
             unmeasured_str = " và ".join(unmeasured) if len(unmeasured) <= 2 else (", ".join(unmeasured[:-1]) + f" và {unmeasured[-1]}")
-            measure_clause = f"; {unmeasured_str} chưa được đo"
+            visual_summary = f"Nhận diện thấy {joined_items} trong ảnh ({unmeasured_str} chưa được đo, cần người khảo sát xác nhận thực tế)."
         else:
-            measure_clause = ""
-        visual_summary = f"AI nhận diện khả năng có {joined_items}. Người khảo sát cần xác nhận thực tế{measure_clause}."
+            visual_summary = f"Nhận diện thấy {joined_items} trong ảnh (cần người khảo sát xác nhận thực tế)."
     else:
         visual_summary = "Không phát hiện tiện ích tiếp cận nào rõ ràng trong ảnh. Vui lòng quan sát và tự chọn bên dưới nếu có."
 
@@ -303,6 +302,8 @@ class Scorer:
             ("ramp_present", cv_result.get("exterior_ramp_present", {})),
             ("door_detected", cv_result.get("door_detected", {})),
             ("stairs_present", cv_result.get("steps_present", {})),
+            ("elevator_present", cv_result.get("elevator_present", {})),
+            ("accessible_restroom_sign", cv_result.get("accessible_restroom_sign", {})),
         ]
 
         for feature_name, data in mapping:

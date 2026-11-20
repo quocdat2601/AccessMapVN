@@ -17,11 +17,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraHeader } from '../components/camera/CameraHeader';
 import { CameraStatusOverlay } from '../components/camera/CameraStatusOverlay';
 import { CaptureControls } from '../components/camera/CaptureControls';
-import { MediaPreview } from '../components/camera/MediaPreview';
 import { PermissionState } from '../components/camera/PermissionState';
 import {
-  addContributionRecord,
-  setPendingContributionMedia,
   type CapturedContributionMedia,
   type CaptureMode,
   type GpsSnapshot,
@@ -124,11 +121,10 @@ function ActiveCameraContributionScreen() {
   const [currentAddress, setCurrentAddress] = useState<string | null>(null);
   const [gpsState, setGpsState] = useState<'loading' | 'available' | 'denied' | 'unavailable'>('loading');
   const [capturedMedia, setCapturedMedia] = useState<CapturedContributionMedia | null>(null);
-  const [savedLocally, setSavedLocally] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   // Workflow 1 Multi-step Verification State
-  const [workflowStep, setWorkflowStep] = useState<'camera' | 'tag_review' | 'final_scorecard' | 'video_preview'>('camera');
+  const [workflowStep, setWorkflowStep] = useState<'camera' | 'tag_review' | 'final_scorecard'>('camera');
   const [preScanTags, setPreScanTags] = useState<PreScanFeatureTag[]>([]);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isPreScanning, setIsPreScanning] = useState(false);
@@ -412,7 +408,7 @@ function ActiveCameraContributionScreen() {
 
       if (durationSeconds < 5) {
         if (mounted.current) {
-          setMessage('Video quá ngắn (< 5s). Vui lòng quay từ 5–10 giây để ghi nhận đủ bằng chứng tiếp cận (BR-01).');
+          setMessage('Video quá ngắn (dưới 5 giây). Vui lòng quay từ 5–10 giây để ghi rõ lối đi.');
         }
         return;
       }
@@ -451,7 +447,6 @@ function ActiveCameraContributionScreen() {
 
   const handleRetake = useCallback(() => {
     setCapturedMedia(null);
-    setSavedLocally(false);
     setCameraReady(false);
     setMessage(null);
     setWorkflowStep('camera');
@@ -573,36 +568,6 @@ function ActiveCameraContributionScreen() {
           onClose={() => setShowLocationModal(false)}
         />
       </>
-    );
-  }
-
-  // Video fallback preview
-  if (workflowStep === 'video_preview' && capturedMedia) {
-    return (
-      <MediaPreview
-        media={capturedMedia}
-        savedLocally={savedLocally}
-        onBack={handleBack}
-        onRetake={handleRetake}
-        onUse={(confirmedTags, customName, notes) => {
-          setPendingContributionMedia(capturedMedia);
-          addContributionRecord({
-            id: createMediaId(),
-            locationId: targetLocationId,
-            locationName: customName || targetLocationName,
-            mediaUri: capturedMedia.uri,
-            mediaType: capturedMedia.type,
-            featureTags: confirmedTags,
-            textDescription: notes,
-            gps: gps ? { latitude: gps.latitude, longitude: gps.longitude } : null,
-            status: 'Pending Moderation',
-            confidenceScore: 0.88,
-            pointsAwarded: 0,
-            createdAt: Date.now(),
-          });
-          setSavedLocally(true);
-        }}
-      />
     );
   }
 

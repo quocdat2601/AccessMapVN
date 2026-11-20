@@ -729,9 +729,11 @@ public sealed class AdminSubmissionsController : ControllerBase
             {
                 var labelName = vs.Feature switch
                 {
-                    "ramp_present" => "Phát hiện ram dốc (Ramp)",
-                    "stairs_present" => "Phát hiện bậc thang / tam cấp (Stairs)",
-                    "door_detected" or "door_present" => "Phát hiện cửa ra vào (Door)",
+                    "ramp_present" => "Phát hiện ram dốc",
+                    "stairs_present" => "Phát hiện bậc tam cấp / cầu thang",
+                    "door_detected" or "door_present" => "Phát hiện cửa ra vào",
+                    "elevator_present" => "Phát hiện thang máy",
+                    "accessible_restroom_sign" => "Phát hiện nhà vệ sinh tiếp cận",
                     _ => vs.Feature
                 };
                 var score = vs.DetectorScore.HasValue ? Math.Round(vs.DetectorScore.Value * 100) : record.Verification.Confidence;
@@ -766,7 +768,9 @@ public sealed class AdminSubmissionsController : ControllerBase
             var matchingVs = visualSuggestions.FirstOrDefault(v =>
                 (category.Contains("Ram", StringComparison.OrdinalIgnoreCase) && v.Feature.Contains("ramp", StringComparison.OrdinalIgnoreCase)) ||
                 (category.Contains("Bậc", StringComparison.OrdinalIgnoreCase) && v.Feature.Contains("stair", StringComparison.OrdinalIgnoreCase)) ||
-                (category.Contains("Cửa", StringComparison.OrdinalIgnoreCase) && v.Feature.Contains("door", StringComparison.OrdinalIgnoreCase))
+                (category.Contains("Cửa", StringComparison.OrdinalIgnoreCase) && v.Feature.Contains("door", StringComparison.OrdinalIgnoreCase)) ||
+                (category.Contains("Thang máy", StringComparison.OrdinalIgnoreCase) && v.Feature.Contains("elevator", StringComparison.OrdinalIgnoreCase)) ||
+                ((category.Contains("vệ sinh", StringComparison.OrdinalIgnoreCase) || category.Contains("ký hiệu", StringComparison.OrdinalIgnoreCase)) && v.Feature.Contains("restroom", StringComparison.OrdinalIgnoreCase))
             );
 
             var claimConfidence = matchingVs?.DetectorScore.HasValue == true

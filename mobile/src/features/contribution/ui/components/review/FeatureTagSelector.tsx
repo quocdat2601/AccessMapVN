@@ -152,7 +152,7 @@ export function FeatureTagSelector({
       {/* Active Category Description */}
       <View style={styles.categoryInfoBar}>
         <Text style={styles.categoryInfoText}>
-          {CATEGORY_CONFIG[activeCategory].label} ({groupsInActiveCategory.length} nhóm đối tượng)
+          Chọn Có, Không hoặc Chưa rõ theo thực tế tại địa điểm
         </Text>
       </View>
 
@@ -191,14 +191,22 @@ export function FeatureTagSelector({
                     <MaterialCommunityIcons name={group.icon as any} size={16} color="#004e58" />
                   </View>
                   <View style={styles.groupHeaderTextWrap}>
-                    <Text
-                      style={[
-                        styles.groupTitle,
-                        isPrimaryViolation && styles.violationLabel,
-                      ]}
-                    >
-                      {group.title}
-                    </Text>
+                    <View style={styles.titleWithBadgeRow}>
+                      <Text
+                        style={[
+                          styles.groupTitle,
+                          isPrimaryViolation && styles.violationLabel,
+                        ]}
+                      >
+                        {group.title}
+                      </Text>
+                      {isPrimaryAiDetected ? (
+                        <View style={styles.aiBadgeInline}>
+                          <MaterialCommunityIcons name="creation" size={10} color="#007D78" />
+                          <Text style={styles.aiBadgeText}>Gợi ý từ ảnh</Text>
+                        </View>
+                      ) : null}
+                    </View>
                     {group.description && childTags.length > 0 ? (
                       <Text style={styles.groupDescription}>{group.description}</Text>
                     ) : null}
@@ -319,6 +327,12 @@ export function FeatureTagSelector({
                               {tag.label}
                             </Text>
                           </View>
+                          {isAiDetected ? (
+                            <View style={styles.aiBadge}>
+                              <MaterialCommunityIcons name="creation" size={10} color="#007D78" />
+                              <Text style={styles.aiBadgeText}>Gợi ý từ ảnh</Text>
+                            </View>
+                          ) : null}
                         </View>
 
                         {/* Right: Tri-State Segment or N/A */}

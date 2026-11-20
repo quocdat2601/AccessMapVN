@@ -282,47 +282,33 @@ export function ScoreMatrixBreakdown({
           const isFullyVerified = hasTags && verifiedCount > 0 && unverifiedCount === 0;
           const isPartiallyVerified = hasTags && verifiedCount > 0 && unverifiedCount > 0;
 
-          const rowBg = isFullyVerified
-            ? '#ecfdf5'
-            : isPartiallyVerified
-            ? '#eff6ff'
-            : '#fffbeb';
+          let rowBg = '#fffbeb';
+          let rowColor = '#d97706';
+          let mainIcon: 'checkbox-marked-circle-outline' | 'information-outline' | 'alert-circle-outline' = 'alert-circle-outline';
+          let statusIcon: 'check-circle' | 'clock-outline' | 'alert-circle' = 'alert-circle';
+          let title = 'Chưa chọn đặc tính nào';
+          let subtitle = '0 đặc tính được xác nhận. Cần bổ sung để đủ điều kiện xét duyệt.';
 
-          const rowColor = isFullyVerified
-            ? '#059669'
-            : isPartiallyVerified
-            ? '#0284c7'
-            : '#d97706';
-
-          const mainIcon = isFullyVerified
-            ? 'checkbox-marked-circle-outline'
-            : isPartiallyVerified
-            ? 'information-outline'
-            : 'alert-circle-outline';
-
-          const statusIcon = isFullyVerified
-            ? 'check-circle'
-            : isPartiallyVerified
-            ? 'clock-outline'
-            : 'alert-circle';
-
-          const title = !hasTags
-            ? 'Chưa chọn đặc tính nào'
-            : isFullyVerified
-            ? 'Đặc điểm bạn đã chọn'
-            : isPartiallyVerified
-            ? `Đặc điểm đã chọn (${verifiedCount} khớp ảnh, ${unverifiedCount} tự khai)`
-            : 'Đặc điểm tự khai (Chưa khớp ảnh)';
-
-          const subtitle = !hasTags
-            ? '0 đặc tính được xác nhận. Cần bổ sung để đủ điều kiện xét duyệt.'
-            : isFullyVerified
-            ? nlpContext.matchedKeywords.length > 0
+          if (isFullyVerified) {
+            rowBg = '#ecfdf5';
+            rowColor = '#059669';
+            mainIcon = 'checkbox-marked-circle-outline';
+            statusIcon = 'check-circle';
+            title = 'Đặc điểm bạn đã chọn';
+            subtitle = nlpContext.matchedKeywords.length > 0
               ? `Đã chọn ${count} đặc điểm (khớp ${nlpContext.matchedKeywords.length} từ khóa ghi chú)`
-              : `Đã xác thực toàn bộ ${count} đặc điểm tiếp cận qua ảnh`
-            : isPartiallyVerified
-            ? `Đã xác thực ${verifiedCount}/${count} đặc điểm qua ảnh. ${unverifiedCount} đặc điểm còn lại cần kiểm duyệt viên xác minh.`
-            : `Đã chọn ${count} đặc điểm nhưng ảnh chưa thể hiện. Cần kiểm duyệt viên xác minh.`;
+              : `Đã xác nhận ${count} đặc điểm phù hợp với ảnh chụp`;
+          } else if (isPartiallyVerified) {
+            rowBg = '#eff6ff';
+            rowColor = '#0284c7';
+            mainIcon = 'information-outline';
+            statusIcon = 'clock-outline';
+            title = `Đặc điểm đã chọn (${verifiedCount} khớp ảnh, ${unverifiedCount} tự khai)`;
+            subtitle = `${verifiedCount}/${count} đặc điểm khớp với ảnh; ${unverifiedCount} mục còn lại sẽ được kiểm duyệt viên xem xét.`;
+          } else if (hasTags) {
+            title = 'Đặc điểm tự khai (Chưa khớp ảnh)';
+            subtitle = `Đã chọn ${count} đặc điểm nhưng chưa thấy rõ trong ảnh. Kiểm duyệt viên sẽ xác minh lại.`;
+          }
 
           return (
             <View style={styles.evidenceRow}>

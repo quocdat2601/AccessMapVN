@@ -1,0 +1,8 @@
+erDiagram
+USER ||--o{ CONTRIBUTION_EVENT : owns
+CONTRIBUTION_EVENT ||--o{ USER_SCORE_HISTORY : applies_typed_effects
+USER ||--o{ USER_SCORE_HISTORY : records_score_changes
+USER ||--|| USER_CONTRIBUTION_STATS : summarizes
+SUBMISSION_CLAIM ||--o{ CLAIM_ASSESSMENT : assessed
+USER ||--o{ CLAIM_ASSESSMENT : reviews
+USER_SCORE_HISTORY o|--o{ USER_SCORE_HISTORY : compensates

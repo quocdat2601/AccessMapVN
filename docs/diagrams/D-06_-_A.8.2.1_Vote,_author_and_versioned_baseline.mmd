@@ -1,0 +1,45 @@
+erDiagram
+USER ||--o{ COMMUNITY_VOTE : casts
+SUBMISSION_CLAIM ||--o{ COMMUNITY_VOTE : confirms_or_challenges
+LOCATION_FEATURE ||--o{ COMMUNITY_VOTE : scoped_version_context
+COMMUNITY_VOTE ||--o{ COMMUNITY_VOTE_STATUS_HISTORY : transitions
+SUBMISSION o|--o{ COMMUNITY_VOTE : optional_media_source
+LOCATION_FEATURE {
+uuid Id PK
+uuid LocationId FK
+uuid ScopeId FK
+uuid SourceClaimId FK
+int FeatureType
+int CurrentStatus
+int Version
+uuid SourceSubmissionId FK
+}
+COMMUNITY_VOTE {
+uuid Id PK
+uuid LocationFeatureId FK
+uuid TargetSubmissionClaimId FK
+uuid VoterId FK
+int ObservedFeatureVersion
+int VoteType
+int ProposedStatus
+int Status
+uuid EvidenceSubmissionId FK
+uuid SupersededByVoteId FK
+}
+COMMUNITY_VOTE_STATUS_HISTORY {
+uuid Id PK
+uuid CommunityVoteId FK
+int FromStatus
+int ToStatus
+datetime CreatedAt
+}
+USER {
+uuid Id PK
+}
+SUBMISSION {
+uuid Id PK
+uuid ContributorId FK
+uuid LocationId FK
+uuid ScopeId FK
+int Status
+}

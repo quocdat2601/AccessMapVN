@@ -1,0 +1,70 @@
+Nội dung chính và yêu cầu hành động
+•	Thời gian và quy trình bảo vệ
+o	Review cấp khoa (review 1.1): đầu tháng 12 (nhắc chuẩn bị), phòng khảo thí đã gửi mail; buổi bảo vệ cấp khoa chính thức diễn ra khoảng 20–27/12.
+o	Nếu qua vòng này, tuần 16 sẽ là bảo vệ cấp trường (Viva) — dự kiến tuần 16 (22–27/?) là bảo vệ lần 1.
+o	Thời lượng trình bày: 30–35 phút/nhóm. Nội dung trình bày gồm: 1) demo sản phẩm (cài đặt) và 2) phần tài liệu (phân tích, thiết kế kỹ thuật).
+o	Tác phong: có mặt đúng giờ (đầu giờ), đầy đủ thành viên, trang phục lịch sự (không bắt buộc áo trắng). Nếu vắng mặt phải có email xác nhận từ nhà trường.
+•	Kịch bản trình bày & demo
+o	Mở slide theo template đã gửi đầu học kỳ (cô FU/Thầy Đức có template). Slide nên tóm tắt ngữ cảnh, giải pháp, kiến trúc, main flows (main flow) — mô tả sơ lược rồi demo.
+o	Ưu tiên: mô tả main flow (4–5 flow chính thường gặp), demo mượt theo kịch bản. Chuẩn bị demo 30 phút: ~5 phút giới thiệu, còn lại demo + trả lời câu hỏi.
+o	Chuẩn bị các câu trả lời chứng minh: dùng dịch vụ bên thứ ba (URL, callback, contact URL), chứng minh quyền sở hữu code (repository), v.v.
+o	Luôn có kịch bản và dữ liệu (data) cố định cho demo; tập chạy ít nhất 3 lần với dữ liệu thật; dọn sạch dữ liệu thử nghiệm cũ trong DB trước khi demo.
+•	Xử lý góp ý review 1 & 2
+o	Phải tiếp thu, thảo luận với nhóm và mentor, chốt phương án trả lời theo biểu mẫu 04 (biểu mẫu quan trọng để đối thoại với hội đồng).
+o	Nếu chọn phương án khác với góp ý giảng viên, phải trình bày so sánh điểm mạnh/ yếu và lý do chọn phương án của nhóm (không bị dẫn dắt, giữ bình tĩnh, tư duy phản biện).
+•	Yêu cầu với mentor trước khi nộp final
+o	Sau sửa theo góp ý, phải để mentor/giảng viên đọc lại và xác nhận trước khi upload lên hệ thống (edules/adonic). Nếu upload trước khi mentor xem thì không thể sửa và có thể bị không duyệt.
+________________________________________
+Hướng dẫn chi tiết chỉnh sửa tài liệu (theo cẩm nang & ví dụ mẫu)
+•	Quy tắc chung cho tất cả report
+o	Tuân theo template trường (cập nhật footer, mã dự án, tiêu đề, ngày tháng, tên đề tài phải trùng phiếu đăng ký đề tài).
+o	Mục lục phải đầy đủ: mục lục nội dung văn bản, mục lục hình/ bảng; caption hình nằm dưới hình, caption bảng nằm trên bảng.
+o	Format chuẩn: căn lề đều hai bên, font nhất quán, giãn dòng/ khoảng cách phù hợp.
+o	Không để dữ liệu test/placeholder (ví dụ “tester 1”, “abc”) trong bản nộp; phải dọn sạch và thay bằng dữ liệu phù hợp với phạm vi đề tài.
+o	Bổ sung đầy đủ phần liên quan đến thiết bị/hardware cho các đề tài IoT vào report 2, 3, 4 (sơ đồ hạ tầng phần cứng, kết nối cloud, database, AI nếu có).
+•	Lỗi cụ thể thường gặp và cách sửa (theo ví dụ nhóm được mở trong buổi)
+o	Trang bìa: không đánh số trang trên trang bìa; sửa footer/header (ví dụ “Hà Nội” phải chỉnh theo trường).
+o	Mục lục hình/bảng: nhiều nhóm quên sinh mục lục cho hình và bảng → cần cập nhật.
+o	Mã đề tài và mã nhóm: phải đúng, không trùng, kiểm tra lại.
+o	Caption & vị trí: hình caption dưới, bảng caption trên.
+o	Trùng mã/tên: kiểm tra trùng lặp thông tin (mã đề tài, tên project).
+o	Không tô màu đồ họa (như swimflow/diagram) gây hiểu nhầm — tốt nhất để cùng màu, tránh phân biệt màu ý nghĩa nếu không giải thích.
+o	Không dùng ký hiệu UML cũ, dùng UML/notation hiện đại (khuyến nghị dùng UML chuẩn).
+o	Không dùng động từ cho Data Flow: các mũi tên data flow phải mô tả “danh từ” (đối tượng dữ liệu) chứ không phải động từ.
+o	Luồng dữ liệu (data flow): tuân thủ ký hiệu (mũi tên, đường nối solid/ dashed đúng chuẩn); tránh vẽ đường vào solid mà đường ra dashed sai cú pháp.
+o	Actor trong use case: chỉ liệt kê actor là người dùng hoặc hệ thống chủ động kích hoạt chức năng; không đưa dịch vụ bên thứ ba làm actor.
+o	Use case / sequence / class diagrams: đầy đủ các layer (ví dụ sequence phải có tầng UI → controller → service → DB; không chỉ vẽ UI/NTC); đánh số tuần tự cho luồng, thêm ngoại lệ.
+o	Dataflow & kiến trúc hệ thống: thể hiện đường kết nối tới/ từ dịch vụ bên thứ ba (ví dụ email, storage, payment) cả chiều request và response nếu có; với IoT cần thể hiện cloud ↔ device và API gọi từ cloud.
+o	Database: report 4 phần physical phải chụp/ mô tả schema thực tế (ví dụ PostgreSQL), không để chữ “link” hay label sai; phải mô tả rõ các bảng, chỉ mục, loại storage, caching, nếu dùng Redis, CDN, AI service phải ghi rõ.
+o	Test report (report 5) và file Excel:
+	Cover đầy đủ mã dự án, ngày tháng, tên dự án.
+	Test plan: liệt kê các chức năng chính cần test (ưu tiên chức năng phức tạp/ quan trọng).
+	Test case: mô tả phương pháp/procedure (không phải hướng dẫn sử dụng UI), dữ liệu dùng để test, bước thực hiện, expected result, actual result, pass/fail.
+	File Excel thứ 2: chứa bộ dữ liệu test cụ thể, username/password, kết quả test, thống kê lỗi phải được ghi rõ; tổng kết số lỗi (mục tiêu: số lỗi = 0 cho các test quan trọng).
+o	Report 2/3/4: cập nhật đầy đủ công nghệ, kiến trúc, mô tả công nghệ caching/DB, IoT/hardware nếu có, các diagram phải đọc được (nên chèn hyperlink tới hình chi tiết nếu quá phức tạp).
+________________________________________
+Checklist hành động trước buổi review 1.1 (ưu tiên theo mức quan trọng)
+1.	Hoàn thiện slide theo template trường:
+o	Có ngữ cảnh, giải pháp, sơ đồ kiến trúc, danh sách main flow (4–5 main flows), slide demo + link tới repo/URL.
+2.	Chuẩn bị kịch bản demo:
+o	Cố định dữ liệu demo; tập chạy tối thiểu 3 lần; dọn DB sạch dữ liệu test cũ.
+3.	Chuẩn bị chứng minh sử dụng dịch vụ bên thứ 3:
+o	Ghi rõ URL, callback, ý nghĩa; chuẩn bị cách chứng minh quyền sở hữu code.
+4.	Sửa tài liệu theo Cẩm nang trắng:
+o	Kiểm tra tất cả comment trong file comment; sửa xong phải cho mentor/giảng viên duyệt trước khi upload.
+5.	Cập nhật đầy đủ phần IoT/hardware nếu đề tài liên quan:
+o	Bổ sung vào report 2, report 3, report 4: sơ đồ phần cứng, kết nối cloud, data flow.
+6.	Test report & Excel:
+o	Hoàn thiện test cases, dữ liệu test, thống kê lỗi; đảm bảo mentor xác nhận.
+7.	Diagram & UML:
+o	Sửa dataflow/use case/sequence/class theo chuẩn (danh từ cho data flow, actor đúng, đường nối đúng solid/dashed), bỏ màu không cần thiết, dùng ký hiệu UML hiện đại.
+8.	Upload đúng hạn:
+o	Sau khi mentor duyệt, upload lên edules/adonic trước deadline (tránh gửi sau giờ đóng vì không thể sửa).
+________________________________________
+Các lưu ý 
+•	Biểu mẫu 04 là chìa khóa để trả lời hội đồng; phải bám theo khi đối thoại.
+•	Không upload tài liệu final trước khi mentor xác nhận; nếu upload sớm sẽ không có cơ hội sửa.
+•	Tập demo mượt, dữ liệu chuẩn, tránh “ngẫu hứng” trong buổi bảo vệ.
+•	Đối với các nhóm IoT: bắt buộc bổ sung tài liệu thiết bị/hardware, mô tả kết nối cloud và API tới dịch vụ bên thứ ba.
+•	Mục tiêu: nếu chuẩn bị tốt review 1.1 (đầu tháng 12), tuần 16 bảo vệ cấp trường sẽ nhẹ nhàng hơn và khả năng pass cao.
+

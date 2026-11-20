@@ -10,3 +10,5 @@ export * from './location-detail';
 export * from './MapView';
 export * from './AccessibilityLayer';
 export * from './UserLocationMarker';
+export * from './FilterChipBar';
+export * from './AccessibilityFilterModal';

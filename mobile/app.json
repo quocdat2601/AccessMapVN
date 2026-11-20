@@ -22,7 +22,7 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
       ],
-      "package": "com.anonymous.AccessMapVN"
+      "package": "com.qd2601.AccessMapVN"
     },
     "web": {
       "output": "static",

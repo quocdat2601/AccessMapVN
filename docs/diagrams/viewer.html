@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AccessMap VN — System Architecture & Design Specification</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+    .mermaid svg { max-width: 100%; height: auto; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col">
+  <!-- Header -->
+  <header class="bg-teal-900 text-white px-6 py-4 shadow-md flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-teal-500/20 flex items-center justify-center border border-teal-400/30 text-teal-300 font-bold text-lg">A</div>
+      <div>
+        <h1 class="text-lg font-bold tracking-tight">AccessMap VN — System Design Diagrams</h1>
+        <p class="text-xs text-teal-200">Interactive Visualizations from NEW Technical & Design Specification (Appendix D)</p>
+      </div>
+    </div>
+    <div class="text-xs text-teal-300 bg-teal-800/80 px-3 py-1.5 rounded-full border border-teal-700 font-mono">
+      QCVN 10:2014 & WCAG 2.1 AAA Compliant
+    </div>
+  </header>
+
+  <!-- Main Layout -->
+  <div class="flex-1 flex overflow-hidden">
+    <!-- Sidebar Navigation -->
+    <aside class="w-80 bg-white border-r border-slate-200 p-4 overflow-y-auto flex flex-col gap-1 shadow-sm">
+      <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 px-2">Diagram Catalog</div>
+      
+      <button onclick="showDiagram('arch')" id="btn-arch" class="nav-btn text-left px-3 py-2.5 rounded-lg text-sm font-semibold flex items-center justify-between bg-teal-50 text-teal-900 border border-teal-200">
+        <span>1. System Architecture (Local DB + Cache)</span>
+        <span class="text-xs px-1.5 py-0.5 rounded bg-teal-200 text-teal-800 font-mono">D-03</span>
+      </button>
+
+      <button onclick="showDiagram('seq-sub')" id="btn-seq-sub" class="nav-btn text-left px-3 py-2.5 rounded-lg text-sm font-medium flex items-center justify-between text-slate-700 hover:bg-slate-100">
+        <span>2. Contributor Submission & AI Verification</span>
+        <span class="text-xs px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-mono">D-12</span>
+      </button>
+
+      <button onclick="showDiagram('domain')" id="btn-domain" class="nav-btn text-left px-3 py-2.5 rounded-lg text-sm font-medium flex items-center justify-between text-slate-700 hover:bg-slate-100">
+        <span>3. Domain Model & Resubmission Revision</span>
+        <span class="text-xs px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-mono">D-04</span>
+      </button>
+
+      <button onclick="showDiagram('erd-core')" id="btn-erd-core" class="nav-btn text-left px-3 py-2.5 rounded-lg text-sm font-medium flex items-center justify-between text-slate-700 hover:bg-slate-100">
+        <span>4. Core Persisted Entities WF-01 (ERD)</span>
+        <span class="text-xs px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-mono">D-05</span>
+      </button>
+
+      <button onclick="showDiagram('erd-comm')" id="btn-erd-comm" class="nav-btn text-left px-3 py-2.5 rounded-lg text-sm font-medium flex items-center justify-between text-slate-700 hover:bg-slate-100">
+        <span>5. Community Validation WF-02 (ERD)</span>
+        <span class="text-xs px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-mono">WF2</span>
+      </button>
+
+      <button onclick="showDiagram('dispute')" id="btn-dispute" class="nav-btn text-left px-3 py-2.5 rounded-lg text-sm font-medium flex items-center justify-between text-slate-700 hover:bg-slate-100">
+        <span>6. Dispute Resolution & Advisory (ERD)</span>
+        <span class="text-xs px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-mono">D-07</span>
+      </button>
+
+      <button onclick="showDiagram('reports')" id="btn-reports" class="nav-btn text-left px-3 py-2.5 rounded-lg text-sm font-medium flex items-center justify-between text-slate-700 hover:bg-slate-100">
+        <span>7. Inaccurate Information Reports (ERD)</span>
+        <span class="text-xs px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-mono">D-10</span>
+      </button>
+
+      <button onclick="showDiagram('reputation')" id="btn-reputation" class="nav-btn text-left px-3 py-2.5 rounded-lg text-sm font-medium flex items-center justify-between text-slate-700 hover:bg-slate-100">
+        <span>8. Reputation Scoring & Ranking WF-04</span>
+        <span class="text-xs px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 font-mono">WF4</span>
+      </button>
+
+      <div class="mt-auto pt-4 border-t border-slate-200 text-xs text-slate-500 leading-relaxed">
+        Tip: Double-click this viewer.html file in any browser (Chrome/Edge) to view all diagrams with full SVG zoom & print support.
+      </div>
+    </aside>
+
+    <!-- Diagram Display Stage -->
+    <main class="flex-1 bg-slate-100 p-6 overflow-y-auto flex flex-col items-center">
+      <div class="w-full max-w-5xl bg-white rounded-xl shadow-sm border border-slate-200 p-6 min-h-[600px] flex flex-col">
+        <!-- Diagram Header Bar -->
+        <div class="flex items-center justify-between pb-4 mb-4 border-b border-slate-200">
+          <div>
+            <h2 id="diag-title" class="text-lg font-bold text-slate-900">1. System Architecture Diagram</h2>
+            <p id="diag-desc" class="text-xs text-slate-500 mt-1">Includes Local DB (PostgreSQL 16 + PostGIS 3.4 Docker) and Client Cache (AsyncStorage) per supervisor review.</p>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="window.print()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-3 py-1.5 rounded-lg border border-slate-300">Print / Export PDF</button>
+          </div>
+        </div>
+
+        <!-- Render Container -->
+        <div id="diag-container" class="flex-1 flex items-center justify-center p-4 overflow-x-auto">
+          <!-- Mermaid element inserted via JS -->
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    mermaid.initialize({ startOnLoad: false, theme: 'neutral', securityLevel: 'loose' });
+
+    const diagrams = {
+      'arch': {
+        title: '1. System Architecture Diagram (Logical & Deployment)',
+        desc: 'Illustrates the 3-tier boundary: Client Tier (Mobile & Web), Application & Processing Tier (.NET 8 WebApi + AI FastAPI + Hangfire Worker), and Persistence Layer (PostgreSQL/PostGIS + MinIO/R2 + Client Cache).',
+        code: `flowchart TB
+    subgraph Clients["CLIENT TIER (USERS & OPERATIONS)"]
+        Mobile["Mobile App (React Native / Expo)<br/>• MapLibre GL POI Rendering<br/>• In-App Camera & TimeMark Watermark<br/>• Client Offline Cache (AsyncStorage)"]
+        WebAdmin["Web Admin Portal (Next.js 15)<br/>• Moderation Queues & Dispute Resolution<br/>• Coverage Reports & Quality Insights"]
+    end
+
+    subgraph Gateway["GATEWAY & REVERSE PROXY"]
+        Proxy["Caddy / Traefik Reverse Proxy<br/>Port 443 / 80 (TLS Termination)"]
+    end
+
+    subgraph BackendServices["APPLICATION & PROCESSING TIER (BACKEND)"]
+        WebApi[".NET 8 WebApi Core<br/>• REST Controllers & CQRS MediatR<br/>• QCVN Scoring & Publication Engine<br/>• Internal Job API (/api/internal/v1)"]
+        Worker["AccessMap Worker (.NET 8)<br/>• Hangfire Server Job Scheduler<br/>• Outbox Message Dispatcher"]
+        AIService["AI Microservice (FastAPI / Python)<br/>• YOLOv8 CV Feature Detectors<br/>• Privacy Face & License Plate Blurring<br/>• PhoBERT Text Extraction"]
+    end
+
+    subgraph StorageLayer["PERSISTENCE & STORAGE TIER"]
+        LocalDB[("Application DB (Local Docker / Supabase)<br/>PostgreSQL 16 + PostGIS 3.4<br/>• Spatial Bounding-Box GiST Queries<br/>• Location, Submission, Claims")]
+        SchedulerDB[("Scheduler DB<br/>PostgreSQL (Hangfire Schema)")]
+        ObjectStorage[("Object Storage<br/>MinIO (Local) / Cloudflare R2<br/>• Private Media Binaries & Keyframes")]
+    end
+
+    Mobile --> Proxy
+    WebAdmin --> Proxy
+    Proxy --> WebApi
+    WebApi --> LocalDB
+    WebApi --> ObjectStorage
+    WebApi -.->|Internal Job API (RS256 JWT)| Worker
+    Worker --> SchedulerDB
+    Worker -->|Async HTTP Verify| AIService
+    AIService -.->|No Direct DB Access| Worker`
+      },
+      'seq-sub': {
+        title: '2. Contributor Submission & AI Verification Sequence (D-12)',
+        desc: 'End-to-end lifecycle: Place search -> staged media upload -> AI pre-scan quality check -> final submit -> async YOLO verification -> moderation & publication.',
+        code: `sequenceDiagram
+    actor Contributor as Contributor (Mobile User)
+    participant Mobile as Mobile App
+    participant API as .NET 8 WebApi
+    participant Storage as MinIO / Cloudflare R2
+    participant Worker as Hangfire Worker
+    participant AI as AI Python Service
+    participant DB as PostGIS DB
+
+    Contributor->>Mobile: Search & select place, capture ramp / entrance photo
+    Mobile->>API: POST /api/v1/media/upload-intents (GPS capture metadata)
+    API-->>Mobile: Return mediaIds + short-lived signed PUT URLs
+    Mobile->>Storage: PUT media bytes directly to Private Staging
+    Mobile->>API: POST /api/v1/submissions/pre-scan
+    API->>AI: Evaluate blur (Laplacian variance) & media quality
+    AI-->>API: Assessment result: Quality=Assessed, is_blur=false
+    API-->>Mobile: Return pre-scan quality feedback & feature hints
+    Contributor->>Mobile: Review pre-scan & confirm Submit
+    Mobile->>API: POST /api/v1/submissions (Idempotency-Key)
+    API->>DB: Persist Submission (Status=Submitted, Revision=1)
+    API-->>Mobile: 202 Accepted (Submission queued)
+    API->>Worker: Trigger asynchronous verification background job
+    Worker->>AI: POST /verify (Detect QCVN 10:2014 features)
+    AI-->>Worker: Return bounding boxes & confidence scores
+    Worker->>DB: Update SubmissionStatus to PendingModeration
+    Note over DB,API: Admin review -> Status=Published & award reputation EXP`
+      },
+      'domain': {
+        title: '3. Domain Model & Resubmission Revision Lifecycle (D-04)',
+        desc: 'Core business domain mapping: Contributor -> Submission -> Claims -> AI Verification -> Decision -> LocationFeature truth -> Single-ID Resubmission Revision.',
+        code: `flowchart TB
+    Person["Contributor (User)"] --> Submission["Submission Attempt"]
+    Submission --> Evidence["Media Evidence (Photos, Videos, Frames)"]
+    Submission --> Claims["Feature Claims (Ramp, Elevator, EntranceDoor, Restroom)"]
+    Submission --> Verification["AI Verification (Evidence & Feature Results)"]
+    Claims --> Decision["Decision (Integrity + Confidence + Moderation)"]
+    Evidence --> Decision
+    Verification --> Decision
+    Decision --> Truth["LocationFeature (Current Published Truth)"]
+    Truth --> History["LocationFeatureHistory (Prior Feature Versions)"]
+    Decision -->|"Admin requests more information"| Next["Correction Request (AwaitingMoreInfo)"]
+    Next -->|"Same ID; Revision+1; ResubmissionCount+1"| NewSubmission["Updated Submission Revision"]
+    NewSubmission -->|"New Media Evidence"| Evidence`
+      },
+      'erd-core': {
+        title: '4. Core Persisted Entities WF-01 (ERD D-05)',
+        desc: 'Relational data model governing place entities, submissions, claims, media attachments, and AI background processing.',
+        code: `erDiagram
+    Location ||--o{ Submission : receives
+    Submission ||--|{ SubmissionClaim : contains
+    Submission ||--|{ SubmissionMedia : attaches
+    Submission ||--o{ AIAnalysis : evaluates
+    Submission ||--o{ SubmissionStatusHistory : audits
+    Submission ||--o| AIProcessingJob : schedules
+    Location ||--o{ LocationFeature : publishes
+    LocationFeature ||--o{ LocationFeatureHistory : archives`
+      },
+      'erd-comm': {
+        title: '5. Community Validation WF-02 (ERD)',
+        desc: 'Relational schema tracking community votes, crowd validation observations, and automated consensus state projections.',
+        code: `erDiagram
+    LocationFeature ||--o{ CommunityVote : validates
+    LocationFeature ||--o| FeatureCommunityState : reflects
+    LocationFeature ||--o{ CommunityAssessment : snapshots
+    CommunityVote ||--o{ CommunityVoteStatusHistory : tracks`
+      },
+      'dispute': {
+        title: '6. Dispute Resolution & Temporary Access Advisory (ERD D-07)',
+        desc: 'Data model managing challenged accessibility features, dispute voting cases, resolution decisions, and temporary access warnings.',
+        code: `erDiagram
+    LocationFeature ||--o{ DisputeCase : challenges
+    DisputeCase ||--o{ DisputeCaseVote : votes
+    DisputeCase ||--o{ DisputeDecision : resolves
+    Location ||--o{ TemporaryAccessAdvisory : posts`
+      },
+      'reports': {
+        title: '7. Inaccurate Information Reports (ERD D-10)',
+        desc: 'Data schema handling user reports regarding inaccurate map pins, modified features, or maintenance closures.',
+        code: `erDiagram
+    Location ||--o{ InaccurateInformationReport : reports
+    InaccurateInformationReport ||--o{ ReportStatusHistory : audits
+    InaccurateInformationReport ||--o{ ReportEvidence : supports`
+      },
+      'reputation': {
+        title: '8. Reputation Scoring & Contributor Ranking WF-04',
+        desc: 'Gamification pipeline: Verified publication -> Scoring calculation -> Contributor Tier assignment -> Leaderboard qualification.',
+        code: `flowchart TB
+    Event["Verified Publication Event"] --> Calc["Reputation Scoring Engine"]
+    Calc --> Standing["Update Points & Tier (Bronze / Silver / Gold / Trusted)"]
+    Standing --> Leaderboard["Public Contributor Leaderboard (Top 1/2/3/10)"]
+    Standing --> Badge["Verified Contributor Badges on Profile"]`
+      }
+    };
+
+    function showDiagram(key) {
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('bg-teal-50', 'text-teal-900', 'border', 'border-teal-200');
+        btn.classList.add('text-slate-700', 'hover:bg-slate-100');
+      });
+
+      const activeBtn = document.getElementById('btn-' + key);
+      if (activeBtn) {
+        activeBtn.classList.remove('text-slate-700', 'hover:bg-slate-100');
+        activeBtn.classList.add('bg-teal-50', 'text-teal-900', 'border', 'border-teal-200');
+      }
+
+      const diag = diagrams[key];
+      document.getElementById('diag-title').innerText = diag.title;
+      document.getElementById('diag-desc').innerText = diag.desc;
+
+      const container = document.getElementById('diag-container');
+      container.innerHTML = '<div class="mermaid w-full text-center">' + diag.code + '</div>';
+      mermaid.run({ nodes: container.querySelectorAll('.mermaid') });
+    }
+
+    // Default load
+    window.addEventListener('DOMContentLoaded', () => {
+      showDiagram('arch');
+    });
+  </script>
+</body>
+</html>

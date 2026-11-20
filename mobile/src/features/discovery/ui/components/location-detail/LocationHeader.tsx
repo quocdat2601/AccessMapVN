@@ -1,6 +1,6 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '@/shared/theme';
 
 interface LocationHeaderProps {
@@ -14,6 +14,8 @@ interface LocationHeaderProps {
   openingHours?: string | null;
   phone?: string | null;
   website?: string | null;
+  isFavorite?: boolean;
+  onToggleFavorite?: () => void;
 }
 
 export function LocationHeader({
@@ -27,6 +29,8 @@ export function LocationHeader({
   openingHours,
   phone,
   website,
+  isFavorite = false,
+  onToggleFavorite,
 }: LocationHeaderProps) {
   const hasCustomName = name && name.trim().length > 0 && name.trim().toLowerCase() !== address?.trim().toLowerCase();
   const displayName = hasCustomName
@@ -35,7 +39,26 @@ export function LocationHeader({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.name} numberOfLines={2}>{displayName}</Text>
+      {/* Title & Bookmark Row */}
+      <View style={styles.titleRow}>
+        <Text style={styles.name} numberOfLines={2}>{displayName}</Text>
+        {onToggleFavorite && (
+          <TouchableOpacity
+            style={[styles.bookmarkButton, isFavorite && styles.bookmarkButtonActive]}
+            onPress={onToggleFavorite}
+            accessibilityRole="button"
+            accessibilityLabel={isFavorite ? 'Đã lưu yêu thích' : 'Lưu vào yêu thích'}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            activeOpacity={0.75}
+          >
+            <Ionicons
+              name={isFavorite ? 'bookmark' : 'bookmark-outline'}
+              size={20}
+              color={isFavorite ? '#004F58' : '#64748B'}
+            />
+          </TouchableOpacity>
+        )}
+      </View>
 
       {/* Meta Pills Row */}
       <View style={styles.metaRow}>
@@ -121,11 +144,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingBottom: 14,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   name: {
+    flex: 1,
     color: Colors.textPrimary,
     fontSize: 21,
     fontWeight: '800',
     letterSpacing: -0.5,
+  },
+  bookmarkButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bookmarkButtonActive: {
+    backgroundColor: '#CCFBF1',
   },
   metaRow: {
     marginTop: 8,

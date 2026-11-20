@@ -1,0 +1,26 @@
+erDiagram
+direction LR
+USER ||--o{ COMMUNITY_VOTE : casts
+LOCATION ||--o{ LOCATION_FEATURE : owns
+SUBMISSION_CLAIM ||--o{ COMMUNITY_VOTE : confirms_or_challenges
+LOCATION_FEATURE ||--o{ COMMUNITY_VOTE : scoped_version_context
+LOCATION_FEATURE ||--o| FEATURE_FEEDBACK_SUMMARY : current_assessment
+LOCATION_FEATURE ||--o{ LOCATION_FEATURE_REVIEW : has_conflicts
+COMMUNITY_VOTE ||--o{ LOCATION_FEATURE_REVIEW_VOTE : links
+LOCATION_FEATURE_REVIEW ||--o{ LOCATION_FEATURE_REVIEW_VOTE : cites
+LOCATION_FEATURE_REVIEW ||--o{ LOCATION_FEATURE_REVIEW_DECISION : audits
+USER ||--o{ LOCATION_FEATURE_REVIEW_DECISION : moderates
+LOCATION_FEATURE ||--o{ LOCATION_FEATURE_NOTICE : carries
+SUBMISSION o|--o{ LOCATION_FEATURE_REVIEW : correction_source
+SUBMISSION o|--o{ COMMUNITY_VOTE : evidence_submission
+LOCATION_FEATURE_REVIEW o|--o{ COMMUNITY_REVIEW : evaluated
+LOCATION_FEATURE ||--o{ COMMUNITY_REVIEW : snapshots
+COMMUNITY_VOTE ||--o{ COMMUNITY_VOTE_STATUS_HISTORY : audits
+USER ||--o{ IDEMPOTENCY_RECORD : replays
+
+
+
+
+
+WF-03 — Personalized Accessibility Search and Surrounding Exploration
+Read Part A for destination discovery, explicit needs, scope limits and user-facing outcomes. System Diagrams is the shared visual baseline; Part B owns deterministic matching and APIs. Appendix D identifies the matching shared figures and compatible data view.

@@ -143,6 +143,10 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     cameraRef.current?.flyTo({ center: [lng, targetLat], zoom, duration: 750 });
   };
 
+  const handleClusterPress = (lng: number, lat: number) => {
+    cameraRef.current?.flyTo({ center: [lng, lat], zoom: 16, duration: 600 });
+  };
+
   useImperativeHandle(ref, () => ({
     recenter: () => {
       if (userLatitude == null || userLongitude == null) return;
@@ -239,8 +243,8 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
       if (typeof px === 'number' && typeof py === 'number' && !isNaN(px) && !isNaN(py)) {
         try {
           features = await mapRef.current.queryRenderedFeatures([
-            [px - 24, py - 24],
-            [px + 24, py + 24],
+            [px - 32, py - 32],
+            [px + 32, py + 32],
           ]);
         } catch {
           features = [];
@@ -265,17 +269,11 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         nativeEvent?.lngLat ||
         (nativeEvent?.coordinate ? [nativeEvent.coordinate.longitude, nativeEvent.coordinate.latitude] : null);
 
-      if (!features || features.length === 0) {
-        setActiveTapPoint(null);
-        onSelectPlace?.(null);
-        onSelectOsmPlace?.(null);
-        return;
-      }
+      const safeFeatures = features ?? [];
+      const immediateAddress = extractImmediateAddress(safeFeatures);
 
-      const immediateAddress = extractImmediateAddress(features);
-
-      // Priority 1: Check if user tapped directly on an AccessMapVN place marker
-      const appFeature = features.find(
+      // Priority 1: Check if user tapped directly on an AccessMapVN place marker feature
+      const appFeature = safeFeatures.find(
         (f: any) => f?.properties?.id && places.some((p) => p.id === f.properties.id)
       );
       if (appFeature) {
@@ -283,8 +281,24 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         return;
       }
 
-      // Priority 2: Check if tapped base map feature matches an existing loaded place
-      const namedFeature = features.find(
+      // Priority 2: Spatial Proximity Snapping - If tapped near any known app place (<= 40m), select it directly
+      if (tapCoords) {
+        let closestAppPlace: PlaceDto | null = null;
+        let closestDistance = Infinity;
+        for (const p of places) {
+          const d = getDistanceMeters(p.lat, p.lng, tapCoords[1], tapCoords[0]);
+          if (d <= 40 && d < closestDistance) {
+            closestDistance = d;
+            closestAppPlace = p;
+          }
+        }
+        if (closestAppPlace) {
+          await handleSelectAppPlace(closestAppPlace.id, immediateAddress);
+          return;
+        }
+      }
+
+      const namedFeature = safeFeatures.find(
         (f: any) =>
           f?.properties?.name ||
           f?.properties?.name_en ||
@@ -292,16 +306,18 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
           f?.properties?.['name:vi']
       );
 
-      // Priority 3: Check if user tapped directly on their current location marker (blue dot)
+      // Priority 3: Check if user specifically tapped on their own location dot (only if NO place was closer)
+      const userDistance =
+        userLatitude != null && userLongitude != null && tapCoords
+          ? getDistanceMeters(userLatitude, userLongitude, tapCoords[1], tapCoords[0])
+          : Infinity;
+
       const isUserLocationTap =
         !namedFeature &&
         userLatitude != null &&
         userLongitude != null &&
-        features.some(
-          (f: any) =>
-            f?.properties?.isUserLocation ||
-            (f?.layer?.id && f.layer.id.includes('user-location'))
-        );
+        (safeFeatures.some((f: any) => f?.properties?.isUserLocation || (f?.layer?.id && f.layer.id.includes('user-location'))) ||
+          userDistance <= 14);
 
       if (isUserLocationTap && userLatitude != null && userLongitude != null) {
         flyToPlace(userLongitude, userLatitude);
@@ -362,6 +378,12 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
         return;
       }
 
+      if (safeFeatures.length === 0) {
+        setActiveTapPoint(null);
+        onSelectPlace?.(null);
+        onSelectOsmPlace?.(null);
+        return;
+      }
       if (namedFeature) {
         const props = namedFeature.properties;
         const rawName = props.name || props['name:vi'] || props.name_vi || props.name_en;
@@ -538,6 +560,16 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
     );
   }
 
+  const selectedScore = selectedPlace ? Number(selectedPlace.accessibility_score) : -1;
+  const isSelectedRated = !isNaN(selectedScore) && selectedScore >= 0;
+  let selectedAccentColor = '#006874';
+  if (isSelectedRated) {
+    const norm = selectedScore > 5 ? selectedScore / 100 : selectedScore > 1 ? selectedScore / 5 : selectedScore;
+    if (norm >= 0.7) selectedAccentColor = '#10b981';
+    else if (norm >= 0.4) selectedAccentColor = '#f59e0b';
+    else selectedAccentColor = '#ef4444';
+  }
+
   return (
     <View style={styles.container}>
       <MapLibreGL.Map
@@ -571,6 +603,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
             MapLibreGL={MapLibreGL}
             places={places}
             onSelectPlace={handleSelectAppPlace}
+            onClusterPress={handleClusterPress}
             selectedPlaceId={selectedPlaceId}
           />
         )}
@@ -596,7 +629,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
               id="selected-place-pulse"
               paint={{
                 circleRadius: 22,
-                circleColor: '#ef4444',
+                circleColor: selectedAccentColor,
                 circleOpacity: 0.25,
                 circleStrokeWidth: 0,
               }}
@@ -606,7 +639,7 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
               id="selected-place-dot"
               paint={{
                 circleRadius: 9,
-                circleColor: '#ef4444',
+                circleColor: selectedAccentColor,
                 circleStrokeWidth: 3,
                 circleStrokeColor: '#ffffff',
               }}
@@ -621,6 +654,8 @@ export const MapView = forwardRef<MapViewHandle, MapViewProps>(function MapView(
                 textOffset: [0, 1.8],
                 textAnchor: 'top',
                 textMaxWidth: 10,
+                textAllowOverlap: true,
+                textIgnorePlacement: true,
               }}
               paint={{
                 textColor: '#0f172a',

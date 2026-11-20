@@ -4,9 +4,11 @@ import type {
   CastCommunityVoteInput,
   CommunityFeatureState,
   CommunityVoteReceipt,
+  CreateCommunityCommentResponse,
   FeatureCommunityLabel,
   PublishedFeatureStatus,
   PublicCommunityComment,
+  PublicCommunityCommentPage,
   PublicTimelineItem,
 } from '../model/types';
 
@@ -109,23 +111,51 @@ export async function fetchLocationTimeline(locationId: string): Promise<PublicT
   return response.items ?? [];
 }
 
-export async function fetchCommunityComments(locationId: string): Promise<PublicCommunityComment[]> {
-  const response = await apiClient.get<{ items: PublicCommunityComment[] }>(
-    `/api/v1/locations/${encodeURIComponent(locationId)}/comments?pageSize=20`,
+export async function fetchCommunityComments(
+  locationId: string,
+  pageSize = 20
+): Promise<PublicCommunityComment[]> {
+  const response = await apiClient.get<PublicCommunityCommentPage>(
+    `/api/v1/locations/${encodeURIComponent(locationId)}/comments?pageSize=${pageSize}`,
     { auth: 'none' }
   );
   return response.items ?? [];
 }
 
+export async function fetchCommunityCommentPage(
+  locationId: string,
+  pageSize = 20,
+  cursor?: string | null
+): Promise<PublicCommunityCommentPage> {
+  const cursorQuery = cursor ? `&cursor=${encodeURIComponent(cursor)}` : '';
+  const response = await apiClient.get<PublicCommunityCommentPage>(
+    `/api/v1/locations/${encodeURIComponent(locationId)}/comments?pageSize=${pageSize}${cursorQuery}`,
+    { auth: 'none' }
+  );
+  return {
+    items: response.items ?? [],
+    nextCursor: response.nextCursor ?? null,
+  };
+}
+
 export async function submitCommunityComment(
   locationId: string,
   body: string,
-  userId: string
-): Promise<void> {
-  await apiClient.postIdempotent(
+  userId: string,
+  requestNonce?: string
+): Promise<CreateCommunityCommentResponse> {
+  const trimmed = body.trim();
+  const nonce = requestNonce ?? `${Date.now()}-${trimmed.length}`;
+  const raw = await apiClient.postIdempotent<any>(
     `/api/v1/locations/${encodeURIComponent(locationId)}/comments`,
-    { body },
-    `comment:${userId}:${locationId}`,
+    { body: trimmed },
+    `comment:${userId}:${locationId}:${nonce}`,
     { auth: 'required' }
   );
+  return {
+    commentId: String(raw?.commentId ?? raw?.id ?? `local-${Date.now()}`),
+    status: (raw?.status ?? 'PendingReview') as CreateCommunityCommentResponse['status'],
+    version: numberOr(raw?.version, 1),
+    createdAt: String(raw?.createdAt ?? new Date().toISOString()),
+  };
 }

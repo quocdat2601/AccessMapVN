@@ -86,16 +86,16 @@ switch (command) {
   case 'migrate':
     migrate();
     break;
-  case 'seed-wf02':
+  case 'seed-community':
     migrate();
-    console.log('[local-db] Thêm/cập nhật địa điểm demo WF-02...');
-    psql(readFileSync(join(repositoryRoot, 'infra', 'seed-wf02.sql'), 'utf8'));
-    console.log('[local-db] Hoàn tất. Tìm địa điểm: [WF-02 DEMO] Trung tâm Phục vụ Cộng đồng');
+    console.log('[local-db] Thêm/cập nhật địa điểm demo cộng đồng...');
+    psql(readFileSync(join(repositoryRoot, 'infra', 'seed-community.sql'), 'utf8'));
+    console.log('[local-db] Hoàn tất. Tìm địa điểm: Trung tâm Phục vụ Cộng đồng');
     break;
   case 'tables':
     psql("SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = 'public' ORDER BY tablename;\n");
     break;
   default:
-    console.error('Usage: node scripts/local-db.mjs <migrate|seed-wf02|tables>');
+    console.error('Usage: node scripts/local-db.mjs <migrate|seed-community|tables>');
     process.exit(1);
 }

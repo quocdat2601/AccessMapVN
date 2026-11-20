@@ -5,6 +5,7 @@ interface AccessibilityLayerProps {
   MapLibreGL: any;
   places: PlaceDto[];
   onSelectPlace?: (placeId: string) => void;
+  onClusterPress?: (lng: number, lat: number) => void;
   selectedPlaceId?: string | null;
 }
 
@@ -105,11 +106,17 @@ function categoryToSpriteIcon(category: string): string {
   }
 }
 
-function getAccessibilityColor(score: number): string {
-  if (score >= 0.8) return '#10b981'; // Xanh lá: Tiếp cận tốt
-  if (score >= 0.5) return '#f59e0b'; // Vàng cam: Tiếp cận một phần
-  if (score >= 0) return '#ef4444';   // Đỏ: Khó tiếp cận
-  return '#006874';                   // Xanh Teal thương hiệu: Chưa có khảo sát cộng đồng
+export function normalizeScore(score: number): number {
+  if (isNaN(score) || score < 0) return -1;
+  if (score > 5) return score / 100; // e.g. 85 -> 0.85, 98 -> 0.98
+  if (score > 1) return score / 5;   // e.g. 4.0 -> 0.80
+  return score;                      // e.g. 0.85 -> 0.85
+}
+
+export function getAccessibilityColor(normalizedScore: number): string {
+  if (normalizedScore >= 0.7) return '#10b981'; // Xanh lá: Tiếp cận tốt (QCVN 10:2014)
+  if (normalizedScore >= 0.4) return '#f59e0b'; // Vàng cam: Tiếp cận một phần
+  return '#ef4444'; // Đỏ: Khó tiếp cận / có chướng ngại
 }
 
 export function AccessibilityLayer({
@@ -121,9 +128,10 @@ export function AccessibilityLayer({
   const geojson: any = useMemo(() => ({
     type: 'FeatureCollection',
     features: places.map((p) => {
-      const score = Number(p.accessibility_score);
-      const isRated = !isNaN(score) && score >= 0;
-      const accessColor = getAccessibilityColor(score);
+      const rawScore = Number(p.accessibility_score);
+      const normalizedScore = normalizeScore(rawScore);
+      const isRated = normalizedScore >= 0;
+      const accessColor = isRated ? getAccessibilityColor(normalizedScore) : '#94a3b8';
       const icon = categoryToSpriteIcon(p.category);
 
       return {
@@ -137,7 +145,7 @@ export function AccessibilityLayer({
           id: p.id,
           name: p.name,
           category: p.category,
-          score,
+          score: normalizedScore,
           isRated,
           accessColor,
           icon,
@@ -153,38 +161,154 @@ export function AccessibilityLayer({
     <MapLibreGL.GeoJSONSource
       id="accessibility-places"
       data={geojson}
-      hitbox={{ top: 20, bottom: 20, left: 20, right: 20 }}
+      cluster={false}
+      hitbox={{ top: 38, bottom: 38, left: 38, right: 38 }}
       onPress={(e: any) => {
         const features = e?.nativeEvent?.features ?? e?.features;
         const feature = features?.[0];
+        if (!feature) return;
+
         if (feature?.properties?.id) {
           onSelectPlace?.(feature.properties.id as string);
         }
       }}
     >
-      {/* Icon thể loại POI + Tên địa điểm */}
+      {/* 1. Unrated places: Subtle dots at zoom >= 13 */}
+      <MapLibreGL.Layer
+        type="circle"
+        id="places-unrated-dot"
+        minZoomLevel={13}
+        filter={['==', ['get', 'isRated'], false]}
+        paint={{
+          circleRadius: [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            13, 3.5,
+            16, 6,
+          ],
+          circleColor: '#94a3b8',
+          circleOpacity: 0.85,
+          circleStrokeWidth: 1.5,
+          circleStrokeColor: '#ffffff',
+        }}
+      />
+
+      {/* 2. Unrated places label: subtle gray name at zoom >= 15 */}
       <MapLibreGL.Layer
         type="symbol"
-        id="places-symbols"
-        minZoomLevel={13}
+        id="places-unrated-symbols"
+        minZoomLevel={15}
+        filter={['==', ['get', 'isRated'], false]}
         layout={{
-          iconImage: ['get', 'icon'],
-          iconSize: 1.0,
-          iconAllowOverlap: true,
-          iconIgnorePlacement: true,
-          textAllowOverlap: false,
           textField: ['get', 'name'],
-          textSize: 11,
+          textSize: 10,
           textFont: ['Noto Sans Regular'],
-          textOffset: [0, 0.8],
+          textOffset: [0, 1.2],
           textAnchor: 'top',
-          textMaxWidth: 9,
+          textMaxWidth: 8,
           textOptional: true,
+          textAllowOverlap: false,
         }}
         paint={{
-          textColor: '#202124',
+          textColor: '#64748b',
           textHaloColor: '#ffffff',
           textHaloWidth: 1.5,
+          textHaloBlur: 0.5,
+        }}
+      />
+
+      {/* 3. Rated / Verified Places: Outer White Badge with Accessibility Ring */}
+      <MapLibreGL.Layer
+        type="circle"
+        id="places-rated-badge"
+        minZoomLevel={11}
+        filter={['all', ['==', ['get', 'isRated'], true], ['!=', ['get', 'isSelected'], true]]}
+        paint={{
+          circleRadius: [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            11, 7,
+            14, 11,
+            16, 14,
+          ],
+          circleColor: '#ffffff',
+          circleOpacity: 0.98,
+          circleStrokeWidth: [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            11, 2.5,
+            14, 3,
+            16, 3.5,
+          ],
+          circleStrokeColor: ['get', 'accessColor'],
+        }}
+      />
+
+      {/* 4. Rated / Verified Places: Inner Colored Center Dot */}
+      <MapLibreGL.Layer
+        type="circle"
+        id="places-rated-center"
+        minZoomLevel={11}
+        filter={['all', ['==', ['get', 'isRated'], true], ['!=', ['get', 'isSelected'], true]]}
+        paint={{
+          circleRadius: [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            11, 3.5,
+            14, 5.5,
+            16, 7.5,
+          ],
+          circleColor: ['get', 'accessColor'],
+          circleOpacity: 1,
+        }}
+      />
+
+      {/* 5. Selected Place: Prominent Highlight Ring */}
+      <MapLibreGL.Layer
+        type="circle"
+        id="places-selected-badge"
+        minZoomLevel={11}
+        filter={['==', ['get', 'isSelected'], true]}
+        paint={{
+          circleRadius: [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            11, 10,
+            14, 14,
+            16, 17,
+          ],
+          circleColor: '#ffffff',
+          circleOpacity: 1,
+          circleStrokeWidth: 4,
+          circleStrokeColor: ['get', 'accessColor'],
+        }}
+      />
+
+      {/* 6. Rated / Verified Places: Bold Name Label (visible from zoom 12, always displayed) */}
+      <MapLibreGL.Layer
+        type="symbol"
+        id="places-rated-label"
+        minZoomLevel={12}
+        filter={['==', ['get', 'isRated'], true]}
+        layout={{
+          textField: ['get', 'name'],
+          textSize: 11,
+          textFont: ['Noto Sans Bold'],
+          textOffset: [0, 1.4],
+          textAnchor: 'top',
+          textMaxWidth: 10,
+          textAllowOverlap: true,
+          textIgnorePlacement: true,
+        }}
+        paint={{
+          textColor: '#0f172a',
+          textHaloColor: '#ffffff',
+          textHaloWidth: 2,
           textHaloBlur: 0.5,
         }}
       />

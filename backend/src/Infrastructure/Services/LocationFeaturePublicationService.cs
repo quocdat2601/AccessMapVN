@@ -1,7 +1,7 @@
 using System.Data;
 using System.Text.Json;
 using AccessMapVN.Application.Common.Exceptions;
-using AccessMapVN.Application.Features.Wf02;
+using AccessMapVN.Application.Features.CommunityValidation;
 using AccessMapVN.Domain.Entities;
 using AccessMapVN.Domain.Enums;
 using AccessMapVN.Infrastructure.Persistence;
@@ -29,17 +29,17 @@ public sealed class LocationFeaturePublicationService : ILocationFeaturePublicat
         if (request.SubmissionId == Guid.Empty || request.LocationId == Guid.Empty ||
             string.IsNullOrWhiteSpace(request.Reason))
         {
-            throw new Wf02Exception("INVALID_PUBLICATION", "A submission, location and publication reason are required.", 422);
+            throw new CommunityValidationException("INVALID_PUBLICATION", "A submission, location and publication reason are required.", 422);
         }
 
         if (!Enum.IsDefined(request.FeatureType) || !Enum.IsDefined(request.Status))
         {
-            throw new Wf02Exception("INVALID_PUBLICATION", "Unsupported feature type or published status.", 422);
+            throw new CommunityValidationException("INVALID_PUBLICATION", "Unsupported feature type or published status.", 422);
         }
 
         if (request.Status == PublishedFeatureStatus.Unknown)
         {
-            throw new Wf02Exception("INVALID_PUBLICATION", "Unknown is not a publishable verified status.", 422);
+            throw new CommunityValidationException("INVALID_PUBLICATION", "Unknown is not a publishable verified status.", 422);
         }
 
         await using var transaction = await _db.Database.BeginTransactionAsync(
@@ -51,18 +51,18 @@ public sealed class LocationFeaturePublicationService : ILocationFeaturePublicat
             cancellationToken);
         if (submission is null)
         {
-            throw new Wf02Exception("SUBMISSION_NOT_FOUND", "The source submission does not exist.", 404);
+            throw new CommunityValidationException("SUBMISSION_NOT_FOUND", "The source submission does not exist.", 404);
         }
 
         if (!Guid.TryParse(submission.PlaceId, out var submittedLocationId) ||
             submittedLocationId != request.LocationId)
         {
-            throw new Wf02Exception("PUBLICATION_LOCATION_MISMATCH", "The submission does not belong to this location.", 409);
+            throw new CommunityValidationException("PUBLICATION_LOCATION_MISMATCH", "The submission does not belong to this location.", 409);
         }
 
-        if (submission.Status is not (SubmissionStatus.AutoVerified or SubmissionStatus.PendingModeration or SubmissionStatus.NeedsSupplement or SubmissionStatus.Published))
+        if (submission.Status is not (SubmissionStatus.PendingModeration or SubmissionStatus.NeedsSupplement or SubmissionStatus.Published))
         {
-            throw new Wf02Exception("SUBMISSION_NOT_VERIFIED", "Only a verified submission can be published.", 409);
+            throw new CommunityValidationException("SUBMISSION_NOT_VERIFIED", "Only a verified submission can be published.", 409);
         }
 
         var location = await _db.Places.SingleOrDefaultAsync(
@@ -70,12 +70,12 @@ public sealed class LocationFeaturePublicationService : ILocationFeaturePublicat
             cancellationToken);
         if (location is null)
         {
-            throw new Wf02Exception("LOCATION_NOT_FOUND", "The location does not exist.", 404);
+            throw new CommunityValidationException("LOCATION_NOT_FOUND", "The location does not exist.", 404);
         }
 
         if (location.Status != LocationStatus.Active)
         {
-            throw new Wf02Exception("LOCATION_NOT_ACTIVE", "Only an active canonical location can be published.", 409);
+            throw new CommunityValidationException("LOCATION_NOT_ACTIVE", "Only an active canonical location can be published.", 409);
         }
 
         if (request.ScopeId is Guid scopeId)
@@ -85,7 +85,7 @@ public sealed class LocationFeaturePublicationService : ILocationFeaturePublicat
                 cancellationToken);
             if (!validScope)
             {
-                throw new Wf02Exception("SCOPE_MISMATCH", "The scope is not active for this location.", 422);
+                throw new CommunityValidationException("SCOPE_MISMATCH", "The scope is not active for this location.", 422);
             }
         }
 
@@ -96,7 +96,7 @@ public sealed class LocationFeaturePublicationService : ILocationFeaturePublicat
                 cancellationToken);
             if (!authorizedActor)
             {
-                throw new Wf02Exception("PUBLICATION_FORBIDDEN", "The publication actor is not authorized.", 403);
+                throw new CommunityValidationException("PUBLICATION_FORBIDDEN", "The publication actor is not authorized.", 403);
             }
         }
 
@@ -194,7 +194,7 @@ public sealed class LocationFeaturePublicationService : ILocationFeaturePublicat
         {
             if (claim.LocationId != request.LocationId)
             {
-                throw new Wf02Exception("CLAIM_LOCATION_MISMATCH", "The submission claim belongs to another location.", 409);
+                throw new CommunityValidationException("CLAIM_LOCATION_MISMATCH", "The submission claim belongs to another location.", 409);
             }
 
             claim.ProposedStatus = request.Status;
@@ -226,6 +226,66 @@ public sealed class LocationFeaturePublicationService : ILocationFeaturePublicat
 
         submission.Status = SubmissionStatus.Published;
         submission.UpdatedAtUtc = now.UtcDateTime;
+
+        var newlyAwardedReputation = 0m;
+        if (!isExactReplay && Guid.TryParse(submission.UserId, out var contributorId))
+        {
+            var thirtyDaysAgo = now.AddDays(-30);
+            var priorPublicationDates = await (
+                from history in _db.LocationFeatureHistories.AsNoTracking()
+                join feat in _db.LocationFeatures.AsNoTracking() on history.LocationFeatureId equals feat.Id
+                join sub in _db.Submissions.AsNoTracking() on history.SourceSubmissionId equals sub.Id
+                where feat.LocationId == request.LocationId &&
+                      sub.UserId == submission.UserId &&
+                      sub.Id != request.SubmissionId
+                select history.EffectiveAt)
+                .ToListAsync(cancellationToken);
+
+            var withinCooldown = priorPublicationDates.Any(dt => dt >= thirtyDaysAgo);
+            if (!withinCooldown)
+            {
+                newlyAwardedReputation = priorPublicationDates.Count == 0 ? 5m : 2m;
+                var contributor = await _db.AppUsers.SingleOrDefaultAsync(
+                    u => u.Id == contributorId,
+                    cancellationToken);
+
+                if (contributor is null)
+                {
+                    contributor = new AppUser
+                    {
+                        Id = contributorId,
+                        ReputationScore = newlyAwardedReputation,
+                        ReputationTier = ResolveReputationTier(newlyAwardedReputation),
+                    };
+                    _db.AppUsers.Add(contributor);
+                }
+                else
+                {
+                    contributor.ReputationScore += newlyAwardedReputation;
+                    contributor.ReputationTier = ResolveReputationTier(contributor.ReputationScore);
+                    contributor.UpdatedAtUtc = now.UtcDateTime;
+                }
+
+                _db.OutboxMessages.Add(new OutboxMessage
+                {
+                    Type = "ReputationCredited",
+                    PayloadJson = JsonSerializer.Serialize(new
+                    {
+                        userId = contributorId,
+                        locationId = request.LocationId,
+                        submissionId = request.SubmissionId,
+                        delta = newlyAwardedReputation,
+                        newScore = contributor.ReputationScore,
+                        tier = contributor.ReputationTier,
+                        reason = priorPublicationDates.Count == 0
+                            ? "Đóng góp địa điểm tiếp cận mới được công bố (+5)"
+                            : "Đóng góp bổ sung tiện ích sau chu kỳ 30 ngày (+2)",
+                        occurredAt = now,
+                    }),
+                    OccurredAt = now,
+                });
+            }
+        }
 
         if (!isExactReplay)
         {
@@ -271,12 +331,17 @@ public sealed class LocationFeaturePublicationService : ILocationFeaturePublicat
             case AccessibilityFeatureType.AccessibleRestroom:
                 location.HasAccessibleRestroom = exists;
                 break;
-            case AccessibilityFeatureType.TactilePaving:
-                location.HasTactilePaving = exists;
-                break;
         }
 
         location.LastVerifiedAt = verifiedAt;
         location.UpdatedAtUtc = verifiedAt.UtcDateTime;
     }
+
+    private static string ResolveReputationTier(decimal score) => score switch
+    {
+        >= 100m => "Hạng Vàng",
+        >= 50m => "Trusted",
+        >= 10m => "Hạng Đồng",
+        _ => "Baseline",
+    };
 }

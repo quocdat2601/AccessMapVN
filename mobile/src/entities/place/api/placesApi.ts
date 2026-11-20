@@ -1,4 +1,5 @@
 import { apiClient } from '@/shared/api/client';
+import { MOCK_S901_PLACES } from '../model/mockS901Places';
 import type { BoundingBox, GeocodeResult, PlaceDto, PoiCategory } from '../model/types';
 
 function nullableBoolean(...values: unknown[]): boolean | null {
@@ -6,11 +7,19 @@ function nullableBoolean(...values: unknown[]): boolean | null {
   return value == null ? null : Boolean(value);
 }
 
+function filterMockPlacesInBBox(bbox: BoundingBox): PlaceDto[] {
+  const inBox = MOCK_S901_PLACES.filter(
+    (p) => p.lat >= bbox.south && p.lat <= bbox.north && p.lng >= bbox.west && p.lng <= bbox.east
+  );
+  return inBox.length > 0 ? inBox : MOCK_S901_PLACES;
+}
+
 export async function fetchPlacesInBBox(
   bbox: BoundingBox,
   zoomLevel: number = 14,
   categories?: string[]
 ): Promise<PlaceDto[]> {
+  const mockMatches = filterMockPlacesInBBox(bbox);
   try {
     const raw = await apiClient.get<any[]>('/api/v1/places', {
       params: {
@@ -23,9 +32,9 @@ export async function fetchPlacesInBBox(
       },
     });
 
-    if (!Array.isArray(raw)) return [];
+    if (!Array.isArray(raw)) return mockMatches;
 
-    return raw.map((p) => ({
+    const mapped: PlaceDto[] = raw.map((p) => ({
       id: String(p.id ?? ''),
       name: String(p.name ?? ''),
       category: (p.category ?? 'other') as PoiCategory,
@@ -51,6 +60,8 @@ export async function fetchPlacesInBBox(
       floor_level: p.floorLevel ?? p.floor_level ?? null,
       building_id: p.buildingId ?? p.building_id ?? null,
       has_accessible_elevator: Boolean(p.hasAccessibleElevator ?? p.has_accessible_elevator),
+      has_accessible_parking: Boolean(p.hasAccessibleParking ?? p.has_accessible_parking),
+      has_step_free: Boolean(p.hasStepFree ?? p.has_step_free ?? p.hasRamp ?? p.has_ramp ?? p.doorWidthOk ?? p.door_width_ok),
       last_verified_at: p.lastVerifiedAt ?? p.last_verified_at ?? null,
       legacy_feature_values: {
         ramp: nullableBoolean(p.hasRamp, p.has_ramp),
@@ -60,13 +71,23 @@ export async function fetchPlacesInBBox(
         tactilePaving: nullableBoolean(p.hasTactilePaving, p.has_tactile_paving),
       },
     }));
+
+    const existingIds = new Set(mapped.map((m) => m.id));
+    for (const mock of mockMatches) {
+      if (!existingIds.has(mock.id)) {
+        mapped.push(mock);
+      }
+    }
+    return mapped;
   } catch {
-    // Graceful fallback to empty array on transient failure
-    return [];
+    // Graceful fallback to mock S9.01 places on transient failure
+    return mockMatches;
   }
 }
 
 export async function fetchPlaceById(id: string): Promise<PlaceDto | null> {
+  const mockMatch = MOCK_S901_PLACES.find((m) => m.id === id);
+  if (mockMatch) return mockMatch;
   try {
     const p = await apiClient.get<any>(`/api/v1/places/${encodeURIComponent(id)}`);
     if (!p || !p.id) return null;
@@ -262,6 +283,15 @@ export async function searchAccessMapPlaces(
   const trimmed = query.trim();
   if (!trimmed || trimmed.length < 2) return [];
 
+  const qLower = trimmed.toLowerCase();
+  const localMocks = MOCK_S901_PLACES.filter(
+    (m) =>
+      m.name.toLowerCase().includes(qLower) ||
+      (m.address && m.address.toLowerCase().includes(qLower)) ||
+      (m.brand && m.brand.toLowerCase().includes(qLower)) ||
+      m.category.toLowerCase().includes(qLower)
+  );
+
   try {
     const raw = await apiClient.get<any[]>('/api/v1/places/search', {
       params: {
@@ -273,9 +303,9 @@ export async function searchAccessMapPlaces(
       auth: 'none',
     });
 
-    if (!Array.isArray(raw)) return [];
+    if (!Array.isArray(raw)) return localMocks;
 
-    return raw.map((p) => ({
+    const mapped = raw.map((p) => ({
       id: String(p.id ?? ''),
       name: String(p.name ?? ''),
       category: (p.category ?? 'other') as PoiCategory,
@@ -301,6 +331,8 @@ export async function searchAccessMapPlaces(
       floor_level: p.floorLevel ?? p.floor_level ?? null,
       building_id: p.buildingId ?? p.building_id ?? null,
       has_accessible_elevator: Boolean(p.hasAccessibleElevator ?? p.has_accessible_elevator),
+      has_accessible_parking: Boolean(p.hasAccessibleParking ?? p.has_accessible_parking),
+      has_step_free: Boolean(p.hasStepFree ?? p.has_step_free ?? p.hasRamp ?? p.has_ramp ?? p.doorWidthOk ?? p.door_width_ok),
       last_verified_at: p.lastVerifiedAt ?? p.last_verified_at ?? null,
       legacy_feature_values: {
         ramp: nullableBoolean(p.hasRamp, p.has_ramp),
@@ -310,8 +342,11 @@ export async function searchAccessMapPlaces(
         tactilePaving: nullableBoolean(p.hasTactilePaving, p.has_tactile_paving),
       },
     }));
+
+    const existingIds = new Set(mapped.map((m) => m.id));
+    return [...localMocks.filter((m) => !existingIds.has(m.id)), ...mapped];
   } catch {
-    return [];
+    return localMocks;
   }
 }
 

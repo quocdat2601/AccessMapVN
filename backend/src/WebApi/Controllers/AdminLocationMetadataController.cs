@@ -1,5 +1,5 @@
 using AccessMapVN.Application.Common.Exceptions;
-using AccessMapVN.Application.Features.Wf02;
+using AccessMapVN.Application.Features.CommunityValidation;
 using AccessMapVN.WebApi.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -7,13 +7,13 @@ using Microsoft.AspNetCore.Mvc;
 namespace AccessMapVN.WebApi.Controllers;
 
 [ApiController]
-[Authorize(Policy = Wf02Policies.Moderate)]
+[Authorize(Policy = CommunityPolicies.Moderate)]
 [Route("api/v1/admin/locations/{locationId:guid}/metadata")]
 public sealed class AdminLocationMetadataController : ControllerBase
 {
-    private readonly IWf02ReportService _service;
+    private readonly ICommunityReportService _service;
 
-    public AdminLocationMetadataController(IWf02ReportService service) => _service = service;
+    public AdminLocationMetadataController(ICommunityReportService service) => _service = service;
 
     [HttpPatch]
     public async Task<ActionResult<CorrectLocationMetadataResponse>> Correct(
@@ -23,7 +23,7 @@ public sealed class AdminLocationMetadataController : ControllerBase
     {
         if (!User.TryGetUserId(out var moderatorId))
         {
-            throw new Wf02Exception("INVALID_SUBJECT", "The authenticated subject is not a UUID.", 401);
+            throw new CommunityValidationException("INVALID_SUBJECT", "The authenticated subject is not a UUID.", 401);
         }
 
         var expectedReportVersion = ParseOptionalEtag();
@@ -45,7 +45,7 @@ public sealed class AdminLocationMetadataController : ControllerBase
         if (value.StartsWith("W/", StringComparison.OrdinalIgnoreCase)) value = value[2..].Trim();
         if (!int.TryParse(value.Trim('"'), out var version) || version <= 0)
         {
-            throw new Wf02Exception("INVALID_IF_MATCH", "If-Match must contain a positive report version.", 422);
+            throw new CommunityValidationException("INVALID_IF_MATCH", "If-Match must contain a positive report version.", 422);
         }
         return version;
     }

@@ -4,7 +4,7 @@ using AccessMapVN.Application.Common.Interfaces;
 using AccessMapVN.Application.Common.Utils;
 using AccessMapVN.Application.Features.Submissions.Admin;
 using AccessMapVN.Application.Features.Submissions.Commands.SubmitSurvey;
-using AccessMapVN.Application.Features.Wf02;
+using AccessMapVN.Application.Features.CommunityValidation;
 using AccessMapVN.Domain.Entities;
 using AccessMapVN.Domain.Enums;
 using AccessMapVN.Infrastructure.Persistence;
@@ -16,7 +16,7 @@ using Microsoft.EntityFrameworkCore;
 namespace AccessMapVN.WebApi.Controllers;
 
 [ApiController]
-[Authorize(Policy = Wf02Policies.Moderate)]
+[Authorize(Policy = CommunityPolicies.Moderate)]
 [Route("api/v1/admin/submissions")]
 public sealed class AdminSubmissionsController : ControllerBase
 {
@@ -1097,6 +1097,5 @@ public sealed class AdminSubmissionsController : ControllerBase
         EnsureFeature(AccessibilityFeatureType.EntranceDoor, place.DoorWidthOk != null, place.DoorWidthOk == true ? PublishedFeatureStatus.Available : PublishedFeatureStatus.Limited);
         EnsureFeature(AccessibilityFeatureType.Elevator, place.HasAccessibleElevator == true, PublishedFeatureStatus.Available);
         EnsureFeature(AccessibilityFeatureType.AccessibleRestroom, place.HasAccessibleRestroom == true, PublishedFeatureStatus.Available);
-        EnsureFeature(AccessibilityFeatureType.TactilePaving, place.HasTactilePaving == true, PublishedFeatureStatus.Available);
     }
 }

@@ -1,5 +1,5 @@
 using AccessMapVN.Application.Common.Exceptions;
-using AccessMapVN.Application.Features.Wf02;
+using AccessMapVN.Application.Features.CommunityValidation;
 using AccessMapVN.WebApi.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -11,15 +11,15 @@ namespace AccessMapVN.WebApi.Controllers;
 [Authorize]
 public sealed class ReportsController : ControllerBase
 {
-    private readonly IWf02ReportService _service;
+    private readonly ICommunityReportService _service;
 
-    public ReportsController(IWf02ReportService service)
+    public ReportsController(ICommunityReportService service)
     {
         _service = service;
     }
 
     [HttpPost("api/v1/locations/{locationId:guid}/reports")]
-    [EnableRateLimiting("wf02-report")]
+    [EnableRateLimiting("community-report")]
     [ProducesResponseType(typeof(CreateInaccurateReportResponse), StatusCodes.Status201Created)]
     public async Task<ActionResult<CreateInaccurateReportResponse>> Create(
         Guid locationId,
@@ -62,7 +62,7 @@ public sealed class ReportsController : ControllerBase
     }
 
     [HttpPost("api/v1/me/reports/{reportId:guid}/evidence")]
-    [EnableRateLimiting("wf02-evidence")]
+    [EnableRateLimiting("community-evidence")]
     [ProducesResponseType(typeof(AddReportEvidenceResponse), StatusCodes.Status201Created)]
     public async Task<ActionResult<AddReportEvidenceResponse>> AddEvidence(
         Guid reportId,
@@ -86,6 +86,6 @@ public sealed class ReportsController : ControllerBase
             return actorId;
         }
 
-        throw new Wf02Exception("INVALID_SUBJECT", "The authenticated subject is not a UUID.", 401);
+        throw new CommunityValidationException("INVALID_SUBJECT", "The authenticated subject is not a UUID.", 401);
     }
 }

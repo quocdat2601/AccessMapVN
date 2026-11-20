@@ -1,6 +1,7 @@
 export * from './AccessibilityFeatureList';
 export * from './AccessibilitySummary';
 export * from './AccuracyConfirmationSection';
+export * from './CommunityCommentsView';
 export * from './CommunityReviewsSection';
 export * from './ContributionCTA';
 export * from './EvidenceGallerySection';

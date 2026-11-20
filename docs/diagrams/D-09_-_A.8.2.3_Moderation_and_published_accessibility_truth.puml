@@ -1,0 +1,1 @@
+Relationship baseline: System Diagrams §5.2 and the full ERD in A.8.2. This section explains the named subset; B.3 owns complete fields and FK/unique/check constraints. Do not derive another schema from an older focused figure.

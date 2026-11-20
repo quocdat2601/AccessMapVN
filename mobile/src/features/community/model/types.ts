@@ -1,9 +1,13 @@
+import { AccessibilityFeatureType as CanonicalAccessibilityFeatureType } from '@/entities/place';
+export { CanonicalAccessibilityFeatureType };
+
 export type AccessibilityFeatureType =
   | 'Ramp'
   | 'EntranceDoor'
   | 'Elevator'
   | 'AccessibleRestroom'
-  | 'TactilePaving';
+  | 'TactilePaving'
+  | CanonicalAccessibilityFeatureType;
 
 export type PublishedFeatureStatus = 'Available' | 'Limited' | 'NotAvailable' | 'Unknown';
 export type CommunityVoteType = 'StillAccurate' | 'Changed';
@@ -77,4 +81,18 @@ export interface PublicCommunityComment {
   createdAt: string;
   recencyWeight: number;
   isRecentContext: boolean;
+}
+
+export interface PublicCommunityCommentPage {
+  items: PublicCommunityComment[];
+  nextCursor?: string | null;
+}
+
+export type CommunityCommentStatus = 'PendingReview' | 'Approved' | 'Hidden';
+
+export interface CreateCommunityCommentResponse {
+  commentId: string;
+  status: CommunityCommentStatus;
+  version: number;
+  createdAt: string;
 }

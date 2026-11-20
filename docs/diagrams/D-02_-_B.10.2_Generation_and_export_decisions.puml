@@ -1,0 +1,1 @@
+Shared figures: System Diagrams §4.7, Coverage report, and §4.8, Coverage export. Requested→Aggregating→Generated→Reviewed precedes export. Export Queued→Rendering→Ready/Failed is separate; B.2/B.3 govern approved-snapshot identity, retry and manual-share recording.

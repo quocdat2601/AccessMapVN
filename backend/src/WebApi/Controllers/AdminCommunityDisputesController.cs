@@ -1,5 +1,5 @@
 using AccessMapVN.Application.Common.Exceptions;
-using AccessMapVN.Application.Features.Wf02;
+using AccessMapVN.Application.Features.CommunityValidation;
 using AccessMapVN.Domain.Enums;
 using AccessMapVN.WebApi.Authorization;
 using Microsoft.AspNetCore.Authorization;
@@ -8,13 +8,13 @@ using Microsoft.AspNetCore.Mvc;
 namespace AccessMapVN.WebApi.Controllers;
 
 [ApiController]
-[Authorize(Policy = Wf02Policies.Moderate)]
+[Authorize(Policy = CommunityPolicies.Moderate)]
 [Route("api/v1/admin/community-disputes")]
 public sealed class AdminCommunityDisputesController : ControllerBase
 {
-    private readonly IWf02DisputeService _service;
+    private readonly ICommunityDisputeService _service;
 
-    public AdminCommunityDisputesController(IWf02DisputeService service) => _service = service;
+    public AdminCommunityDisputesController(ICommunityDisputeService service) => _service = service;
 
     [HttpGet]
     public async Task<ActionResult<DisputeQueuePage>> GetQueue(
@@ -41,7 +41,7 @@ public sealed class AdminCommunityDisputesController : ControllerBase
     {
         if (!User.TryGetUserId(out var moderatorId))
         {
-            throw new Wf02Exception("INVALID_SUBJECT", "The authenticated subject is not a UUID.", 401);
+            throw new CommunityValidationException("INVALID_SUBJECT", "The authenticated subject is not a UUID.", 401);
         }
 
         var expectedVersion = ParseRequiredEtag();
@@ -58,7 +58,7 @@ public sealed class AdminCommunityDisputesController : ControllerBase
         if (value.StartsWith("W/", StringComparison.OrdinalIgnoreCase)) value = value[2..].Trim();
         if (!int.TryParse(value.Trim('"'), out var version) || version <= 0)
         {
-            throw new Wf02Exception("IF_MATCH_REQUIRED", "A valid If-Match version is required.", 428);
+            throw new CommunityValidationException("IF_MATCH_REQUIRED", "A valid If-Match version is required.", 428);
         }
         return version;
     }

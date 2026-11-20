@@ -31,6 +31,8 @@ export interface VerificationMatrixInput {
   verifiedTagCount?: number;
   unverifiedTagCount?: number;
   allowedRadiusMeters?: number;
+  venueCategory?: string;
+  isLargeVenue?: boolean;
 }
 
 export interface VerificationMatrixResult {
@@ -153,8 +155,17 @@ export function evaluateVerificationMatrix(
     const accuracyMargin = input.contributorCoords.accuracy
       ? Math.min(30, Math.max(0, Math.round(input.contributorCoords.accuracy)))
       : 0;
-    const effectiveDistance = Math.max(0, distanceMeters - accuracyMargin);
     const allowedRadius = input.allowedRadiusMeters && input.allowedRadiusMeters > 0 ? input.allowedRadiusMeters : 50;
+
+    // Large venues (malls, supermarkets, hospitals, parks, transit stations) suffer from indoor drift
+    const isLargeVenue =
+      input.isLargeVenue ||
+      ['mall', 'supermarket', 'market', 'hospital', 'clinic', 'park', 'transit', 'station'].includes(
+        input.venueCategory?.toLowerCase() || ''
+      );
+    const buildingAllowance = isLargeVenue ? 35 : 0;
+
+    const effectiveDistance = Math.max(0, distanceMeters - accuracyMargin - buildingAllowance);
     spatialValid = effectiveDistance <= allowedRadius;
 
     if (spatialValid) {

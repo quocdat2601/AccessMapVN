@@ -1,0 +1,12 @@
+erDiagram
+USER ||--o{ COVERAGE_REPORT : requests
+COVERAGE_REPORT ||--o{ COVERAGE_REPORT_METRIC : aggregates
+COVERAGE_REPORT ||--o{ COVERAGE_REPORT_EXPORT : exports_snapshot
+USER ||--o{ COVERAGE_REPORT_EXPORT : requests_format
+COVERAGE_REPORT_EXPORT ||--o| COVERAGE_REPORT_FILE : renders
+COVERAGE_REPORT_EXPORT ||--o| COVERAGE_EXPORT_AUDIT : successful_render
+COVERAGE_REPORT_FILE ||--o| COVERAGE_EXPORT_AUDIT : exports
+COVERAGE_REPORT_FILE ||--o{ DOWNLOAD_ACCESS_AUDIT : downloads
+COVERAGE_REPORT ||--o{ COVERAGE_JOB : schedules_aggregation_or_render
+COVERAGE_REPORT_EXPORT o|--o{ COVERAGE_JOB : render_context
+LOCATION ||--o{ LOCATION_FEATURE : supplies_published_data

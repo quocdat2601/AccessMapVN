@@ -37,8 +37,21 @@ export interface ContributionSubmissionRecord {
   featureTags: string[];
   textDescription?: string;
   gps?: { latitude: number; longitude: number } | null;
-  status: 'Auto-Verified' | 'Pending Moderation' | 'Submitted' | 'Rejected' | 'Published';
+  status:
+    | 'Submitted'
+    | 'AIProcessing'
+    | 'AwaitingMoreInfo'
+    | 'PendingModeration'
+    | 'NeedsSupplement'
+    | 'Published'
+    | 'Rejected'
+    | 'Cancelled'
+    | 'Auto-Verified'
+    | 'Pending Moderation';
   confidenceScore: number;
   pointsAwarded: number;
   createdAt: number;
+  revision?: number;
+  resubmissionCount?: number;
+  moderatorNote?: string;
 }

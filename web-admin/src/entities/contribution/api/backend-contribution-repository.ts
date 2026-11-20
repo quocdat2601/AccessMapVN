@@ -2,13 +2,15 @@
 
 import { apiRequest } from "@/shared/api/api-client";
 import type { ContributionRepository } from "./contribution-repository";
-import type {
-  ApproveContributionInput,
-  ContributionDetail,
-  ContributionNavigation,
-  ContributionQueueQuery,
-  ContributionQueueResponse,
-  RequestMoreInfoInput,
+import {
+  ModerationDecision,
+  type ApproveContributionInput,
+  type ContributionDetail,
+  type ContributionNavigation,
+  type ContributionQueueQuery,
+  type ContributionQueueResponse,
+  type RequestMoreInfoInput,
+  type ReviseClaimAssessmentInput,
 } from "../model/types";
 
 function buildQueryString(query: ContributionQueueQuery = {}) {
@@ -99,6 +101,23 @@ class BackendContributionRepository implements ContributionRepository {
         method: "POST",
         body: { reason },
       },
+    );
+    return response.data;
+  }
+
+  async reviseClaimAssessment(
+    id: string,
+    input: ReviseClaimAssessmentInput
+  ): Promise<ContributionDetail> {
+    const response = await apiRequest<ContributionDetail>(
+      `/api/v1/admin/submissions/${encodeURIComponent(id)}/revise-claim-assessment`,
+      {
+        method: "POST",
+        body: {
+          decision: ModerationDecision.ReviseClaimAssessment,
+          ...input,
+        },
+      }
     );
     return response.data;
   }

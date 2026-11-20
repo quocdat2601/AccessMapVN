@@ -3,13 +3,13 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using AccessMapVN.Application.Common.Interfaces;
+using AccessMapVN.Application.Common.Options;
 using AccessMapVN.Application.Common.Utils;
 using AccessMapVN.Domain.Entities;
 using AccessMapVN.Domain.Enums;
 using FluentValidation;
 using FluentValidation.Results;
 using MediatR;
-
 namespace AccessMapVN.Application.Features.Submissions.Commands.SubmitSurvey;
 
 internal record CanonicalMeasurementItem
@@ -44,15 +44,18 @@ public class SubmitSurveyCommandHandler : IRequestHandler<SubmitSurveyCommand, S
     private readonly IPlaceRepository _placeRepository;
     private readonly ISubmissionRepository _submissionRepository;
     private readonly ISubmissionJobScheduler? _submissionJobScheduler;
+    private readonly CommunityValidationOptions _options;
 
     public SubmitSurveyCommandHandler(
         IPlaceRepository placeRepository,
         ISubmissionRepository submissionRepository,
-        ISubmissionJobScheduler? submissionJobScheduler = null)
+        ISubmissionJobScheduler? submissionJobScheduler = null,
+        CommunityValidationOptions? options = null)
     {
         _placeRepository = placeRepository;
         _submissionRepository = submissionRepository;
         _submissionJobScheduler = submissionJobScheduler;
+        _options = options ?? new CommunityValidationOptions();
     }
 
     public async Task<SubmitSurveyResult> Handle(SubmitSurveyCommand request, CancellationToken cancellationToken)
@@ -189,7 +192,20 @@ public class SubmitSurveyCommandHandler : IRequestHandler<SubmitSurveyCommand, S
             }
         }
 
-        // 5. Tạo hồ sơ khảo sát ở trạng thái Chờ duyệt (PendingModeration)
+        // 5. Lọc rác đầu vào: Ngưỡng AI Confidence < RejectConfidenceThreshold (40%)
+        if (request.ConfidenceScore.HasValue &&
+            request.ConfidenceScore.Value < _options.Thresholds.RejectConfidenceThreshold)
+        {
+            var percent = Math.Round(request.ConfidenceScore.Value * 100);
+            throw new ValidationException(new[]
+            {
+                new ValidationFailure(
+                    nameof(request.ConfidenceScore),
+                    $"Chất lượng nhận diện yếu tố tiếp cận quá thấp ({percent}% < {_options.Thresholds.RejectConfidenceThreshold * 100}%). Vui lòng chụp lại ảnh rõ nét, bao quát khu vực lối vào/ram dốc/thang máy trước khi gửi.")
+            });
+        }
+
+        // 6. Tạo mã hồ sơ khảo sát ở trạng thái Chờ duyệt (PendingModeration)
         var code = $"AMV-{DateTimeOffset.UtcNow.Year}-{Random.Shared.Next(10000, 99999)}";
 
         var submission = new Submission

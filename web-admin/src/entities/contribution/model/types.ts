@@ -149,12 +149,32 @@ export interface InformationRequest {
   responseStatus: "waiting" | "received";
 }
 
-export interface ModerationDecision {
-  type: "published" | "rejected";
+/**
+ * Canonical ModerationDecision matching backend domain enum:
+ * Approve = 1, Reject = 2, RequestMoreInfo = 3, ReviseClaimAssessment = 4.
+ * (NEW Technical _ Design Specification.docx B.2)
+ */
+export enum ModerationDecision {
+  Approve = 1,
+  Reject = 2,
+  RequestMoreInfo = 3,
+  ReviseClaimAssessment = 4,
+}
+
+export interface ModerationDecisionRecord {
+  type: "published" | "rejected" | "revise_claim_assessment";
+  decision?: ModerationDecision;
   selectedClaimIds: string[];
   reason: string;
   decidedAt: string;
   decidedBy: string;
+}
+
+export interface ReviseClaimAssessmentInput {
+  claimIds: string[];
+  outcome: string;
+  reason: string;
+  evidenceRefs?: string[];
 }
 
 export interface ContributorHistorySummary {
@@ -170,7 +190,7 @@ export interface ContributionDetail extends ContributionRecord {
   claims: AccessibilityClaim[];
   timeline: ContributionTimelineEvent[];
   informationRequest?: InformationRequest;
-  moderationDecision?: ModerationDecision;
+  moderationDecision?: ModerationDecisionRecord;
   contributorHistory: ContributorHistorySummary;
   technicalNotes: string[];
   applicableStandards: string[];

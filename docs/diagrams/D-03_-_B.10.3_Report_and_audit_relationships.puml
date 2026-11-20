@@ -1,0 +1,374 @@
+erDiagram
+USER ||--o{ COVERAGE_REPORT : requests
+COVERAGE_REPORT ||--o{ COVERAGE_REPORT_METRIC : aggregates
+COVERAGE_REPORT ||--o{ COVERAGE_REPORT_EXPORT : exports_snapshot
+USER ||--o{ COVERAGE_REPORT_EXPORT : requests_format
+COVERAGE_REPORT_EXPORT ||--o| COVERAGE_REPORT_FILE : renders
+COVERAGE_REPORT_EXPORT ||--o| COVERAGE_EXPORT_AUDIT : successful_render
+COVERAGE_REPORT_FILE ||--o| COVERAGE_EXPORT_AUDIT : exports
+COVERAGE_REPORT_FILE ||--o{ DOWNLOAD_ACCESS_AUDIT : downloads
+COVERAGE_REPORT ||--o{ COVERAGE_JOB : schedules_aggregation_or_render
+COVERAGE_REPORT_EXPORT o|--o{ COVERAGE_JOB : render_context
+LOCATION ||--o{ LOCATION_FEATURE : supplies_published_data
+USER ||--o{ COVERAGE_EXPORT_AUDIT : authorizes
+
+
+
+
+Optional — Deferred capabilities
+These items are recorded for later consideration and are excluded from current WF1–Admin implementation and release acceptance. They require an explicit scoped decision, versioned contracts and tests before activation. Existing authorization, privacy, mandatory byte validation and Admin approval remain required.
+1. Screen-reader support and verification
+Defer the dedicated TalkBack/VoiceOver interaction and screen-reader acceptance campaign. Future work defines meaningful labels, focus order, dynamic announcements and representative-device tests. This deferral does not count as completed accessibility certification and does not require removal of existing semantic controls.
+2. Static WebP intake
+Current intake remains JPEG/PNG and MP4/H.264. Static WebP support is deferred: before enabling, define MIME/magic-byte and decode validation, dimensions/size, animation rejection, original/hash/provenance handling, Python pre/full analysis, derivatives and fixtures. Do not accept WebP solely by filename or silently expand the whitelist.
+3. Additional consistency scoring
+CV, GPS and media-quality inputs use the current availability-aware WF1 calculation. PhoBERT NLP is part of the active WF1 contract. Only the additional consistency component stays deferred; it requires an independent mapping/calibration that does not duplicate CV or NLP evidence. Do not double-count CV as a synthetic NLP/consistency signal or claim unavailable models executed.
+4. WF1/WF2 shared evidence reader
+Combining assessed published claims with eligible votes in WF1 confidence is deferred. A future version must specify source/version/context alignment, one observation per contributor across sources, current author exclusions, accuracy/history/recency snapshot, migration/replay and coexistence tests. Current WF2 votes are aggregated independently for review; they never automatically publish or mutate facts.
+5. Additional scoring extensions
+Temporal-corroboration bonuses and learned weights require a separate versioned calibration proposal with abuse and regression tests. They are absent from v3-metrics-3. Retired single-score trust multipliers, automatic publication, score-based rejection/supplement requests and legacy +50/−100 rules are discarded policies, not optional implementation paths.
+
+AccessMap VN — System Diagrams
+1. Context Diagram
+
+2. Use Case Diagram
+
+3. System Architecture
+
+
+4. State diagrams
+
+4.1 State Diagram — Submission (WF1)
+
+
+
+4.2 State Diagram — AIProcessingJob (WF1)
+
+4.3 State Diagram — CommunityVote (WF2)
+
+4.4 State Diagram — Feature dispute (WF2)
+
+4.5 State Diagram — Inaccuracy report (WF2)
+
+4.6 State Diagram — Reputation source (WF4)
+
+4.7 State Diagram — Coverage report (Admin Portal)
+
+4.8 State Diagram — Coverage export (Admin Portal)
+
+5. Entity Relationship Diagram
+5.1 Conceptual ERD
+
+5.2 Full ERD
+
+6. Activity Diagrams
+
+6.1 Core Flow Activity — WF1
+
+6.2 Contribution Activity — WF2
+
+6.3 WF3
+
+6.4 WF4
+7. Package Diagram
+
+8. Class and Sequence Diagrams
+8.1 Search and View Place Details
+8.1.1 Class Diagram
+
+8.1.2 Search
+
+8.1.3 View place details
+
+8.2 Place Discovery
+8.2.1 Class Diagram
+
+8.2.2 Discover matching published places
+
+8.3 Media Upload, Quality Check and AI Suggestions
+8.3.1 Class Diagram
+
+8.3.2 Create upload intent and upload original
+
+8.3.3 Pre-submit quality check
+
+8.3.4 Optional AI suggestions
+
+8.4 Submission and Resubmission
+8.4.1 Class Diagram
+
+8.4.2 Submit contribution
+
+8.4.3 Resubmit requested correction
+
+8.5 AI Verification
+8.5.1 Class Diagram
+
+8.5.2 Full AI verification job
+
+8.6 Submission Moderation
+8.6.1 Class Diagram
+
+8.6.2 Admin moderation and publication
+
+8.7 Community Voting and Comment
+8.7.1 Class Diagram
+
+8.7.2 Record a community vote
+
+8.7.3 View approved comments
+
+8.7.4 Create a comment
+
+8.7.5 Moderate a comment
+
+8.8 Inaccuracy Reporting and Review
+8.8.1 Class Diagram
+
+8.8.2 Create an inaccuracy report
+
+8.8.3 Admin review of an inaccuracy report
+
+8.9 Reputation Credit
+8.9.1 Class Diagram
+
+8.9.2 Credit an eligible contribution
+
+8.10 Reputation and Leaderboard
+8.10.1 Class Diagram
+
+8.10.2 View leaderboard and own reputation
+
+8.11 Reputation Adjustment
+8.11.1 Class Diagram
+
+8.11.2 Review a trust adjustment
+
+8.12 Coverage Report Generation and Review
+8.12.1 Class Diagram
+
+8.12.2 Request coverage aggregation
+
+8.12.3 Aggregate coverage snapshot
+
+8.12.4 Review retained coverage snapshot
+
+8.13 Coverage Export and Download
+8.13.1 Class Diagram
+
+8.13.2 Request a coverage export
+
+8.13.3 Render a private coverage export
+
+8.13.4 Download an authorized coverage artifact
+
+8.14 User Management
+8.14.1 Class Diagram
+
+8.14.2 Register and verify a User account
+
+8.14.3 List users
+
+8.14.4 View user details
+
+
+Nội dung bên dưới là lịch sử đề xuất, có thể chứa tên gọi, mức điểm và giả định đã được thay thế. Khi viết Coding Agent Contract, schema, API hoặc test, chỉ dùng quy tắc hiện hành ở các tab WF-01–WF-04 và Admin Portal; không hợp nhất các đề xuất cũ thành một chính sách thứ hai.
+1. Tên gọi và ý nghĩa
+Mình chọn Account Standing thay vì thêm một tên TrustScore, vì dễ phân biệt tình trạng tài khoản với độ chính xác của thông tin.
+Contribution Accuracy diễn đạt đúng công thức tỷ lệ hơn Trust Probability: 90% lịch sử đúng không có nghĩa bài tiếp theo chắc chắn đúng với xác suất 90%.
+Ba chỉ số hiển thị như sau:
+Uy tín tài khoản: 82/100
+Độ tin cậy: 90% · 45/50 nhận định đã kiểm chứng
+Danh vọng: 1.250 điểm · Hạng 18
+
+2. Những điều phải xác định cho từng chỉ số
+Không nên dùng cả ba chỉ số để cùng tác động lên một công thức confidence, vì sẽ tính lặp ảnh hưởng của cùng một lịch sử đóng góp.
+
+3. Uy tín tài khoản — Account Standing
+3.1. Công thức
+\[ S_{new}=\operatorname{clamp}(S_{current}+\Delta S,\ 0,\ 100) \]
+Ví dụ:
+98 + 2 → 100.
+100 + 2 → vẫn 100, không tích điểm dư.
+100 − 4 → 96.
+Cần lưu cả mức điều chỉnh yêu cầu và mức thực tế áp dụng:
+Điều này giúp giải thích lịch sử và xử lý đảo quyết định chính xác hơn.
+3.2. Các sự kiện
+Mức −4 và −6 cho cùng một hành vi là các mức thay thế, không tự động cộng dồn.
+Vi phạm nghiêm trọng có thể dẫn đến đình chỉ tài khoản bằng quyết định riêng. Không nên cho phép người đang có 100 điểm thực hiện nhiều lần gian lận rồi vẫn hoạt động chỉ vì điểm chưa xuống thấp.
+3.3. Không cộng/trừ trong các trường hợp sau
+Đăng nhập, tìm kiếm, lưu yêu thích.
+Gửi submission nhưng chưa có kết luận.
+Gửi thêm ảnh hoặc resubmit cùng một nội dung.
+AI lỗi, timeout hoặc không nhận diện được.
+Bằng chứng chưa đủ để kết luận.
+Địa điểm thay đổi sau thời điểm đóng góp.
+Người dùng bị report nhưng report chưa được xác minh.
+Report sai do nhầm lẫn thiện chí, không có hành vi lạm dụng.
+3.4. Ngưỡng hạn chế
+Các ngưỡng này không thay thế kiểm duyệt submission: nếu hệ thống yêu cầu Admin duyệt mọi lần công bố, người có 100 điểm vẫn phải được duyệt.
+Cần chốt riêng các cấu hình:
+NormalSubmissionLimit.
+LimitedSubmissionLimit.
+RestrictedSubmissionLimit.
+Hạn mức report tương ứng.
+Khoảng thời gian áp dụng: theo ngày UTC hoặc cửa sổ trượt.
+Quyền được giữ lại khi bị hạn chế.
+Cách phục hồi sau đình chỉ.
+Không nên khóa toàn bộ khả năng đóng góp chỉ vì điểm thấp, rồi lại yêu cầu đóng góp đúng để phục hồi.
+
+4. Độ tin cậy — Contribution Accuracy
+4.1. Giữ đúng tỷ lệ thực tế, không làm mượt
+
+
+Hiển thị theo phần trăm. Khi mẫu số bằng 0, trả về chưa có dữ liệu, không phải 0%.
+Không có sự kiện “+2% độ tin cậy” hoặc “−5% độ tin cậy”. Sự kiện thay đổi số đúng/sai; phần trăm được tính lại.
+4.2. Đơn vị tính nên là claim đã kiểm chứng
+Một submission có thể chứa:
+Ramp: đúng.
+Entrance width: đúng.
+Elevator: sai.
+Kết quả là 2 nhận định đúng, 1 nhận định sai, không nên coi cả submission đúng hoặc sai hoàn toàn.
+Tuy nhiên, phải ngăn việc tách một thông tin thành nhiều claim để tăng mẫu số. Cần quy định khóa nghiệp vụ nhận diện một nhận định độc lập, dựa trên địa điểm, scope, loại feature và lần quan sát.
+4.3. Tách kết quả đóng góp và kết quả report
+Nên lưu:
+Đề xuất:
+Độ tin cậy chính trên hồ sơ: tỷ lệ claim đúng.
+Chi tiết bổ sung: tỷ lệ report đúng.
+Trọng số bằng chứng feature: chỉ dùng lịch sử claim.
+Report đúng có thể cộng uy tín và danh vọng, nhưng không tự động làm người đó giỏi đánh giá mọi feature hơn.
+Nếu gộp hai loại thành một tỷ lệ, người dùng có thể dùng nhiều report đơn giản để bù cho các claim đo đạc sai. Vì vậy mình không đề xuất gộp ở phiên bản đầu.
+4.4. Các sự kiện cập nhật
+Một claim phải có một kết luận đang có hiệu lực, dù có nhiều lần review hoặc nhiều report.
+4.5. Điều kiện để tính là “đã kiểm chứng”
+Không nên mặc định:
+Admin bấm Approve → mọi claim trong bài đều được tính đúng.
+Admin cần có kết luận ở mức claim:
+ConfirmedCorrect.
+ConfirmedIncorrect.
+Inconclusive.
+Claim chỉ được công bố khi đáp ứng quy trình hiện hành, nhưng trạng thái xuất bản và kết luận kiểm chứng phải có ý nghĩa rõ ràng, tránh cộng độ tin cậy chỉ vì hoàn thành thao tác duyệt.
+Không dùng “trùng với số đông” làm căn cứ duy nhất xác nhận đúng. Nếu không, hệ thống có thể tạo vòng lặp: điểm cao → tác động kết quả → kết quả đó lại tăng điểm.
+
+5. Danh vọng — Reputation Points
+5.1. Công thức
+
+
+Trong đó mỗi khoản thưởng có nguồn và phần đã bị thu hồi, nếu có.
+Danh vọng bắt đầu từ 0, không giới hạn trên. Chỉ thu hồi điểm từng được trao không hợp lệ, không dùng điểm âm tùy ý làm hình phạt hành vi.
+5.2. Các sự kiện
+Có thể tiếp tục giữ cơ chế hạn chế thưởng lặp theo cùng người dùng–địa điểm–scope–feature trong một khoảng thời gian. Tuy nhiên, thay đổi thực tế mới có bằng chứng phải được phân biệt với việc gửi lại nội dung cũ.
+5.3. Xếp hạng
+Đề xuất thứ tự:
+ReputationPoints giảm dần.
+Số địa điểm khác nhau có đóng góp được công nhận giảm dần.
+Thời điểm đạt mức điểm hiện tại tăng dần.
+UserId để bảo đảm thứ tự ổn định.
+Không dùng Account Standing để nhân điểm danh vọng. Tài khoản bị đình chỉ có thể bị ẩn khỏi leaderboard theo chính sách, nhưng lịch sử điểm vẫn được giữ.
+
+6. Ba chỉ số ảnh hưởng hệ thống như thế nào?
+Uy tín thấp có thể khiến phản hồi mới cần được kiểm tra trước khi đủ điều kiện tổng hợp. Đây là điều kiện sử dụng dữ liệu, không phải lấy điểm uy tín nhân trực tiếp vào confidence.
+
+7. Công thức confidence phù hợp với mô hình này
+Nên tính theo từng claim, không lấy một điểm trung bình để che khuất feature đang có mâu thuẫn.
+7.1. AI confidence
+
+
+: tín hiệu AI khả dụng.
+: trọng số của tín hiệu.
+Không có tín hiệu đủ điều kiện → Unavailable.
+Không đưa ba chỉ số tài khoản vào AI confidence.
+Chưa cần thay toàn bộ trọng số nội bộ AI chỉ để triển khai ba loại điểm này.
+7.2. Trọng số của một người đóng góp
+
+
+Trong đó:
+
+
+
+
+
+
+Hệ số lịch sử không sửa tỷ lệ đúng hiển thị. Nó chỉ giới hạn sức ảnh hưởng của lịch sử còn ít.
+Người mới chưa có lịch sử không có trọng số tự động trong công thức này; họ vẫn được gửi bài và được Admin đánh giá bằng chứng trực tiếp.
+7.3. Chọn dữ liệu cộng đồng
+Chỉ dùng bằng chứng:
+Cùng địa điểm, scope và feature.
+So sánh được với claim đang đánh giá.
+Thuộc giai đoạn thực tế còn phù hợp.
+Đủ điều kiện theo quy trình kiểm chứng.
+Tối đa một quan sát đại diện của mỗi người cho lần đánh giá.
+Không thuộc người đang gửi claim cần đánh giá.
+Không dùng claim đang xét để tăng độ tin cậy rồi dùng độ tin cậy mới đó quay lại chấm chính claim ấy.
+7.4. Tách mức đồng thuận và độ đầy đủ của bằng chứng
+Mình đề xuất cách này rõ hơn công thức làm mượt community đã đưa trước đó:
+
+
+Trong đó  nếu hỗ trợ claim,  nếu mâu thuẫn; Unknown bị loại.
+Sau đó:
+
+
+là lượng bằng chứng có trọng số cần để cộng đồng có mức ảnh hưởng tối đa; có thể thử nghiệm từ 3 đơn vị trọng số.
+Cách tách này giải quyết trường hợp:
+Một người đồng ý → đồng thuận có thể là 100%.
+Nhưng lượng bằng chứng còn yếu → ảnh hưởng lên confidence nhỏ.
+7.5. Confidence tổng hợp
+Để không phạt bài chỉ vì địa điểm chưa có cộng đồng, đề xuất:
+
+
+
+
+Ý nghĩa:
+Cộng đồng đủ mạnh → tối đa 40% ảnh hưởng, AI còn 60%.
+Cộng đồng ít → ảnh hưởng nhỏ.
+Không có cộng đồng → , kèm nhãn AI-only / Chưa có đối chứng cộng đồng.
+AI không khả dụng → không tính , chuyển Admin review; vẫn có thể hiển thị dữ liệu cộng đồng riêng.
+Ví dụ AI confidence là 80%:
+Đây là thay đổi được đề xuất cho công thức tổng hợp, không phải mô tả công thức đã có trong tài liệu. Nó giữ mức ảnh hưởng cộng đồng tối đa 40% và xử lý rõ trường hợp thiếu lịch sử.
+Các điểm từ chế độ AI-only và chế độ có cộng đồng phải hiển thị nguồn khác nhau; không nên diễn giải chúng là cùng một xác suất đã được hiệu chuẩn.
+7.6. Confidence không quyết định thay Admin
+Điểm cao: hỗ trợ sắp xếp và xem xét.
+Mâu thuẫn đáng kể: gắn cờ review.
+Bằng chứng thiếu: yêu cầu bổ sung nếu người dùng có thể khắc phục.
+AI lỗi: fallback sang review.
+Mọi lần công bố vẫn cần Admin phê duyệt.
+Không tự động trừ điểm người dùng dựa trên confidence thấp.
+
+8. Những quy tắc kỹ thuật phải có trong đặc tả
+8.1. Event phải có căn cứ nghiệp vụ
+Nên có các sự kiện như:
+Không lấy thao tác Submit, Vote hoặc kết quả AI làm event cộng điểm ngay.
+8.2. Chống trùng và xử lý đảo quyết định
+Mỗi tác động cần lưu:
+Người nhận tác động.
+Loại chỉ số.
+Nguồn submission/claim/report/quyết định.
+Phiên bản quyết định.
+Mức thay đổi và giá trị trước/sau, khi phù hợp.
+Người hoặc tiến trình thực hiện.
+Lý do và căn cứ.
+Thời gian.
+Phiên bản chính sách.
+Liên kết bản ghi bị đảo.
+Khóa chống xử lý trùng.
+Với độ tin cậy, lưu chuyển đổi kết luận và bộ đếm, không ghi một khoản “+x%”.
+Với uy tín bị chặn ở 0/100, việc đảo quyết định cần quy tắc riêng: hoàn lại phần thực tế bị áp dụng hoặc tính lại lịch sử theo chính sách. Không thể mặc định lấy dấu ngược của mức yêu cầu trong mọi trường hợp.
+8.3. Đồng bộ với luồng hiện tại
+Có thể giữ cách xử lý:
+Admin hoàn tất quyết định nghiệp vụ.
+API lưu quyết định và event trong cùng transaction.
+Worker nhận việc và gọi Internal Job API.
+API cập nhật lịch sử điểm và số tổng hợp theo cơ chế chống trùng.
+Sau commit mới phát thông báo.
+AI không ghi điểm; worker không tự sửa trực tiếp database.
+8.4. Không bắt buộc ba loại điểm phải là ba bảng
+Ba chỉ số là ba khái niệm nghiệp vụ, không đồng nghĩa bắt buộc thêm ba bảng.
+Có thể dùng một bản tổng hợp theo User chứa:
+AccountStandingScore.
+CorrectClaimCount, IncorrectClaimCount.
+CorrectReportCount, IncorrectReportCount.
+ReputationPoints.
+Tỷ lệ chính xác được tính từ các bộ đếm. Lịch sử thay đổi và kết luận nguồn phải đủ để tái dựng số liệu. Chỉ quyết định đổi/gộp bảng sau khi đối chiếu ERD hiện tại.
+
+9. Những trường hợp bắt buộc kiểm thử
+Phương án mình ưu tiên là: giữ uy tín dưới dạng điểm hành vi 0–100; giữ độ tin cậy đúng tỷ lệ thực tế và luôn kèm số mẫu; dùng danh vọng riêng cho ranking. Confidence chỉ tham khảo độ tin cậy qua trọng số bằng chứng, còn quyền công bố và xử lý vi phạm vẫn dựa trên quyết định có căn cứ.

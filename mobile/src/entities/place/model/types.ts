@@ -1,4 +1,17 @@
-export type PoiCategory = 'mall' | 'hotel' | 'hospital' | 'transit' | 'market' | 'other';
+export type PoiCategory =
+  | 'mall'
+  | 'supermarket'
+  | 'restaurant'
+  | 'cafe'
+  | 'hotel'
+  | 'hospital'
+  | 'clinic'
+  | 'pharmacy'
+  | 'transit'
+  | 'market'
+  | 'park'
+  | 'other'
+  | (string & {});
 
 export interface PlaceDto {
   id: string;
@@ -22,6 +35,8 @@ export interface PlaceDto {
   floor_level?: number | null;
   building_id?: string | null;
   has_accessible_elevator?: boolean | null;
+  has_accessible_parking?: boolean | null;
+  has_step_free?: boolean | null;
   last_verified_at?: string | null;
   isAddressLoading?: boolean;
   legacy_feature_values?: {
@@ -39,6 +54,37 @@ export interface BoundingBox {
   east: number;
   west: number;
 }
+
+/**
+ * Canonical AccessibilityFeatureType matching backend domain enum (B.2):
+ * Ramp = 1, Elevator = 2, AccessibleRestroom = 3, EntranceDoor = 5.
+ * Values 4, 6, 7 are unused per NEW Technical _ Design Specification.docx
+ */
+export enum AccessibilityFeatureType {
+  Ramp = 1,
+  Elevator = 2,
+  AccessibleRestroom = 3,
+  EntranceDoor = 5,
+}
+
+export const AccessibilityFeatureTypeMap: Record<AccessibilityFeatureType, string> = {
+  [AccessibilityFeatureType.Ramp]: 'Ramp',
+  [AccessibilityFeatureType.Elevator]: 'Elevator',
+  [AccessibilityFeatureType.AccessibleRestroom]: 'AccessibleRestroom',
+  [AccessibilityFeatureType.EntranceDoor]: 'EntranceDoor',
+};
+
+export const CanonicalFeatureNameToType: Record<string, AccessibilityFeatureType> = {
+  Ramp: AccessibilityFeatureType.Ramp,
+  Elevator: AccessibilityFeatureType.Elevator,
+  AccessibleRestroom: AccessibilityFeatureType.AccessibleRestroom,
+  EntranceDoor: AccessibilityFeatureType.EntranceDoor,
+  ramp: AccessibilityFeatureType.Ramp,
+  elevator: AccessibilityFeatureType.Elevator,
+  accessibleRestroom: AccessibilityFeatureType.AccessibleRestroom,
+  entranceDoor: AccessibilityFeatureType.EntranceDoor,
+  door: AccessibilityFeatureType.EntranceDoor,
+};
 
 export interface MapRegion {
   latitude: number;

@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Pressable,
   StyleSheet,
+  Text,
   TextInput,
   TouchableOpacity,
   View,
@@ -20,6 +21,7 @@ interface SearchBarProps {
   onBlur?: () => void;
   onVoicePress?: () => void;
   onFilterPress?: () => void;
+  activeFilterCount?: number;
 }
 
 export function SearchBar({
@@ -32,6 +34,7 @@ export function SearchBar({
   onBlur,
   onVoicePress,
   onFilterPress,
+  activeFilterCount = 0,
 }: SearchBarProps) {
   const inputRef = useRef<TextInput>(null);
   const [isFocused, setIsFocused] = useState(false);
@@ -101,13 +104,22 @@ export function SearchBar({
 
         {/* Filter Button */}
         <TouchableOpacity
-          style={styles.filterButton}
+          style={[styles.filterButton, activeFilterCount > 0 && styles.filterButtonActive]}
           onPress={onFilterPress}
           accessibilityRole="button"
           accessibilityLabel="Bộ lọc tiêu chuẩn tiếp cận"
           activeOpacity={0.7}
         >
-          <Ionicons name="options-outline" size={17} color={Colors.textPrimary} />
+          <Ionicons
+            name="options-outline"
+            size={17}
+            color={activeFilterCount > 0 ? '#FFFFFF' : Colors.textPrimary}
+          />
+          {activeFilterCount > 0 && (
+            <View style={styles.filterBadge}>
+              <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+            </View>
+          )}
         </TouchableOpacity>
       </Pressable>
     </View>
@@ -175,5 +187,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 6,
+    position: 'relative',
+  },
+  filterButtonActive: {
+    backgroundColor: Colors.primary,
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#004F58',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  filterBadgeText: {
+    color: '#99F6E4',
+    fontSize: 9.5,
+    fontWeight: '800',
   },
 });

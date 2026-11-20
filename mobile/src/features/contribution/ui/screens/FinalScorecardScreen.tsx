@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,6 +24,8 @@ import {
 } from '@/features/reports/model/reportDraftStore';
 import { ScoreCriteriaExplainer } from '../components/review/ScoreCriteriaExplainer';
 import type { UserMeasurementsInput } from './TagReviewScreen';
+import { useAuth } from '@/features/auth';
+import { LoginRequiredModal } from '@/shared/ui/LoginRequiredModal';
 
 interface FinalScorecardScreenProps {
   media: CapturedContributionMedia;
@@ -66,6 +68,8 @@ export function FinalScorecardScreen({
   const contentOpacity = useRef(new Animated.Value(0)).current;
   const contentTranslateY = useRef(new Animated.Value(12)).current;
 
+  const { user } = useAuth();
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const clientSubmissionIdRef = useRef<string>(
     `mob-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 9)}`
@@ -138,6 +142,10 @@ export function FinalScorecardScreen({
   };
 
   const handleSubmit = async () => {
+    if (!user) {
+      setShowLoginModal(true);
+      return;
+    }
     setIsSubmitting(true);
     setSubmitError(null);
     setIsConflictError(false);
@@ -175,7 +183,7 @@ export function FinalScorecardScreen({
       const payload = {
         client_submission_id: clientSubmissionIdRef.current,
         location_id: media.locationId || 'custom-location',
-        user_id: 'mobile-contributor',
+        user_id: user.id,
         media_urls: [uploadedUrl],
         client_observations: selectedTagKeys,
         observations: confirmedObservations ?? {},
@@ -316,6 +324,18 @@ export function FinalScorecardScreen({
   }
 
   const handleAttachToReport = () => {
+    if (overallScore < 60) {
+      Alert.alert(
+        'Độ tin cậy quá thấp',
+        `Ảnh minh chứng chỉ đạt ${overallScore}% độ tin cậy AI (yêu cầu tối thiểu 60%).\n\nBáo cáo mâu thuẫn không chấp nhận ảnh độ tin cậy thấp để bảo vệ chất lượng dữ liệu tiếp cận. Vui lòng chụp lại ảnh rõ góc ram dốc hoặc lối vào.`,
+        [
+          { text: 'Chụp lại ngay', onPress: onRetakeOrReset, style: 'default' },
+          { text: 'Đóng', style: 'cancel' },
+        ]
+      );
+      return;
+    }
+
     // Start background upload immediately so it's ready before user finishes typing
     let uploadPromise: Promise<string> | null = null;
     if (media.uri && !media.uri.startsWith('http')) {
@@ -635,6 +655,12 @@ export function FinalScorecardScreen({
           )}
         </View>
       </View>
+
+      <LoginRequiredModal
+        visible={showLoginModal}
+        featureName="xuất bản dữ liệu tiếp cận và nhận +50 EXP"
+        onClose={() => setShowLoginModal(false)}
+      />
     </View>
   );
 }

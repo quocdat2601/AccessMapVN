@@ -1,0 +1,59 @@
+erDiagram
+direction LR
+LOCATION ||--o{ LOCATION_SCOPE : contains
+LOCATION ||--o{ LOCATION_FEATURE : publishes
+LOCATION_SCOPE ||--o{ LOCATION_FEATURE : scopes
+SUBMISSION_CLAIM ||--o| LOCATION_FEATURE : current_source
+LOCATION_FEATURE ||--o{ LOCATION_FEATURE_HISTORY : versions
+LOCATION_FEATURE ||--o| FEATURE_FEEDBACK_SUMMARY : public_freshness
+LOCATION ||--o{ SURROUNDING_OBSERVATION : optional_context
+USER ||--o| ACCESSIBILITY_PREFERENCE : saves
+USER ||--o{ FAVORITE_LOCATION : owns
+LOCATION ||--o{ FAVORITE_LOCATION : bookmarked
+LOCATION {
+uuid Id PK
+geography Position
+enum Status
+}
+LOCATION_SCOPE {
+uuid Id PK
+uuid LocationId FK
+enum Kind
+int FloorNumber
+enum CoverageStatus
+}
+LOCATION_FEATURE {
+uuid Id PK
+uuid LocationId FK
+uuid ScopeId FK
+uuid SourceClaimId FK
+enum FeatureType
+enum CurrentStatus
+int Version
+}
+SUBMISSION_CLAIM {
+uuid Id PK
+enum FeatureType
+enum ClaimedStatus
+}
+ACCESSIBILITY_PREFERENCE {
+uuid UserId PK,FK
+enum Profile
+jsonb DefaultRequiredFeatures
+jsonb DefaultPreferredFeatures
+datetime ConsentedAt
+int Version
+}
+FAVORITE_LOCATION {
+uuid UserId PK,FK
+uuid LocationId PK,FK
+datetime CreatedAt
+}
+SURROUNDING_OBSERVATION {
+uuid Id PK
+uuid LocationId FK
+string Source
+datetime CapturedAt
+string Permission
+datetime ExpiresAt
+}

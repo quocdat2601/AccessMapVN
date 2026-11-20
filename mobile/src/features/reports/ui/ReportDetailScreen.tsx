@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/features/auth';
+import { runAiPreScan } from '@/features/contribution/api/aiPreScanService';
 import { ApiError } from '@/shared/api/client';
 import { addReportEvidence, fetchMyReport, uploadReportMedia } from '../api/reportsApi';
 import type { ReportDetail, ReportStatus } from '../model/types';
@@ -109,7 +111,28 @@ export function ReportDetailScreen() {
       quality: 1,
       selectionLimit: 1,
     });
-    if (!result.canceled) setEvidenceAsset(result.assets[0] ?? null);
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      const asset = result.assets[0];
+      if (asset.type !== 'video') {
+        try {
+          const scan = await runAiPreScan(asset.uri);
+          const detected = scan.features.filter((f) => f.detected && f.confidence > 0);
+          const maxConf = detected.length > 0 ? Math.max(...detected.map((f) => f.confidence)) : 0;
+          const score = Math.round(maxConf * 100);
+          if (detected.length === 0 || score < 60) {
+            Alert.alert(
+              'Độ tin cậy quá thấp',
+              `Ảnh được chọn không phát hiện rõ đặc điểm tiếp cận nào hoặc độ tin cậy AI quá thấp (${score}% < 60%).\n\nMinh chứng bổ sung yêu cầu đạt từ 60% độ tin cậy AI trở lên để kiểm duyệt viên xác thực.`,
+              [{ text: 'Đồng ý', style: 'default' }]
+            );
+            return;
+          }
+        } catch {
+          // ignore scan error
+        }
+      }
+      setEvidenceAsset(asset);
+    }
   };
 
   if (!user) {

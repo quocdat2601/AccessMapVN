@@ -1,0 +1,1 @@
+Shared figure: System Diagrams §3. Coverage uses the API, shared database, durable worker and private object storage. B.4–B.6 define bounded snapshot aggregation and rendering outside database transactions.

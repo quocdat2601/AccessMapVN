@@ -1,0 +1,8 @@
+flowchart TB
+Publication["WF-01 approved publication"] --> Source["ContributionEvent"]
+Source --> Worker["WF-04 durable eligibility processing"]
+Worker --> Ledger["Immutable typed score history"]
+Worker --> Snapshot["Reputation snapshot and ranking keys"]
+Ledger --> Outbox["Notification outbox"]
+Snapshot --> User["User reputation and leaderboard"]
+Admin["Admin Portal: reviewed adjustment"] --> Ledger

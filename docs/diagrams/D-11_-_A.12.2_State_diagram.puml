@@ -1,0 +1,1 @@
+Shared diagram reference: System Diagrams §4.1/§4.2 and B.6.6 use same-ID resubmit, immutable revision snapshots, a three-resubmit cap and separate job ownership. Verification success or exhausted retry routes to Admin review; only an authorized Admin requests more evidence or publishes.

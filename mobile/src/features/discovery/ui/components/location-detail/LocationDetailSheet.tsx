@@ -25,6 +25,7 @@ import { loadContributionRecords, syncPendingSubmissionsWithBackend } from '@/en
 import { fetchPlaceEvidence } from '@/entities/place';
 import { resolveServiceUrl } from '@/shared/api/client';
 import { useAuth } from '@/features/auth';
+import { LoginRequiredModal } from '@/shared/ui/LoginRequiredModal';
 import {
   castCommunityVote,
   FeatureVerificationModal,
@@ -42,6 +43,7 @@ import {
 } from '@/features/reports';
 import type { PlaceDto } from '../../../model';
 import { AccessibilitySummary } from './AccessibilitySummary';
+import { CommunityCommentsView } from './CommunityCommentsView';
 import { CommunityReviewsSection } from './CommunityReviewsSection';
 import { ContributionCTA } from './ContributionCTA';
 import { EvidenceGallerySection } from './EvidenceGallerySection';
@@ -52,12 +54,15 @@ interface LocationDetailSheetProps {
   place: PlaceDto;
   userLatitude?: number | null;
   userLongitude?: number | null;
+  isFavorite?: boolean;
+  onToggleFavorite?: (place: PlaceDto) => void;
   onClose: () => void;
   onContribute?: (place: PlaceDto) => void;
   onReportIssue?: (place: PlaceDto) => void;
 }
 
 type SheetSnap = 'expanded' | 'collapsed' | 'peek';
+type DetailSubview = 'overview' | 'comments';
 
 const SPRING_CONFIG = {
   damping: 24,
@@ -132,6 +137,8 @@ export function LocationDetailSheet({
   place,
   userLatitude,
   userLongitude,
+  isFavorite = false,
+  onToggleFavorite,
   onClose,
   onContribute,
   onReportIssue,
@@ -147,12 +154,19 @@ export function LocationDetailSheet({
 
   const translateY = useSharedValue(sheetHeight);
   const dragStartY = useSharedValue(collapsedOffset);
+  const subviewProgress = useSharedValue(0);
+
   const [snap, setSnap] = useState<SheetSnap>('collapsed');
+  const [activeSubview, setActiveSubview] = useState<DetailSubview>('overview');
   const [showReportForm, setShowReportForm] = useState(false);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loginModalFeature, setLoginModalFeature] = useState('đóng góp dữ liệu tiếp cận');
   const [reportInitialFeature, setReportInitialFeature] = useState<AccessibilityFeatureType | undefined>(undefined);
   const [reportInitialData, setReportInitialData] = useState<ReportFormData | undefined>(undefined);
   const [verificationRefreshKey, setVerificationRefreshKey] = useState(0);
+
+  const myCommentsStorageKey = `@accessmap_my_comments_${place.id}`;
 
   useEffect(() => {
     return subscribeReportDraft(() => {
@@ -462,7 +476,6 @@ export function LocationDetailSheet({
           });
       } catch {}
 
-
       // Fake demo evidence for the 2 demo venues only
       if (items.length === 0) {
         if (isDemo1) {
@@ -490,11 +503,20 @@ export function LocationDetailSheet({
     }
 
     async function loadComments() {
+      let localOwnComments: CommunityReview[] = [];
+      try {
+        const rawLocal = await AsyncStorage.getItem(myCommentsStorageKey);
+        if (rawLocal) {
+          localOwnComments = JSON.parse(rawLocal);
+        }
+      } catch {}
+
+      let remoteMapped: CommunityReview[] = [];
       try {
         const items = await fetchCommunityComments(place.id);
-        if (isMounted && items && items.length > 0) {
-          const mapped: CommunityReview[] = items.map((c) => {
-            const author = c.authorLabel || 'Cộng đồng';
+        if (items && items.length > 0) {
+          remoteMapped = items.map((c) => {
+            const author = c.authorLabel || 'Thành viên cộng đồng';
             const initials = author.slice(0, 2).toUpperCase();
             const date = new Date(c.createdAt);
             const age = Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('vi-VN');
@@ -504,16 +526,22 @@ export function LocationDetailSheet({
               initials,
               age,
               helpfulCount: Math.max(1, Math.round((c.recencyWeight || 1) * 10)),
+              likesCount: Math.max(1, Math.round((c.recencyWeight || 1) * 4)),
               comment: c.body,
+              status: 'Approved',
+              createdAtIso: c.createdAt,
             };
           });
-          setCommunityReviews(mapped);
-          return;
         }
       } catch {}
 
       if (isMounted) {
-        setCommunityReviews([]);
+        const remoteIds = new Set(remoteMapped.map((r) => r.id));
+        const remoteBodies = new Set(remoteMapped.map((r) => r.comment.trim()));
+        const pendingOwn = localOwnComments.filter(
+          (loc) => !remoteIds.has(loc.id) && !remoteBodies.has(loc.comment.trim())
+        );
+        setCommunityReviews([...pendingOwn, ...remoteMapped]);
       }
     }
 
@@ -523,24 +551,54 @@ export function LocationDetailSheet({
     return () => {
       isMounted = false;
     };
-  }, [place.id]);
+  }, [isDemo1, isDemo2, myCommentsStorageKey, place.id]);
 
-  // Slide up from bottom when place changes
+  // Slide up from bottom and reset subview when place changes
   useEffect(() => {
     translateY.value = sheetHeight;
     translateY.value = withTiming(collapsedOffset, { duration: 380 });
     setSnap('collapsed');
-  }, [place.id, collapsedOffset, sheetHeight, translateY]);
+    subviewProgress.value = 0;
+    setActiveSubview('overview');
+  }, [place.id, collapsedOffset, sheetHeight, subviewProgress, translateY]);
 
   const setSnapFromAnimation = useCallback((nextSnap: SheetSnap) => {
     setSnap(nextSnap);
   }, []);
 
-  const snapTo = (nextSnap: SheetSnap) => {
-    const target = nextSnap === 'expanded' ? 0 : nextSnap === 'peek' ? peekOffset : collapsedOffset;
-    translateY.value = withSpring(target, SPRING_CONFIG);
-    setSnap(nextSnap);
-  };
+  const snapTo = useCallback(
+    (nextSnap: SheetSnap) => {
+      const target =
+        nextSnap === 'expanded' ? 0 : nextSnap === 'peek' ? peekOffset : collapsedOffset;
+      translateY.value = withSpring(target, SPRING_CONFIG);
+      setSnap(nextSnap);
+    },
+    [collapsedOffset, peekOffset, translateY]
+  );
+
+  const openCommentsSection = useCallback(() => {
+    snapTo('expanded');
+    setActiveSubview('comments');
+    subviewProgress.value = withSpring(1, SPRING_CONFIG);
+  }, [snapTo, subviewProgress]);
+
+  const closeCommentsSection = useCallback(() => {
+    subviewProgress.value = withTiming(0, { duration: 240 }, (finished) => {
+      if (finished) runOnJS(setActiveSubview)('overview');
+    });
+  }, [subviewProgress]);
+
+  const handleCommentAdded = useCallback(
+    (newReview: CommunityReview) => {
+      setCommunityReviews((prev) => {
+        const next = [newReview, ...prev.filter((r) => r.id !== newReview.id)];
+        const ownOnly = next.filter((r) => r.isOwn);
+        void AsyncStorage.setItem(myCommentsStorageKey, JSON.stringify(ownOnly)).catch(() => {});
+        return next;
+      });
+    },
+    [myCommentsStorageKey]
+  );
 
   const dismissSheet = useCallback(() => {
     translateY.value = withTiming(sheetHeight, { duration: 220 }, (finished) => {
@@ -595,6 +653,15 @@ export function LocationDetailSheet({
     width: sheetWidth,
   }));
 
+  const overviewSlideStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: -sheetWidth * subviewProgress.value }],
+    opacity: 1 - subviewProgress.value * 0.35,
+  }));
+
+  const commentsSlideStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: sheetWidth * (1 - subviewProgress.value) }],
+  }));
+
   return (
     <Animated.View style={[styles.sheet, { height: sheetHeight }, animatedSheetStyle]}>
       <GestureDetector gesture={panGesture}>
@@ -620,103 +687,165 @@ export function LocationDetailSheet({
         </View>
       </GestureDetector>
 
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={[
-          styles.scrollContent,
-          snap === 'collapsed' && { paddingBottom: collapsedOffset + 24 },
-        ]}
-        scrollEnabled={snap !== 'peek'}
-        nestedScrollEnabled
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <LocationHeader
-          name={place.name}
-          category={localizedCategory}
-          brand={place.brand}
-          distanceStr={distanceStr}
-          standardLabel={isFullyVerified ? 'Đạt QCVN 10:2014' : trustPercent > 0 ? 'Khảo sát cộng đồng' : undefined}
-          address={place.address}
-          isAddressLoading={place.isAddressLoading}
-          openingHours={place.opening_hours}
-          phone={place.phone}
-          website={place.website}
-        />
+      <View style={styles.subviewViewport}>
+        {/* Main Overview Page */}
+        <Animated.View
+          style={[styles.subviewPage, overviewSlideStyle]}
+          pointerEvents={activeSubview === 'overview' ? 'auto' : 'none'}
+        >
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={[
+              styles.scrollContent,
+              snap === 'collapsed' && { paddingBottom: collapsedOffset + 24 },
+            ]}
+            scrollEnabled={snap !== 'peek'}
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <LocationHeader
+              name={place.name}
+              category={localizedCategory}
+              brand={place.brand}
+              distanceStr={distanceStr}
+              standardLabel={isFullyVerified ? 'Đạt QCVN 10:2014' : trustPercent > 0 ? 'Khảo sát cộng đồng' : undefined}
+              address={place.address}
+              isAddressLoading={place.isAddressLoading}
+              openingHours={place.opening_hours}
+              phone={place.phone}
+              website={place.website}
+              isFavorite={isFavorite}
+              onToggleFavorite={onToggleFavorite ? () => onToggleFavorite(place) : undefined}
+            />
 
-        <AccessibilitySummary
-          isUnrated={isUnrated}
-          trustPercent={trustPercent}
-          features={features}
-          note={displayAccessibilityNote}
-          hasRamp={Boolean(place.has_ramp)}
-          doorWidthOk={Boolean(place.door_width_ok)}
-          hasTactile={Boolean(place.has_tactile_paving)}
-          lastVerifiedAt={place.last_verified_at}
-          isFullyVerified={isFullyVerified}
-          onHelpConfirmPress={() => setShowVerificationModal(true)}
-        />
+            <AccessibilitySummary
+              isUnrated={isUnrated}
+              trustPercent={trustPercent}
+              features={features}
+              note={displayAccessibilityNote}
+              hasRamp={Boolean(place.has_ramp)}
+              doorWidthOk={Boolean(place.door_width_ok)}
+              hasTactile={Boolean(place.has_tactile_paving)}
+              lastVerifiedAt={place.last_verified_at}
+              isFullyVerified={isFullyVerified}
+              onHelpConfirmPress={() => {
+                if (!user) {
+                  setLoginModalFeature('xác nhận tiện ích tiếp cận');
+                  setShowLoginModal(true);
+                  return;
+                }
+                setShowVerificationModal(true);
+              }}
+            />
 
-        <View style={styles.sectionInset}>
-          <CommunityReviewsSection
+            <View style={styles.sectionInset}>
+              <CommunityReviewsSection
+                reviews={communityReviews}
+                onViewAll={openCommentsSection}
+                showDemoContent={hasDemoCommunityContent}
+                isVerified={isFullyVerified}
+              />
+
+              <EvidenceGallerySection
+                evidence={evidenceList}
+                onAddEvidence={() => {
+                  if (!user) {
+                    setLoginModalFeature('đóng góp ảnh minh chứng');
+                    setShowLoginModal(true);
+                    return;
+                  }
+                  onContribute?.(place);
+                }}
+                showDemoContent={hasDemoCommunityContent}
+                isVerified={isFullyVerified}
+              />
+
+              {showVerificationSection && (
+                <TouchableOpacity
+                  style={styles.verificationCard}
+                  onPress={() => {
+                    if (!user) {
+                      setLoginModalFeature('xác nhận tiện ích tiếp cận');
+                      setShowLoginModal(true);
+                      return;
+                    }
+                    setShowVerificationModal(true);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Mở danh sách xác nhận thông tin tiếp cận"
+                  activeOpacity={0.82}
+                >
+                  <View style={styles.verificationCardLeft}>
+                    <View style={styles.verificationCardIconBox}>
+                      <MaterialCommunityIcons name="clipboard-check-outline" size={20} color="#007D78" />
+                    </View>
+                    <View style={styles.verificationCardTextContainer}>
+                      <View style={styles.verificationCardTitleRow}>
+                        <Text style={styles.verificationCardTitle}>Giúp xác nhận thông tin tiếp cận</Text>
+                        <View style={styles.verificationBadge}>
+                          <Text style={styles.verificationBadgeText}>{features.length} tiện ích</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.verificationCardSub}>
+                        Kiểm tra và xác nhận thực tế ram dốc, cửa vào, thang máy, WC...
+                      </Text>
+                    </View>
+                  </View>
+                  <MaterialCommunityIcons name="chevron-right" size={22} color="#007D78" />
+                </TouchableOpacity>
+              )}
+
+              <ContributionCTA
+                locationId={place.id}
+                locationName={place.name}
+                onPress={() => {
+                  if (!user) {
+                    setLoginModalFeature('đóng góp dữ liệu tiếp cận');
+                    setShowLoginModal(true);
+                    return;
+                  }
+                  onContribute?.(place);
+                }}
+                showReportIssue={hasPublishedAccessibilityInfo}
+                onReportIssue={() => {
+                  if (!user) {
+                    setLoginModalFeature('báo thay đổi thông tin tiếp cận');
+                    setShowLoginModal(true);
+                    return;
+                  }
+                  onReportIssue?.(place);
+                  setReportInitialFeature(undefined);
+                  setReportInitialData(undefined);
+                  setShowReportForm(true);
+                }}
+              />
+            </View>
+          </ScrollView>
+        </Animated.View>
+
+        {/* Right-to-Left Community Comments Subview Page */}
+        <Animated.View
+          style={[styles.subviewPage, styles.commentsOverlayPage, commentsSlideStyle]}
+          pointerEvents={activeSubview === 'comments' ? 'auto' : 'none'}
+        >
+          <CommunityCommentsView
+            locationId={place.id}
+            locationName={place.name}
+            locationCategory={localizedCategory}
             reviews={communityReviews}
             showDemoContent={hasDemoCommunityContent}
             isVerified={isFullyVerified}
-          />
-
-          <EvidenceGallerySection
-            evidence={evidenceList}
-            onAddEvidence={() => onContribute?.(place)}
-            showDemoContent={hasDemoCommunityContent}
-            isVerified={isFullyVerified}
-          />
-
-          {showVerificationSection && (
-            <TouchableOpacity
-              style={styles.verificationCard}
-              onPress={() => setShowVerificationModal(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Mở danh sách xác nhận thông tin tiếp cận"
-              activeOpacity={0.82}
-            >
-              <View style={styles.verificationCardLeft}>
-                <View style={styles.verificationCardIconBox}>
-                  <MaterialCommunityIcons name="clipboard-check-outline" size={20} color="#007D78" />
-                </View>
-                <View style={styles.verificationCardTextContainer}>
-                  <View style={styles.verificationCardTitleRow}>
-                    <Text style={styles.verificationCardTitle}>Giúp xác nhận thông tin tiếp cận</Text>
-                    <View style={styles.verificationBadge}>
-                      <Text style={styles.verificationBadgeText}>{publishedFeaturesCount} tiện ích</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.verificationCardSub}>
-                    Kiểm tra thực tế hoặc báo sai lệch cùng cộng đồng
-                  </Text>
-                </View>
-              </View>
-              <MaterialCommunityIcons name="chevron-right" size={22} color="#007D78" />
-            </TouchableOpacity>
-          )}
-
-          <ContributionCTA
-            locationId={place.id}
-            locationName={place.name}
-            onPress={() => onContribute?.(place)}
-            showReportIssue={!showVerificationSection && hasPublishedAccessibilityInfo}
-            onReportIssue={() => {
-              if (!user) {
-                router.push('/login');
-                return;
-              }
-              onReportIssue?.(place);
-              setReportInitialFeature(undefined);
-              setReportInitialData(undefined);
-              setShowReportForm(true);
+            onBack={closeCommentsSection}
+            onCommentAdded={handleCommentAdded}
+            onRequireLogin={(featureLabel) => {
+              setLoginModalFeature(featureLabel);
+              setShowLoginModal(true);
             }}
           />
-        </View>
-      </ScrollView>
+        </Animated.View>
+      </View>
+
       <ReportFormModal
         features={features}
         locationId={place.id}
@@ -740,6 +869,11 @@ export function LocationDetailSheet({
         onRequestReport={handleRequestReportFromFeature}
         refreshTrigger={verificationRefreshKey}
         onClose={() => setShowVerificationModal(false)}
+      />
+      <LoginRequiredModal
+        visible={showLoginModal}
+        featureName={loginModalFeature}
+        onClose={() => setShowLoginModal(false)}
       />
     </Animated.View>
   );
@@ -790,6 +924,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f5f9',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  subviewViewport: {
+    flex: 1,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  subviewPage: {
+    flex: 1,
+  },
+  commentsOverlayPage: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: '#FFFFFF',
   },
   scrollView: {
     flex: 1,

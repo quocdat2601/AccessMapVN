@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { fetchPlacesInBBox, type BoundingBox, type PlaceDto } from '@/entities/place';
+import { fetchPlacesInBBox, MOCK_S901_PLACES, type BoundingBox, type PlaceDto } from '@/entities/place';
 
 export function useNearbyPlaces(bbox: BoundingBox | null) {
-  const [places, setPlaces] = useState<PlaceDto[]>([]);
+  const [places, setPlaces] = useState<PlaceDto[]>(() => [...MOCK_S901_PLACES]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const cacheRef = useRef<Map<string, PlaceDto>>(new Map());
+  const cacheRef = useRef<Map<string, PlaceDto>>(
+    new Map(MOCK_S901_PLACES.map((p) => [p.id, p]))
+  );
   const lastFetchedBox = useRef<BoundingBox | null>(null);
 
   const selectedPlace = places.find((p) => p.id === selectedId) ?? null;
@@ -66,8 +68,8 @@ export function useNearbyPlaces(bbox: BoundingBox | null) {
     if (bbox) {
       fetchPlaces(bbox);
     } else {
-      // Zoom Gate: Clear markers when zoomed out to prevent citywide clutter
-      setPlaces([]);
+      // Keep S9.01 mock places available before first bbox settles
+      setPlaces(Array.from(cacheRef.current.values()));
       lastFetchedBox.current = null;
     }
   }, [bbox, fetchPlaces]);

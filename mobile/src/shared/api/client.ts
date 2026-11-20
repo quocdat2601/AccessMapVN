@@ -161,21 +161,29 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
     );
   }
 
+  const rawText = await response.text();
+
   if (!response.ok) {
-    let errorData: ApiErrorBody | string;
-    try {
-      errorData = (await response.json()) as ApiErrorBody;
-    } catch {
-      errorData = await response.text();
+    let errorData: ApiErrorBody | string = rawText;
+    if (rawText) {
+      try {
+        errorData = JSON.parse(rawText) as ApiErrorBody;
+      } catch {
+        errorData = rawText;
+      }
     }
     throw new ApiError(responseMessage(response.status, errorData), response.status, errorData);
   }
 
-  if (response.status === 204) return {} as T;
-  return response.json() as Promise<T>;
+  if (response.status === 204 || !rawText) return {} as T;
+  try {
+    return JSON.parse(rawText) as T;
+  } catch {
+    return rawText as unknown as T;
+  }
 }
 
-const IDEMPOTENCY_PREFIX = 'wf02:idempotency:';
+const IDEMPOTENCY_PREFIX = 'accessmap:idempotency:';
 const idempotencyLookups = new Map<string, Promise<PendingIdempotency>>();
 
 interface PendingIdempotency {

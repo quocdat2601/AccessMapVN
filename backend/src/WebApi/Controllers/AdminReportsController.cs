@@ -1,5 +1,5 @@
 using AccessMapVN.Application.Common.Exceptions;
-using AccessMapVN.Application.Features.Wf02;
+using AccessMapVN.Application.Features.CommunityValidation;
 using AccessMapVN.Domain.Enums;
 using AccessMapVN.WebApi.Authorization;
 using Microsoft.AspNetCore.Authorization;
@@ -8,14 +8,14 @@ using Microsoft.AspNetCore.Mvc;
 namespace AccessMapVN.WebApi.Controllers;
 
 [ApiController]
-[Authorize(Policy = Wf02Policies.Moderate)]
+[Authorize(Policy = CommunityPolicies.Moderate)]
 [Route("api/v1/admin/reports")]
 public sealed class AdminReportsController : ControllerBase
 {
-    private readonly IWf02ReportService _service;
-    private readonly IWf02MediaService _mediaService;
+    private readonly ICommunityReportService _service;
+    private readonly ICommunityMediaService _mediaService;
 
-    public AdminReportsController(IWf02ReportService service, IWf02MediaService mediaService)
+    public AdminReportsController(ICommunityReportService service, ICommunityMediaService mediaService)
     {
         _service = service;
         _mediaService = mediaService;
@@ -68,7 +68,7 @@ public sealed class AdminReportsController : ControllerBase
     {
         if (!User.TryGetUserId(out var moderatorId))
         {
-            throw new Wf02Exception("INVALID_SUBJECT", "The authenticated subject is not a UUID.", 401);
+            throw new CommunityValidationException("INVALID_SUBJECT", "The authenticated subject is not a UUID.", 401);
         }
 
         ValidateIfMatch(request.ExpectedVersion);
@@ -99,7 +99,7 @@ public sealed class AdminReportsController : ControllerBase
         value = value.Trim('"');
         if (!int.TryParse(value, out var headerVersion) || headerVersion != expectedVersion)
         {
-            throw new Wf02Exception(
+            throw new CommunityValidationException(
                 "REPORT_VERSION_CHANGED",
                 "If-Match and expectedVersion must identify the same report version.",
                 409);

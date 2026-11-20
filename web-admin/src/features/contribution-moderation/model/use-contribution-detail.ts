@@ -1,7 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { contributionRepository, type ApproveContributionInput, type ContributionDetail, type ContributionNavigation, type RequestMoreInfoInput } from "@/entities/contribution";
+import {
+  contributionRepository,
+  type ApproveContributionInput,
+  type ContributionDetail,
+  type ContributionNavigation,
+  type RequestMoreInfoInput,
+  type ReviseClaimAssessmentInput,
+} from "@/entities/contribution";
 
 export function useContributionDetail(id: string) {
   const [data, setData] = useState<ContributionDetail | null>(null);
@@ -45,6 +52,8 @@ export function useContributionDetail(id: string) {
     approve: (input: ApproveContributionInput) => runMutation(() => contributionRepository.approve(id, input)),
     requestMoreInfo: (input: RequestMoreInfoInput) => runMutation(() => contributionRepository.requestMoreInfo(id, input)),
     reject: (reason: string) => runMutation(() => contributionRepository.reject(id, reason)),
+    reviseClaimAssessment: (input: ReviseClaimAssessmentInput) =>
+      runMutation(() => contributionRepository.reviseClaimAssessment(id, input)),
     sendReminder: () => runMutation(() => contributionRepository.sendReminder(id)),
   };
 }

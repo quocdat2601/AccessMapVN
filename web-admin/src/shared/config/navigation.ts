@@ -9,7 +9,6 @@ import {
   MessageSquareWarning,
   Settings2,
   ShieldCheck,
-  TicketPercent,
   UsersRound,
 } from "lucide-react";
 
@@ -40,7 +39,6 @@ export const navigationGroups: NavigationGroup[] = [
     label: "Nền tảng",
     items: [
       { label: "Người dùng & Uy tín", href: "/admin/nguoi-dung-uy-tin", icon: UsersRound },
-      { label: "Kho ưu đãi & Voucher", href: "/admin/kho-uu-dai-voucher", icon: TicketPercent },
       { label: "Báo cáo dữ liệu & Độ phủ", href: "/admin/bao-cao-du-lieu-do-phu", icon: ChartNoAxesCombined },
     ],
   },

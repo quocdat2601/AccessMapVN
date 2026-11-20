@@ -17,11 +17,11 @@ Default local service addresses:
 - Object-storage console: `http://localhost:9001`
 
 No PostgreSQL desktop application is required. Open the database viewer and sign in with the
-database name, username and password from `infra/.env`. To migrate and add the idempotent WF-02
+database name, username and password from `infra/.env`. To migrate and add the idempotent community
 demo location, run from the repository root:
 
 ```powershell
-npm run db:seed:wf02
+npm run db:seed:community
 ```
 
 To list local tables directly in the terminal:

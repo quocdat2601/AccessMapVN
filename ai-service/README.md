@@ -10,7 +10,7 @@ FastAPI microservice for WF-01 accessibility pre-scan and verification (`uvicorn
 - `GET /health` & `GET /health/ready`: liveness and loaded-detector readiness probes
 
 ## Models
-- YOLOv8 weights under `models/yolo/`: `accessibility_v8s.pt` (door, entrance-door, elevator, restroom signage, ramp/stair fallback), `ramp.pt`, `step.pt`
+- YOLOv8 weights under `models/yolo/`: primary multi-class `accessibility_v8s.pt` (door, entrance-door, elevator, restroom signage, wheelchair-ramp, stairs); optional `ramp.pt` / `step.pt` fallback only if `accessibility_v8s.pt` is absent
 - Vietnamese NLP extractor & PhoBERT classifier under `models/phobert/` (optional)
 
 ## Run

@@ -42,14 +42,14 @@ must be supplied through the deployment secret store and must not be committed.
 To reset and reproduce the local PostGIS + Adminer stack cleanly on a fresh machine (from repo root):
 
 ```bash
-docker compose -f infra/docker-compose.yml down -v
-docker compose -f infra/docker-compose.yml up -d
+docker compose --env-file infra/.env -f infra/docker-compose.dev.yml down -v
+docker compose --env-file infra/.env -f infra/docker-compose.dev.yml up -d
 npm run db:migrate:local
 npm run db:seed:community
 npm run db:tables
 ```
 
-- **PostgreSQL + PostGIS**: `localhost:5432` (credentials configured in local `.env` / `infra/docker-compose.yml`).
+- **PostgreSQL + PostGIS**: `localhost:5432` (credentials configured in local `infra/.env` / `infra/docker-compose.dev.yml`).
 - **Adminer UI**: `http://localhost:8082` (inspect migrated tables and seeded WF-01/WF-02 records).
 - Verify all four application layers after infrastructure startup:
   - Backend: `dotnet test backend/tests/UnitTests/AccessMapVN.UnitTests.csproj`

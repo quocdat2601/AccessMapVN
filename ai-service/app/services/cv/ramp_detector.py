@@ -1,15 +1,9 @@
 """
 services/cv/ramp_detector.py
 -----------------------------
-YOLOv8-based ramp detector.
-
-Expected classes in the model: ["ramp"] (class index 0).
-The model file lives at ``models/yolo/ramp.pt``.
+YOLOv8-based ramp detector (uses ``ramp.pt`` classes ``ramp`` / ``wheelchair-ramp``).
 """
 from __future__ import annotations
-
-import io
-from pathlib import Path
 
 import numpy as np
 

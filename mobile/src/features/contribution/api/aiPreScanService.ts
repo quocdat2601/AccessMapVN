@@ -1,11 +1,3 @@
-let isAndroid = false;
-try {
-  const { Platform } = require('react-native');
-  isAndroid = Platform?.OS === 'android';
-} catch {
-  isAndroid = false;
-}
-
 export type FeatureStatus = 'present' | 'absent' | 'unknown';
 
 export interface PreScanFeatureTag {
@@ -83,9 +75,6 @@ function generateFallbackResult(): PreScanResult {
 }
 
 export async function runAiPreScan(imageUri: string, textDescription?: string): Promise<PreScanResult> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000);
-
   try {
     const formData = new FormData();
     formData.append('images', {
@@ -101,7 +90,6 @@ export async function runAiPreScan(imageUri: string, textDescription?: string): 
     const aiBaseUrl = resolveServiceUrl(8000, process.env.EXPO_PUBLIC_AI_SERVICE_URL);
     console.log('[runAiPreScan] Calling:', `${aiBaseUrl}/api/v1/ai/pre-scan`, 'with imageUri:', imageUri);
     const data = await postMultipart<AiPreScanPayload>(`${aiBaseUrl}/api/v1/ai/pre-scan`, formData, 15000);
-    clearTimeout(timeoutId);
 
     console.log('[runAiPreScan] SUCCESS data:', JSON.stringify(data));
     const rawFeatures = data.features || {};
@@ -132,7 +120,6 @@ export async function runAiPreScan(imageUri: string, textDescription?: string): 
       isMockFallback: false,
     };
   } catch (error) {
-    clearTimeout(timeoutId);
     console.warn('[runAiPreScan] FAILED:', error);
     // Graceful fallback allows instant testing on device even if ai-service is not currently launched locally
     return generateFallbackResult();

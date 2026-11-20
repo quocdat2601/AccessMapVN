@@ -1,7 +1,6 @@
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '@/shared/theme';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface LocationHeaderProps {
   name: string;

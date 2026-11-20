@@ -1,14 +1,11 @@
 """
 services/cv/door_estimator.py
 ------------------------------
-YOLOv8-based door detector and width estimator.
+YOLOv8-based entrance/door detector.
 
-Width is estimated heuristically from the bounding-box width relative to
-image width.  A door box ≥ 10 % of image width is considered potentially
-accessible (≥ 80 cm for a standard corridor shot).
-
-ponytail: pixel-ratio heuristic for width; upgrade with metric depth estimation
-          (e.g., MiDaS or stereo camera data) for accurate measurements.
+Presence is detected via YOLOv8 (`door`, `entrance-door`); physical clear-width
+compliance (>= 900 mm per QCVN 10:2014) is recorded separately from user
+measurements rather than inferred from pixel ratios.
 """
 from __future__ import annotations
 
@@ -19,9 +16,6 @@ from app.core.logging import get_logger
 from app.services.cv._base import BaseYOLODetector, DetectionResult
 
 logger = get_logger(__name__)
-
-# Rough threshold: door bbox width / image width considered wide enough
-_WIDTH_RATIO_THRESHOLD = 0.10
 
 
 class DoorEstimator(BaseYOLODetector):

@@ -16,7 +16,6 @@ Design notes
 from __future__ import annotations
 
 import hashlib
-import io
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path

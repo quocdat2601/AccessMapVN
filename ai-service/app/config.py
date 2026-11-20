@@ -31,7 +31,6 @@ class Settings(BaseSettings):
     yolo_elevator_weights: str = "yolo/accessibility_v8s.pt"
     yolo_door_weights: str = "yolo/accessibility_v8s.pt"
     yolo_signage_weights: str = "yolo/accessibility_v8s.pt"
-    yolo_tactile_weights: str = "yolo/tactile.pt"
 
     # PhoBERT (HuggingFace local path or hub id)
     phobert_model_path: str = str(_SERVICE_ROOT / "models" / "phobert")
@@ -80,7 +79,6 @@ class Settings(BaseSettings):
     s3_bucket: str = "accessmap-media"
 
     # ── HTTP client ────────────────────────────────────────────────────────────
-    backend_base_url: str = "http://backend:8080"
     http_timeout: float = 30.0
 
     # ── Pre-scan SLA ───────────────────────────────────────────────────────────
@@ -94,17 +92,13 @@ class Settings(BaseSettings):
         step_p = base / self.yolo_step_weights
         if not step_p.exists():
             step_p = base / self.yolo_ramp_weights
-        door_p = base / self.yolo_door_weights
-        if not door_p.exists():
-            door_p = base / "yolo/door.pt"
         return {
             "accessibility": base / self.yolo_accessibility_weights,
             "ramp":     base / self.yolo_ramp_weights,
             "step":     step_p,
             "elevator": base / self.yolo_elevator_weights,
-            "door":     door_p,
+            "door":     base / self.yolo_door_weights,
             "signage":  base / self.yolo_signage_weights,
-            "tactile":  base / self.yolo_tactile_weights,
         }
 
 

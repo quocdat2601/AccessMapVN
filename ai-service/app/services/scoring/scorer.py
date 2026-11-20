@@ -15,8 +15,8 @@ CV always dominates (60 % by default) per the requirements.
 
 Overall score
 -------------
-Weighted mean of the three most important features:
-    exterior_ramp_present, steps_present, door_width_ok  (equal weight)
+Mean confidence of active detected features (`value == "present"` or
+`confidence >= 0.50`), falling back to max observable confidence.
 
 Thresholds
 ----------
@@ -39,9 +39,6 @@ from app.schemas import (
 )
 
 logger = get_logger(__name__)
-
-# Features considered for the overall score (equal weight among them)
-_KEY_FEATURES = ["exterior_ramp_present", "steps_present", "door_width_ok"]
 
 
 def _fuse_confidence(cv_conf: float, nlp_conf: float) -> float:
